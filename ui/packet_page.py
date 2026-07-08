@@ -128,14 +128,15 @@ class PacketPage(QWidget):
         self.saved_alert_count = 0
 
         layout = QVBoxLayout(self)
+        layout.setSpacing(10)
         toolbar = QHBoxLayout()
         self.interface_combo = QComboBox()
-        self.interface_combo.setMinimumWidth(220)
-        self.refresh_interfaces_button = QPushButton("刷新网卡")
-        self.import_button = QPushButton("导入 pcap")
-        self.start_capture_button = QPushButton("开始抓包")
-        self.stop_capture_button = QPushButton("停止抓包")
-        self.clear_button = QPushButton("清空")
+        self.interface_combo.setMinimumWidth(260)
+        self.refresh_interfaces_button = QPushButton("Refresh interfaces")
+        self.import_button = QPushButton("Import pcap")
+        self.start_capture_button = QPushButton("Start capture")
+        self.stop_capture_button = QPushButton("Stop capture")
+        self.clear_button = QPushButton("Clear table")
         self.stop_capture_button.setEnabled(False)
 
         toolbar.addWidget(self.interface_combo)
@@ -146,8 +147,9 @@ class PacketPage(QWidget):
         toolbar.addWidget(self.clear_button)
         toolbar.addStretch()
 
-        self.status_label = QLabel("请选择本地 pcap 文件进行离线分析，或选择网卡开始实时抓包。")
+        self.status_label = QLabel("Import a local pcap file for offline analysis, or choose a network interface for live capture.")
         self.status_label.setObjectName("PageHint")
+        self.status_label.setWordWrap(True)
         self.packet_table = PacketTable()
 
         layout.addLayout(toolbar)
@@ -163,27 +165,27 @@ class PacketPage(QWidget):
 
     def refresh_interfaces(self) -> None:
         self.interface_combo.clear()
-        self.interface_combo.addItem("默认网卡", None)
+        self.interface_combo.addItem("Default interface", None)
         try:
             for interface in self.interface_manager.list_interfaces():
                 self.interface_combo.addItem(interface, interface)
-            self.status_label.setText("网卡列表已刷新。Windows 实时抓包可能需要 Npcap 和管理员权限。")
+            self.status_label.setText("Interface list refreshed. Live capture on Windows may require Npcap and administrator privileges.")
         except Exception as exc:
-            self.status_label.setText(f"获取网卡列表失败：{exc}")
+            self.status_label.setText(f"Failed to load network interfaces: {exc}")
 
     def select_pcap_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self,
-            "选择 pcap 文件",
+            "Select pcap file",
             "",
-            "pcap 文件 (*.pcap *.pcapng *.cap);;所有文件 (*)",
+            "pcap files (*.pcap *.pcapng *.cap);;All files (*)",
         )
         if path:
             self.start_import(path)
 
     def start_import(self, path: str | Path) -> None:
         if self.import_worker and self.import_worker.isRunning():
-            QMessageBox.information(self, "正在导入", "当前已有 pcap 文件正在导入，请稍后。")
+            QMessageBox.information(self, "Import in progress", "A pcap file is already being imported. Please wait.")
             return
 
         self.loaded_count = 0
@@ -191,7 +193,7 @@ class PacketPage(QWidget):
         self.saved_alert_count = 0
         self.packet_table.clear_packets()
         self._set_busy(True)
-        self.status_label.setText(f"正在导入并检测：{Path(path).name}")
+        self.status_label.setText(f"Importing and detecting: {Path(path).name}")
 
         self.import_worker = PcapImportWorker(
             path,
@@ -207,7 +209,7 @@ class PacketPage(QWidget):
         if self.live_worker and self.live_worker.isRunning():
             return
         interface = self.interface_combo.currentData()
-        self.status_label.setText("实时抓包已启动，检测结果会持续写入数据库。")
+        self.status_label.setText("Live capture started. Packets and alerts will be written to the database.")
         self.start_capture_button.setEnabled(False)
         self.stop_capture_button.setEnabled(True)
         self.import_button.setEnabled(False)
@@ -225,7 +227,7 @@ class PacketPage(QWidget):
 
     def stop_live_capture(self) -> None:
         if self.live_worker and self.live_worker.isRunning():
-            self.status_label.setText("正在停止实时抓包...")
+            self.status_label.setText("Stopping live capture...")
             self.live_worker.stop_capture()
 
     def handle_processed_batch(self, packets: list[PacketRecord], alerts: list[AlertRecord]) -> None:
@@ -234,37 +236,41 @@ class PacketPage(QWidget):
         self.saved_packet_count += self.packet_repository.add_many(packets)
         self.saved_alert_count += self.alert_repository.add_many(alerts)
         self.status_label.setText(
-            f"已处理 {self.loaded_count} 个数据包，已保存 {self.saved_packet_count} 条流量记录，"
-            f"生成 {self.saved_alert_count} 条告警。"
+            f"Processed {self.loaded_count} packets, saved {self.saved_packet_count} packet records, "
+            f"and generated {self.saved_alert_count} alerts."
         )
 
     def handle_import_failed(self, message: str) -> None:
         self._set_busy(False)
-        self.status_label.setText("pcap 导入失败。")
-        QMessageBox.critical(self, "导入失败", message)
+        self.status_label.setText("pcap import failed.")
+        QMessageBox.critical(self, "Import failed", message)
 
     def handle_import_finished(self, packet_total: int, alert_total: int) -> None:
         self._set_busy(False)
-        self.status_label.setText(f"导入完成：共解析 {packet_total} 个数据包，生成 {alert_total} 条告警。")
+        self.status_label.setText(f"Import complete: parsed {packet_total} packets and generated {alert_total} alerts.")
 
     def handle_capture_failed(self, message: str) -> None:
-        self.status_label.setText("实时抓包失败。")
-        QMessageBox.critical(self, "实时抓包失败", f"{message}\n\nWindows 下请确认已安装 Npcap，并尝试以管理员权限运行。")
+        self.status_label.setText("Live capture failed.")
+        QMessageBox.critical(
+            self,
+            "Live capture failed",
+            f"{message}\n\nOn Windows, confirm that Npcap is installed and try running with administrator privileges.",
+        )
 
     def handle_capture_stopped(self) -> None:
         self.start_capture_button.setEnabled(True)
         self.stop_capture_button.setEnabled(False)
         self.import_button.setEnabled(True)
         self.refresh_interfaces_button.setEnabled(True)
-        if "失败" not in self.status_label.text():
-            self.status_label.setText("实时抓包已停止。")
+        if "failed" not in self.status_label.text().lower():
+            self.status_label.setText("Live capture stopped.")
 
     def clear_packets(self) -> None:
         self.packet_table.clear_packets()
         self.loaded_count = 0
         self.saved_packet_count = 0
         self.saved_alert_count = 0
-        self.status_label.setText("表格已清空，可继续导入 pcap 文件或实时抓包。")
+        self.status_label.setText("Table cleared. You can import a pcap file or start live capture again.")
 
     def _set_busy(self, busy: bool) -> None:
         self.import_button.setEnabled(not busy)

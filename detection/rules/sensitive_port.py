@@ -6,7 +6,7 @@ from models import AlertRecord, PacketRecord
 
 class SensitivePortRule(RuleBase):
     rule_id = "SENSITIVE_PORT"
-    name = "敏感端口访问检测"
+    name = "Sensitive port access"
     category = "policy"
     severity = "MEDIUM"
     threshold = 1
@@ -42,7 +42,7 @@ class SensitivePortRule(RuleBase):
             self.create_alert(
                 packet,
                 alert_type="SENSITIVE_PORT_ACCESS",
-                description=f"检测到对敏感服务端口 {packet.dst_port}/{service} 的访问。",
+                description=f"Detected access to sensitive service port {packet.dst_port}/{service}.",
                 evidence=evidence,
             )
         ]

@@ -5,39 +5,25 @@ from detection.rules.payload_utils import matched_keywords, packet_text
 from models import AlertRecord, PacketRecord
 
 
-class HttpSuspiciousRule(RuleBase):
-    rule_id = "HTTP_SUSPICIOUS"
-    name = "Suspicious HTTP request"
+class XssRule(RuleBase):
+    rule_id = "XSS"
+    name = "XSS detection"
     category = "web"
     severity = "HIGH"
     threshold = 1
     time_window = 0
 
     KEYWORDS = [
-        "../",
-        "..\\",
-        "%2e%2e",
-        "/etc/passwd",
-        "boot.ini",
-        "web.config",
-        "169.254.169.254",
-        "metadata.google.internal",
-        "file://",
-        "php://",
-        "expect://",
-        "gopher://",
-        "jndi:",
-        "ysoserial",
-        "${jndi",
-        "; id",
-        "| id",
-        "`id`",
-        "; ls",
-        "| ls",
-        "`ls`",
-        "/admin",
-        "/wp-admin",
-        "/.env",
+        "<script",
+        "javascript:",
+        "onerror=",
+        "onload=",
+        "alert(",
+        "document.cookie",
+        "document.domain",
+        "<img",
+        "<iframe",
+        "eval(",
     ]
 
     def process(self, packet: PacketRecord) -> list[AlertRecord]:
@@ -51,8 +37,8 @@ class HttpSuspiciousRule(RuleBase):
         return [
             self.create_alert(
                 packet,
-                alert_type="HTTP_SUSPICIOUS",
-                description="Detected directory traversal, SSRF, file inclusion or suspicious administration path indicators.",
+                alert_type="XSS",
+                description="Detected suspicious cross-site scripting indicators.",
                 evidence=f"matched={matches}; host={packet.http_host or ''}; path={packet.http_path or ''}",
             )
         ]

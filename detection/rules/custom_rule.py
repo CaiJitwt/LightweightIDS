@@ -26,7 +26,7 @@ class CustomRule(RuleBase):
             self.create_alert(
                 packet,
                 alert_type="CUSTOM_RULE",
-                description=self.record.description or f"命中自定义规则：{self.name}",
+                description=self.record.description or f"Matched custom rule: {self.name}",
                 evidence=evidence,
             )
         ]

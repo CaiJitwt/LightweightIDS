@@ -170,10 +170,11 @@ class AlertRepository:
             rows = connection.execute(sql, tuple(values)).fetchall()
         return [self._from_row(row) for row in rows]
 
-    def update_status(self, alert_id: int, status: str) -> None:
+    def update_status(self, alert_id: int, status: str) -> bool:
         with self.database.connect() as connection:
-            connection.execute("UPDATE alerts SET status = ? WHERE id = ?", (status, alert_id))
+            cursor = connection.execute("UPDATE alerts SET status = ? WHERE id = ?", (status, alert_id))
             connection.commit()
+            return cursor.rowcount > 0
 
     def count(self) -> int:
         with self.database.connect() as connection:

@@ -29,9 +29,14 @@ class Database:
     def _seed_rules(self, connection: sqlite3.Connection) -> None:
         connection.executemany(
             """
-            INSERT OR IGNORE INTO rules
+            INSERT INTO rules
                 (id, name, category, severity, enabled, threshold, time_window, description)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                category = excluded.category,
+                severity = excluded.severity,
+                description = excluded.description
             """,
             DEFAULT_RULES,
         )

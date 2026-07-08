@@ -15,7 +15,7 @@ class PacketParser:
             from scapy.layers.l2 import ARP
             from scapy.packet import Raw
         except ImportError as exc:
-            raise RuntimeError("缺少 Scapy，请先安装 requirements.txt 中的依赖。") from exc
+            raise RuntimeError("Scapy is missing. Please install the dependencies from requirements.txt.") from exc
 
         timestamp = self._format_timestamp(getattr(packet, "time", None))
         src_ip: Optional[str] = None
@@ -76,7 +76,7 @@ class PacketParser:
             http_method=http_method,
             http_host=http_host,
             http_path=http_path,
-            raw_summary=self._packet_summary(packet),
+            raw_summary=self._packet_summary(packet, payload_text),
         )
 
     def _detect_protocol(self, packet: object, src_port: Optional[int], dst_port: Optional[int], payload: str) -> str:
@@ -92,6 +92,8 @@ class PacketParser:
             return "ARP"
         if self._has_layer(packet, DNS) or 53 in {src_port, dst_port}:
             return "DNS"
+        if self._looks_like_tls(payload):
+            return "TLS"
         if self._looks_like_http(src_port, dst_port, payload):
             return "HTTP"
         if self._has_layer(packet, TCP):
@@ -164,6 +166,10 @@ class PacketParser:
             return False
         return payload.startswith(("GET ", "POST ", "PUT ", "DELETE ", "HEAD ", "OPTIONS ", "PATCH "))
 
+    def _looks_like_tls(self, payload: str) -> bool:
+        lowered = payload.lower()
+        return payload.startswith("\x16\x03") or "client hello" in lowered or "server hello" in lowered
+
     def _parse_http_payload(self, payload: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
         if not payload:
             return None, None, None
@@ -184,8 +190,18 @@ class PacketParser:
 
         return method, host, path
 
-    def _packet_summary(self, packet: object) -> str:
+    def _packet_summary(self, packet: object, payload_text: str = "") -> str:
         try:
-            return str(packet.summary())  # type: ignore[attr-defined]
+            summary = str(packet.summary())  # type: ignore[attr-defined]
         except Exception:
-            return repr(packet)
+            summary = repr(packet)
+
+        if not payload_text:
+            return summary
+
+        preview = " ".join(payload_text.replace("\x00", " ").split())
+        if not preview:
+            return summary
+        if len(preview) > 240:
+            preview = preview[:240] + "..."
+        return f"{summary} | payload={preview}"

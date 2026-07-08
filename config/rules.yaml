@@ -1,41 +1,129 @@
 rules:
   - id: PORT_SCAN
-    name: 端口扫描检测
+    name: Port scan
     category: scan
     severity: HIGH
     enabled: true
     threshold: 20
     time_window: 10
-    description: 检测同一源 IP 在短时间内访问同一目标的多个端口。
+    description: Detects one source scanning many ports on the same target.
   - id: SYN_FLOOD
-    name: SYN Flood 检测
+    name: SYN flood
     category: flood
     severity: HIGH
     enabled: true
     threshold: 100
     time_window: 10
-    description: 检测短时间内大量 TCP SYN 请求。
+    description: Detects high-volume TCP SYN requests in a short time window.
   - id: ICMP_FLOOD
-    name: ICMP Flood 检测
+    name: ICMP flood
     category: flood
     severity: MEDIUM
     enabled: true
     threshold: 50
     time_window: 10
-    description: 检测短时间内大量 ICMP 数据包。
+    description: Detects high-volume ICMP packets in a short time window.
   - id: SENSITIVE_PORT
-    name: 敏感端口访问检测
+    name: Sensitive port access
     category: policy
     severity: MEDIUM
     enabled: true
     threshold: 1
     time_window: 0
-    description: 检测对常见敏感服务端口的访问。
+    description: Detects access to common sensitive service ports.
   - id: BLACKLIST_IP
-    name: 黑名单 IP 检测
+    name: Blacklisted IP
     category: reputation
     severity: HIGH
     enabled: true
     threshold: 1
     time_window: 0
-    description: 检测源 IP 或目标 IP 是否命中本地黑名单。
+    description: Detects traffic that matches local blacklisted IP addresses.
+  - id: BRUTE_FORCE
+    name: Brute force connection
+    category: authentication
+    severity: HIGH
+    enabled: true
+    threshold: 10
+    time_window: 10
+    description: Detects repeated connections to authentication services.
+  - id: DNS_ANOMALY
+    name: DNS anomaly
+    category: dns
+    severity: MEDIUM
+    enabled: true
+    threshold: 40
+    time_window: 60
+    description: Detects high-frequency DNS queries, long domains and DGA-like names.
+  - id: HTTP_SUSPICIOUS
+    name: Suspicious HTTP request
+    category: web
+    severity: HIGH
+    enabled: true
+    threshold: 1
+    time_window: 0
+    description: Detects traversal, SSRF, file inclusion and suspicious admin paths.
+  - id: SQL_INJECTION
+    name: SQL injection
+    category: web
+    severity: CRITICAL
+    enabled: true
+    threshold: 1
+    time_window: 0
+    description: Detects SQL injection patterns in HTTP traffic.
+  - id: XSS
+    name: XSS
+    category: web
+    severity: HIGH
+    enabled: true
+    threshold: 1
+    time_window: 0
+    description: Detects cross-site scripting patterns in HTTP traffic.
+  - id: MALICIOUS_COMMAND
+    name: Malicious command
+    category: web
+    severity: CRITICAL
+    enabled: true
+    threshold: 1
+    time_window: 0
+    description: Detects command execution, reverse shell and download-execute patterns.
+  - id: ABNORMAL_OUTBOUND
+    name: Abnormal outbound traffic
+    category: behavior
+    severity: HIGH
+    enabled: true
+    threshold: 4
+    time_window: 300
+    description: Detects unusual public outbound ports and fixed heartbeat intervals.
+  - id: LATERAL_MOVEMENT
+    name: Lateral movement
+    category: behavior
+    severity: CRITICAL
+    enabled: true
+    threshold: 5
+    time_window: 60
+    description: Detects internal movement through SMB, RDP, SSH and admin shares.
+  - id: HOST_SCAN
+    name: Host scan
+    category: scan
+    severity: HIGH
+    enabled: true
+    threshold: 30
+    time_window: 10
+    description: Detects one source contacting many destination hosts quickly.
+  - id: TLS_FINGERPRINT
+    name: TLS fingerprint risk
+    category: tls
+    severity: HIGH
+    enabled: true
+    threshold: 1
+    time_window: 0
+    description: Detects weak TLS versions, weak ciphers and suspicious certificate indicators.
+  - id: ML_ANOMALY
+    name: ML anomaly score
+    category: behavior
+    severity: MEDIUM
+    enabled: true
+    threshold: 80
+    time_window: 0
+    description: Uses a lightweight anomaly score based on packet size, protocol and port features.

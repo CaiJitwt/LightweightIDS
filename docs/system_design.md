@@ -1,40 +1,68 @@
-# 系统设计
+# Lightweight IDS 系统设计
 
-系统按职责划分为捕获、解析、检测、存储、界面和报告模块。
+## 总体架构
 
-- `capture`：pcap 导入和实时抓包。
-- `parser`：Scapy 数据包解析和协议识别。
-- `detection`：检测引擎、内置规则和自定义规则。
-- `storage`：SQLite 初始化和数据访问。
-- `ui`：PySide6 桌面界面。
-- `report`：HTML、CSV、JSON 报告导出。
+系统采用分层结构：
 
-## 离线检测链路
+- `parser`：负责将 Scapy 数据包转换为 `PacketRecord`。
+- `models`：定义数据包、告警、规则、统计和自定义规则数据模型。
+- `storage`：负责 SQLite 初始化和仓储访问。
+- `detection`：负责规则检测、异常评分、攻击链分析和误报降噪。
+- `ui`：负责 PySide6 桌面界面。
+- `report`：负责告警报告导出。
 
-1. “流量监控”选择本地 pcap 文件。
-2. 后台线程使用 Scapy 逐包解析为 `PacketRecord`。
-3. `DetectionEngine` 对每个数据包运行内置规则和自定义规则。
-4. `PacketRecord` 和 `AlertRecord` 分别写入 SQLite。
-5. “告警中心”和“报告导出”从 SQLite 读取结果。
+## 数据流
 
-## 实时检测链路
+1. pcap 导入或实时抓包产生原始数据包。
+2. `PacketParser` 提取关键字段并生成 `PacketRecord`。
+3. 数据包保存到 SQLite。
+4. `DetectionEngine` 依次执行启用的内置规则和自定义规则。
+5. 规则命中后生成 `AlertRecord`，经过基础降噪后保存到 SQLite。
+6. GUI 从仓储层读取数据并刷新表格、统计和攻击链视图。
+7. 用户可在告警中心确认、忽略、查看详情或导出 CSV。
 
-1. “流量监控”刷新并选择网卡。
-2. `LiveCapture` 使用 Scapy 被动抓取本机网卡流量。
-3. 后台线程将原始包解析为 `PacketRecord`。
-4. `DetectionEngine` 使用 SQLite 中当前规则配置进行检测。
-5. 流量记录和告警写入 SQLite，界面同步显示数据包表格。
+## 检测引擎
 
-## 规则管理链路
+所有内置规则继承 `RuleBase`，统一实现：
 
-1. “规则管理”从 SQLite 的 `rules` 表加载内置规则配置。
-2. 用户修改启用状态、阈值、时间窗口和说明。
-3. 保存后写回 SQLite。
-4. 后续 pcap 导入和实时抓包重新读取规则配置。
+```python
+process(packet: PacketRecord) -> list[AlertRecord]
+```
 
-## 自定义规则链路
+规则通过 `create_alert` 生成告警，时间窗口类规则使用滑动窗口保存近期访问状态。`DetectionEngine` 支持从数据库规则配置构建检测规则，并加载用户自定义规则。
 
-1. “规则管理”中的自定义规则写入 SQLite 的 `custom_rules` 表。
-2. pcap 导入或实时抓包开始时读取自定义规则。
-3. `CustomRule` 使用协议、IP、端口和关键字条件做字段匹配。
-4. 命中后生成 `CUSTOM_RULE` 告警。
+## 当前规则集合
+
+- 扫描类：端口扫描、主机扫描。
+- 泛洪类：SYN Flood、ICMP Flood。
+- 策略类：敏感端口访问。
+- 信誉类：本地黑名单 IP。
+- 认证类：暴力破解连接。
+- DNS 类：高频查询、超长域名、DGA 可疑域名。
+- Web 类：HTTP 可疑请求、SQL 注入、XSS、恶意命令。
+- 行为类：异常外联、横向移动、轻量异常评分。
+- TLS 类：弱协议、弱加密套件和可疑证书元数据。
+
+## GUI 设计
+
+仪表盘展示总体态势和分析视图：
+
+- 处理包数量、告警数量、高危告警数量、检测状态。
+- 协议分布、告警等级、Top 源 IP、Top 目标端口。
+- 攻击链阶段统计。
+- 异常评分趋势。
+- 攻击链时间线。
+
+告警中心展示告警表格和攻击链视图。规则管理页面从 SQLite 中读取所有已注册规则，新增默认规则会在数据库初始化时自动补齐。
+
+## 数据库设计
+
+SQLite 表包括：
+
+- `packets`：保存解析后的数据包。
+- `alerts`：保存检测告警。
+- `rules`：保存内置规则配置。
+- `custom_rules`：保存用户自定义规则。
+- `settings`：保存应用配置。
+
+数据库初始化会补齐新增默认规则，但不会覆盖用户已经调整过的启用状态、阈值和时间窗口。用户可通过规则管理页的恢复默认功能重置规则参数。

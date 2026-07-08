@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtWidgets import QAbstractItemView, QTableWidget, QTableWidgetItem
+from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableWidget, QTableWidgetItem
 
 from models import PacketRecord
 
@@ -8,11 +8,24 @@ from models import PacketRecord
 class PacketTable(QTableWidget):
     def __init__(self) -> None:
         super().__init__(0, 8)
-        self.setHorizontalHeaderLabels(["时间", "源 IP", "目标 IP", "协议", "源端口", "目标端口", "长度", "摘要"])
-        self.horizontalHeader().setStretchLastSection(True)
+        self.setHorizontalHeaderLabels(
+            ["Time", "Source IP", "Destination IP", "Protocol", "Source Port", "Destination Port", "Length", "Summary"]
+        )
+        header = self.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Interactive)
+        header.setStretchLastSection(True)
+        self.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.setAlternatingRowColors(True)
+        self.setWordWrap(False)
         self.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.setColumnWidth(0, 170)
+        self.setColumnWidth(1, 130)
+        self.setColumnWidth(2, 140)
+        self.setColumnWidth(3, 90)
+        self.setColumnWidth(4, 100)
+        self.setColumnWidth(5, 120)
+        self.setColumnWidth(6, 70)
 
     def add_packets(self, packets: list[PacketRecord]) -> None:
         if not packets:
@@ -35,8 +48,11 @@ class PacketTable(QTableWidget):
                 packet.raw_summary,
             ]
             for column, value in enumerate(values):
-                self.setItem(row, column, QTableWidgetItem(value))
+                item = QTableWidgetItem(value)
+                item.setToolTip(value)
+                self.setItem(row, column, item)
 
+        self.resizeRowsToContents()
         self.scrollToBottom()
         self.setSortingEnabled(True)
 

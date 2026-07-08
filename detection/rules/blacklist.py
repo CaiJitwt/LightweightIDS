@@ -9,7 +9,7 @@ from models import AlertRecord, PacketRecord
 
 class BlacklistRule(RuleBase):
     rule_id = "BLACKLIST_IP"
-    name = "黑名单 IP 检测"
+    name = "Blacklisted IP match"
     category = "reputation"
     severity = "HIGH"
     threshold = 1
@@ -33,7 +33,7 @@ class BlacklistRule(RuleBase):
             self.create_alert(
                 packet,
                 alert_type="BLACKLIST_IP",
-                description=f"数据包命中黑名单 IP：{', '.join(matched_ips)}。",
+                description=f"Packet matched blacklisted IP addresses: {', '.join(matched_ips)}.",
                 evidence=evidence,
             )
         ]

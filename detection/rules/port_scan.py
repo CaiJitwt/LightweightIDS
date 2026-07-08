@@ -15,7 +15,7 @@ class PortHit:
 
 class PortScanRule(RuleBase):
     rule_id = "PORT_SCAN"
-    name = "端口扫描检测"
+    name = "Port scan detection"
     category = "scan"
     severity = "HIGH"
     threshold = 20
@@ -49,7 +49,7 @@ class PortScanRule(RuleBase):
             self.create_alert(
                 packet,
                 alert_type="PORT_SCAN",
-                description=f"源 IP 在 {self.time_window} 秒内访问同一目标的 {len(ports)} 个不同端口。",
+                description=f"Source IP accessed {len(ports)} different ports on the same target within {self.time_window} seconds.",
                 evidence=evidence,
             )
         ]

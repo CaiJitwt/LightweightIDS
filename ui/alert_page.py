@@ -4,13 +4,19 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
+    QHeaderView,
 )
 
+from detection.analysis.attack_chain import AttackChainAnalyzer
+from models import AlertRecord
 from report.report_generator import ReportGenerator
 from storage.database import Database
 from storage.repositories import AlertRepository
@@ -23,33 +29,64 @@ class AlertPage(QWidget):
         self.database = database
         self.alert_repository = AlertRepository(database)
         self.report_generator = ReportGenerator()
-        self.current_alerts = []
+        self.attack_chain_analyzer = AttackChainAnalyzer()
+        self.current_alerts: list[AlertRecord] = []
+        self.rule_display_names = {
+            "PORT_SCAN": "Port scan detection",
+            "SYN_FLOOD": "SYN flood detection",
+            "ICMP_FLOOD": "ICMP flood detection",
+            "SENSITIVE_PORT": "Sensitive port access",
+            "BLACKLIST_IP": "Blacklisted IP match",
+            "BRUTE_FORCE": "Brute-force connection detection",
+            "DNS_ANOMALY": "DNS anomaly detection",
+            "HTTP_SUSPICIOUS": "Suspicious HTTP request",
+            "SQL_INJECTION": "SQL injection detection",
+            "XSS": "XSS detection",
+            "MALICIOUS_COMMAND": "Malicious command detection",
+            "ABNORMAL_OUTBOUND": "Abnormal outbound traffic",
+            "LATERAL_MOVEMENT": "Lateral movement",
+            "HOST_SCAN": "Host scan",
+            "TLS_FINGERPRINT": "TLS fingerprint risk",
+            "ML_ANOMALY": "ML anomaly score",
+        }
 
         layout = QVBoxLayout(self)
+        layout.setSpacing(12)
         toolbar = QHBoxLayout()
 
         self.severity_filter = QComboBox()
-        self.severity_filter.addItems(["全部等级", "LOW", "MEDIUM", "HIGH", "CRITICAL"])
+        self.severity_filter.addItems(["All severities", "LOW", "MEDIUM", "HIGH", "CRITICAL"])
         self.keyword_input = QLineEdit()
-        self.keyword_input.setPlaceholderText("搜索规则、IP、描述或证据")
-        self.refresh_button = QPushButton("刷新")
-        self.detail_button = QPushButton("查看详情")
-        self.confirm_button = QPushButton("确认")
-        self.ignore_button = QPushButton("忽略")
-        self.export_button = QPushButton("导出 CSV")
+        self.keyword_input.setPlaceholderText("Search rule, IP, description or evidence")
+        self.refresh_button = QPushButton("Refresh")
+        self.detail_button = QPushButton("Details")
+        self.confirm_button = QPushButton("Confirm")
+        self.ignore_button = QPushButton("Ignore")
+        self.export_button = QPushButton("Export CSV")
 
         toolbar.addWidget(self.severity_filter)
-        toolbar.addWidget(self.keyword_input)
+        toolbar.addWidget(self.keyword_input, 1)
         toolbar.addWidget(self.refresh_button)
         toolbar.addWidget(self.detail_button)
         toolbar.addWidget(self.confirm_button)
         toolbar.addWidget(self.ignore_button)
         toolbar.addWidget(self.export_button)
-        toolbar.addStretch()
 
         self.table = AlertTable()
+        self.chain_title = QLabel("Attack chain view")
+        self.chain_title.setStyleSheet("font-weight: 700; color: #1f2933;")
+        self.chain_table = QTableWidget(0, 4)
+        self.chain_table.setHorizontalHeaderLabels(["Source IP", "Risk", "Stages", "Alerts"])
+        self.chain_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.chain_table.horizontalHeader().setStretchLastSection(True)
+        self.chain_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.chain_table.setAlternatingRowColors(True)
+        self.chain_table.setMinimumHeight(130)
+
         layout.addLayout(toolbar)
-        layout.addWidget(self.table)
+        layout.addWidget(self.table, 3)
+        layout.addWidget(self.chain_title)
+        layout.addWidget(self.chain_table, 1)
 
         self.severity_filter.currentTextChanged.connect(self.refresh)
         self.keyword_input.textChanged.connect(self.refresh)
@@ -66,54 +103,73 @@ class AlertPage(QWidget):
         super().showEvent(event)  # type: ignore[arg-type]
 
     def refresh(self) -> None:
-        severity = self.severity_filter.currentText()
+        severity_text = self.severity_filter.currentText()
+        severity = None if severity_text == "All severities" else severity_text
         keyword = self.keyword_input.text().strip()
         self.current_alerts = self.alert_repository.list_all(severity=severity, keyword=keyword)
+        self.current_alerts = [self._display_alert(alert) for alert in self.current_alerts]
         self.table.set_alerts(self.current_alerts)
+        self._render_attack_chains()
+
+    def _render_attack_chains(self) -> None:
+        chains = self.attack_chain_analyzer.analyze(self.current_alerts)
+        self.chain_table.setRowCount(len(chains))
+        for row, chain in enumerate(chains):
+            values = [chain.source_ip, str(chain.risk_score), chain.summary, str(len(chain.alerts))]
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                item.setToolTip(value)
+                self.chain_table.setItem(row, column, item)
+        self.chain_table.setColumnWidth(0, 140)
+        self.chain_table.setColumnWidth(1, 70)
+        self.chain_table.setColumnWidth(3, 70)
+        self.chain_table.resizeRowsToContents()
 
     def show_selected_detail(self) -> None:
         alert = self._selected_alert()
         if alert is None:
-            QMessageBox.information(self, "未选择告警", "请先选择一条告警。")
+            QMessageBox.information(self, "No alert selected", "Please select an alert first.")
             return
 
         detail = (
-            f"时间：{alert.timestamp}\n"
-            f"等级：{alert.severity}\n"
-            f"类型：{alert.alert_type}\n"
-            f"规则：{alert.rule_name} ({alert.rule_id})\n"
-            f"源：{alert.src_ip or ''}:{alert.src_port or ''}\n"
-            f"目标：{alert.dst_ip or ''}:{alert.dst_port or ''}\n"
-            f"协议：{alert.protocol or ''}\n"
-            f"状态：{alert.status}\n\n"
-            f"描述：{alert.description}\n\n"
-            f"证据：{alert.evidence}"
+            f"Time: {alert.timestamp}\n"
+            f"Severity: {alert.severity}\n"
+            f"Type: {alert.alert_type}\n"
+            f"Rule: {alert.rule_name} ({alert.rule_id})\n"
+            f"Source: {alert.src_ip or ''}:{alert.src_port or ''}\n"
+            f"Destination: {alert.dst_ip or ''}:{alert.dst_port or ''}\n"
+            f"Protocol: {alert.protocol or ''}\n"
+            f"Status: {alert.status}\n\n"
+            f"Description: {alert.description}\n\n"
+            f"Evidence: {alert.evidence}"
         )
-        QMessageBox.information(self, "告警详情", detail)
+        QMessageBox.information(self, "Alert details", detail)
 
     def update_selected_status(self, status: str) -> None:
         alert_id = self.table.selected_alert_id()
         if alert_id is None:
-            QMessageBox.information(self, "未选择告警", "请先选择一条告警。")
+            QMessageBox.information(self, "No alert selected", "Please select an alert first.")
             return
 
-        self.alert_repository.update_status(alert_id, status)
+        if not self.alert_repository.update_status(alert_id, status):
+            QMessageBox.warning(self, "Update failed", "The selected alert could not be updated. Please refresh and try again.")
+            return
         self.refresh()
 
     def export_csv(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "导出告警 CSV",
+            "Export alerts CSV",
             "alerts.csv",
-            "CSV 文件 (*.csv);;所有文件 (*)",
+            "CSV files (*.csv);;All files (*)",
         )
         if not path:
             return
 
         self.report_generator.export_alerts_csv(self.current_alerts, path)
-        QMessageBox.information(self, "导出完成", f"告警 CSV 已导出：{path}")
+        QMessageBox.information(self, "Export complete", f"Alerts CSV exported to: {path}")
 
-    def _selected_alert(self):
+    def _selected_alert(self) -> AlertRecord | None:
         alert_id = self.table.selected_alert_id()
         if alert_id is None:
             return None
@@ -121,3 +177,46 @@ class AlertPage(QWidget):
             if alert.id == alert_id:
                 return alert
         return None
+
+    def _display_alert(self, alert: AlertRecord) -> AlertRecord:
+        rule_name = self.rule_display_names.get(alert.rule_id, alert.rule_name)
+        description = alert.description
+        if self._contains_non_ascii(description):
+            description = self._fallback_description(alert)
+        return AlertRecord(
+            id=alert.id,
+            timestamp=alert.timestamp,
+            rule_id=alert.rule_id,
+            rule_name=rule_name,
+            alert_type=alert.alert_type,
+            severity=alert.severity,
+            src_ip=alert.src_ip,
+            dst_ip=alert.dst_ip,
+            src_port=alert.src_port,
+            dst_port=alert.dst_port,
+            protocol=alert.protocol,
+            description=description,
+            evidence=alert.evidence,
+            status=alert.status,
+        )
+
+    def _fallback_description(self, alert: AlertRecord) -> str:
+        descriptions = {
+            "SENSITIVE_PORT_ACCESS": "Detected access to a sensitive service port.",
+            "BLACKLIST_IP": "Packet matched a blacklisted IP address.",
+            "PORT_SCAN": "Source IP accessed many ports on the same target.",
+            "SYN_FLOOD": "Detected many TCP SYN packets in a short time window.",
+            "ICMP_FLOOD": "Detected many ICMP packets in a short time window.",
+            "BRUTE_FORCE": "Detected many service connection attempts in a short time window.",
+            "DNS_QUERY_FREQUENCY": "Detected high-frequency DNS queries.",
+            "DNS_TUNNELING_SUSPECTED": "Detected an unusually long DNS query.",
+            "DGA_DOMAIN_SUSPECTED": "Detected a random-looking high-entropy domain.",
+            "HTTP_SUSPICIOUS": "Detected suspicious HTTP request indicators.",
+            "SQL_INJECTION": "Detected suspicious SQL injection indicators.",
+            "XSS": "Detected suspicious cross-site scripting indicators.",
+            "MALICIOUS_COMMAND": "Detected suspicious command execution indicators.",
+        }
+        return descriptions.get(alert.alert_type, "Alert matched the detection rule.")
+
+    def _contains_non_ascii(self, value: str) -> bool:
+        return any(ord(char) > 127 for char in value)

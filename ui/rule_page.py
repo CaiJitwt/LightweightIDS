@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QHeaderView,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -22,7 +23,7 @@ from storage.database import Database
 from storage.repositories import BlacklistRepository, CustomRuleRepository, RuleRepository
 
 
-PROTOCOL_OPTIONS = ["不限", "TCP", "UDP", "ICMP", "ICMPv6", "ARP", "DNS", "HTTP", "HTTPS", "DHCP", "MDNS", "LLMNR", "NBNS", "NTP", "QUIC"]
+PROTOCOL_OPTIONS = ["Any", "TCP", "UDP", "ICMP", "ICMPv6", "ARP", "DNS", "HTTP", "HTTPS", "TLS", "DHCP", "MDNS", "LLMNR", "NBNS", "NTP", "QUIC"]
 SEVERITY_OPTIONS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
 
 
@@ -40,12 +41,12 @@ class RulePage(QWidget):
         layout.setSpacing(12)
 
         button_bar = QHBoxLayout()
-        self.refresh_button = QPushButton("刷新")
-        self.save_button = QPushButton("保存")
-        self.restore_button = QPushButton("恢复默认")
-        self.add_custom_button = QPushButton("新增自定义规则")
-        self.delete_custom_button = QPushButton("删除选中规则")
-        self.save_blacklist_button = QPushButton("保存黑名单")
+        self.refresh_button = QPushButton("Refresh")
+        self.save_button = QPushButton("Save")
+        self.restore_button = QPushButton("Restore defaults")
+        self.add_custom_button = QPushButton("Add custom rule")
+        self.delete_custom_button = QPushButton("Delete selected rule")
+        self.save_blacklist_button = QPushButton("Save blacklist")
         for button in [
             self.refresh_button,
             self.save_button,
@@ -59,27 +60,31 @@ class RulePage(QWidget):
         button_bar.addStretch()
 
         self.table = QTableWidget(0, 8)
-        self.table.setHorizontalHeaderLabels(["ID", "名称", "分类", "等级", "启用", "阈值", "窗口(s)", "说明"])
-        self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.setAlternatingRowColors(True)
+        self.table.setHorizontalHeaderLabels(["ID", "Name", "Category", "Severity", "Enabled", "Threshold", "Window (s)", "Description"])
+        self._configure_table(self.table)
 
         self.custom_table = QTableWidget(0, 11)
         self.custom_table.setHorizontalHeaderLabels(
-            ["ID", "名称", "等级", "启用", "协议", "源 IP", "目标 IP", "源端口", "目标端口", "关键字", "说明"]
+            ["ID", "Name", "Severity", "Enabled", "Protocol", "Source IP", "Destination IP", "Source Port", "Destination Port", "Keyword", "Description"]
         )
-        self.custom_table.horizontalHeader().setStretchLastSection(True)
-        self.custom_table.setAlternatingRowColors(True)
+        self._configure_table(self.custom_table)
 
         self.blacklist_editor = QTextEdit()
-        self.blacklist_editor.setPlaceholderText("每行一个 IP，空行会被忽略。")
-        self.blacklist_editor.setMaximumHeight(96)
+        self.blacklist_editor.setPlaceholderText("One IP address per line. Empty lines are ignored.")
+        self.blacklist_editor.setMaximumHeight(100)
+
+        builtin_label = QLabel("Built-in detection rules")
+        custom_label = QLabel("Custom rules: empty fields mean no restriction. Use drop-downs for protocol and severity.")
+        blacklist_label = QLabel("Blacklisted IP addresses")
+        for label in [builtin_label, custom_label, blacklist_label]:
+            label.setStyleSheet("font-weight: 700; color: #1f2933;")
 
         layout.addLayout(button_bar)
-        layout.addWidget(QLabel("内置检测规则"))
+        layout.addWidget(builtin_label)
         layout.addWidget(self.table, 2)
-        layout.addWidget(QLabel("自定义规则：空条件表示不限制；协议和等级请选择，端口请使用数字框。"))
+        layout.addWidget(custom_label)
         layout.addWidget(self.custom_table, 3)
-        layout.addWidget(QLabel("黑名单 IP"))
+        layout.addWidget(blacklist_label)
         layout.addWidget(self.blacklist_editor)
 
         self.refresh_button.clicked.connect(self.refresh)
@@ -129,24 +134,30 @@ class RulePage(QWidget):
             description_item.setToolTip(rule.description)
             self.table.setItem(row_index, 7, description_item)
 
-        self.table.setColumnWidth(0, 120)
-        self.table.setColumnWidth(1, 160)
-        self.table.setColumnWidth(4, 64)
-        self.table.setColumnWidth(5, 86)
-        self.table.setColumnWidth(6, 86)
+        self.table.setColumnWidth(0, 150)
+        self.table.setColumnWidth(1, 210)
+        self.table.setColumnWidth(2, 120)
+        self.table.setColumnWidth(3, 90)
+        self.table.setColumnWidth(4, 76)
+        self.table.setColumnWidth(5, 105)
+        self.table.setColumnWidth(6, 105)
+        self.table.resizeRowsToContents()
 
     def _render_custom_rules(self) -> None:
         self.custom_table.setRowCount(len(self.current_custom_rules))
         for row_index, rule in enumerate(self.current_custom_rules):
             self._set_custom_row(row_index, rule)
-        self.custom_table.setColumnWidth(0, 56)
-        self.custom_table.setColumnWidth(1, 150)
-        self.custom_table.setColumnWidth(2, 112)
-        self.custom_table.setColumnWidth(3, 64)
+        self.custom_table.setColumnWidth(0, 60)
+        self.custom_table.setColumnWidth(1, 180)
+        self.custom_table.setColumnWidth(2, 115)
+        self.custom_table.setColumnWidth(3, 76)
         self.custom_table.setColumnWidth(4, 110)
-        self.custom_table.setColumnWidth(7, 86)
-        self.custom_table.setColumnWidth(8, 86)
-        self.custom_table.setColumnWidth(9, 140)
+        self.custom_table.setColumnWidth(5, 140)
+        self.custom_table.setColumnWidth(6, 150)
+        self.custom_table.setColumnWidth(7, 115)
+        self.custom_table.setColumnWidth(8, 130)
+        self.custom_table.setColumnWidth(9, 150)
+        self.custom_table.resizeRowsToContents()
 
     def _set_custom_row(self, row: int, rule: CustomRuleRecord) -> None:
         id_item = QTableWidgetItem("" if rule.id is None else str(rule.id))
@@ -165,7 +176,7 @@ class RulePage(QWidget):
 
         protocol_box = QComboBox()
         protocol_box.addItems(PROTOCOL_OPTIONS)
-        protocol_box.setCurrentText(rule.protocol if rule.protocol in PROTOCOL_OPTIONS else "不限")
+        protocol_box.setCurrentText(rule.protocol if rule.protocol in PROTOCOL_OPTIONS else "Any")
         self.custom_table.setCellWidget(row, 4, protocol_box)
 
         self._set_text_item(self.custom_table, row, 5, rule.src_ip or "")
@@ -180,25 +191,25 @@ class RulePage(QWidget):
         self.custom_table.setRowCount(row + 1)
         self._set_custom_row(
             row,
-            CustomRuleRecord(name="新自定义规则", severity="LOW", enabled=True, description="命中自定义条件"),
+            CustomRuleRecord(name="New custom rule", severity="LOW", enabled=True, description="Matched custom rule conditions"),
         )
 
     def delete_selected_custom_rule(self) -> None:
         row = self.custom_table.currentRow()
         if row < 0:
-            QMessageBox.information(self, "未选择规则", "请先选择一条自定义规则。")
+            QMessageBox.information(self, "No rule selected", "Please select a custom rule first.")
             return
         rule_id = self._item_text(self.custom_table, row, 0)
         if rule_id:
             self.custom_rule_repository.delete(int(rule_id))
         self.custom_table.removeRow(row)
-        QMessageBox.information(self, "删除完成", "自定义规则已删除。")
+        QMessageBox.information(self, "Deleted", "The selected custom rule has been deleted.")
         self.refresh()
 
     def save_rules(self) -> None:
         self._save_builtin_rules()
         self._save_custom_rules()
-        QMessageBox.information(self, "保存完成", "规则配置已保存，后续导入和实时抓包会使用新配置。")
+        QMessageBox.information(self, "Saved", "Rule configuration saved. Future imports and live capture will use it.")
         self.refresh()
 
     def _save_builtin_rules(self) -> None:
@@ -229,19 +240,19 @@ class RulePage(QWidget):
             protocol_widget = self.custom_table.cellWidget(row, 4)
             src_port_widget = self.custom_table.cellWidget(row, 7)
             dst_port_widget = self.custom_table.cellWidget(row, 8)
-            protocol = protocol_widget.currentText() if isinstance(protocol_widget, QComboBox) else "不限"
+            protocol = protocol_widget.currentText() if isinstance(protocol_widget, QComboBox) else "Any"
             rule = CustomRuleRecord(
                 id=self._optional_int(self._item_text(self.custom_table, row, 0)),
                 name=name,
                 severity=severity_widget.currentText() if isinstance(severity_widget, QComboBox) else "LOW",
                 enabled=enabled_widget.isChecked() if isinstance(enabled_widget, QCheckBox) else True,
-                protocol=None if protocol == "不限" else protocol,
+                protocol=None if protocol == "Any" else protocol,
                 src_ip=self._optional_text(self._item_text(self.custom_table, row, 5)),
                 dst_ip=self._optional_text(self._item_text(self.custom_table, row, 6)),
                 src_port=self._spin_optional_value(src_port_widget),
                 dst_port=self._spin_optional_value(dst_port_widget),
                 keyword=self._optional_text(self._item_text(self.custom_table, row, 9)),
-                description=self._item_text(self.custom_table, row, 10) or "命中自定义条件",
+                description=self._item_text(self.custom_table, row, 10) or "Matched custom rule conditions",
             )
             if rule.id is None:
                 self.custom_rule_repository.add(rule)
@@ -250,13 +261,21 @@ class RulePage(QWidget):
 
     def restore_defaults(self) -> None:
         self.rule_repository.reset_defaults()
-        QMessageBox.information(self, "已恢复", "默认规则已恢复。")
+        QMessageBox.information(self, "Restored", "Default rules have been restored.")
         self.refresh()
 
     def save_blacklist(self) -> None:
         self.blacklist_repository.save_all(self.blacklist_editor.toPlainText().splitlines())
-        QMessageBox.information(self, "保存完成", "黑名单 IP 已保存。")
+        QMessageBox.information(self, "Saved", "Blacklisted IP addresses saved.")
         self.refresh()
+
+    def _configure_table(self, table: QTableWidget) -> None:
+        header = table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Interactive)
+        header.setStretchLastSection(True)
+        table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        table.setAlternatingRowColors(True)
+        table.setWordWrap(False)
 
     def _set_text_item(self, table: QTableWidget, row: int, column: int, value: str) -> None:
         item = QTableWidgetItem(value)
@@ -266,7 +285,7 @@ class RulePage(QWidget):
     def _port_box(self, value: int | None) -> QSpinBox:
         box = QSpinBox()
         box.setRange(0, 65535)
-        box.setSpecialValueText("不限")
+        box.setSpecialValueText("Any")
         box.setValue(value or 0)
         return box
 

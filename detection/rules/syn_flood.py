@@ -7,7 +7,7 @@ from models import AlertRecord, PacketRecord
 
 class SynFloodRule(RuleBase):
     rule_id = "SYN_FLOOD"
-    name = "SYN Flood 检测"
+    name = "SYN flood detection"
     category = "flood"
     severity = "HIGH"
     threshold = 100
@@ -37,7 +37,7 @@ class SynFloodRule(RuleBase):
             self.create_alert(
                 packet,
                 alert_type="SYN_FLOOD",
-                description=f"源 IP 在 {self.time_window} 秒内向同一目标发送大量 TCP SYN 包。",
+                description=f"Source IP sent many TCP SYN packets to the same target within {self.time_window} seconds.",
                 evidence=evidence,
             )
         ]
