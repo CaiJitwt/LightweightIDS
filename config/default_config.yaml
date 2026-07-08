@@ -1,0 +1,19 @@
+app:
+  name: Lightweight IDS
+  version: 0.1.0
+
+database:
+  path: data/lightweight_ids.db
+
+logging:
+  level: INFO
+  file: logs/lightweight_ids.log
+
+ui:
+  window_width: 1180
+  window_height: 760
+
+detection:
+  alert_cooldown_seconds: 10
+  enable_realtime_detection: true
+  auto_save_packets: true

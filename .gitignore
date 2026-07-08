@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.test_cache/
+.test_tmp/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.conda/
+
+# Runtime data
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+logs/*.log
+reports/
+exports/
+
+# Local captures and generated samples
+sample_data/*.pcap
+sample_data/*.pcapng
+sample_data/*.cap
+sample_data/_verify_import.pcap
+
+# Packaging
+build/
+dist/
+*.spec
+
+# OS and editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

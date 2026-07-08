@@ -1,0 +1,41 @@
+rules:
+  - id: PORT_SCAN
+    name: 端口扫描检测
+    category: scan
+    severity: HIGH
+    enabled: true
+    threshold: 20
+    time_window: 10
+    description: 检测同一源 IP 在短时间内访问同一目标的多个端口。
+  - id: SYN_FLOOD
+    name: SYN Flood 检测
+    category: flood
+    severity: HIGH
+    enabled: true
+    threshold: 100
+    time_window: 10
+    description: 检测短时间内大量 TCP SYN 请求。
+  - id: ICMP_FLOOD
+    name: ICMP Flood 检测
+    category: flood
+    severity: MEDIUM
+    enabled: true
+    threshold: 50
+    time_window: 10
+    description: 检测短时间内大量 ICMP 数据包。
+  - id: SENSITIVE_PORT
+    name: 敏感端口访问检测
+    category: policy
+    severity: MEDIUM
+    enabled: true
+    threshold: 1
+    time_window: 0
+    description: 检测对常见敏感服务端口的访问。
+  - id: BLACKLIST_IP
+    name: 黑名单 IP 检测
+    category: reputation
+    severity: HIGH
+    enabled: true
+    threshold: 1
+    time_window: 0
+    description: 检测源 IP 或目标 IP 是否命中本地黑名单。
