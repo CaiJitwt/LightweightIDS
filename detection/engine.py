@@ -7,6 +7,7 @@ from detection.rules.blacklist import BlacklistRule
 from detection.rules.icmp_flood import IcmpFloodRule
 from detection.rules.port_scan import PortScanRule
 from detection.rules.sensitive_port import SensitivePortRule
+from detection.rules.sql_injection import SqlInjectionRule
 from detection.rules.syn_flood import SynFloodRule
 
 
@@ -25,6 +26,7 @@ class DetectionEngine:
                 IcmpFloodRule(),
                 SensitivePortRule(),
                 BlacklistRule(),
+                SqlInjectionRule(),
             ],
             alert_cooldown_seconds=alert_cooldown_seconds,
         )
@@ -37,6 +39,7 @@ class DetectionEngine:
             "ICMP_FLOOD": IcmpFloodRule,
             "SENSITIVE_PORT": SensitivePortRule,
             "BLACKLIST_IP": BlacklistRule,
+            "SQL_INJECTION": SqlInjectionRule,
         }
         rules: list[RuleBase] = []
         for record in rule_records:

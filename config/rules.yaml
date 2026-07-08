@@ -39,3 +39,11 @@ rules:
     threshold: 1
     time_window: 0
     description: 检测源 IP 或目标 IP 是否命中本地黑名单。
+  - id: SQL_INJECTION
+    name: SQL 注入检测
+    category: injection
+    severity: CRITICAL
+    enabled: true
+    threshold: 1
+    time_window: 0
+    description: 检测 HTTP 请求中的 SQL 注入攻击特征。
