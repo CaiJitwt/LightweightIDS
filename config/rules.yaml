@@ -47,3 +47,11 @@ rules:
     threshold: 1
     time_window: 0
     description: 检测 HTTP 请求中的 SQL 注入攻击特征。
+  - id: XSS
+    name: XSS 攻击检测
+    category: injection
+    severity: HIGH
+    enabled: true
+    threshold: 1
+    time_window: 0
+    description: 检测 HTTP 请求中的 XSS 跨站脚本攻击特征。
