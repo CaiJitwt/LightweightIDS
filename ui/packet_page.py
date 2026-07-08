@@ -18,10 +18,10 @@ from capture.interface_manager import InterfaceManager
 from capture.live_capture import LiveCapture
 from capture.pcap_loader import PcapLoader
 from detection.engine import DetectionEngine
-from models import AlertRecord, PacketRecord, RuleRecord
+from models import AlertRecord, CustomRuleRecord, PacketRecord, RuleRecord
 from parser.packet_parser import PacketParser
 from storage.database import Database
-from storage.repositories import AlertRepository, PacketRepository, RuleRepository
+from storage.repositories import AlertRepository, CustomRuleRepository, PacketRepository, RuleRepository
 from ui.widgets.packet_table import PacketTable
 
 
@@ -30,16 +30,23 @@ class PcapImportWorker(QThread):
     import_failed = Signal(str)
     import_finished = Signal(int, int)
 
-    def __init__(self, pcap_path: str | Path, rule_records: list[RuleRecord], batch_size: int = 100) -> None:
+    def __init__(
+        self,
+        pcap_path: str | Path,
+        rule_records: list[RuleRecord],
+        custom_rule_records: list[CustomRuleRecord],
+        batch_size: int = 100,
+    ) -> None:
         super().__init__()
         self.pcap_path = Path(pcap_path)
         self.rule_records = rule_records
+        self.custom_rule_records = custom_rule_records
         self.batch_size = batch_size
 
     def run(self) -> None:
         loader = PcapLoader()
         parser = PacketParser()
-        engine = DetectionEngine.from_rule_records(self.rule_records, alert_cooldown_seconds=10)
+        engine = DetectionEngine.from_rule_records(self.rule_records, self.custom_rule_records, alert_cooldown_seconds=10)
         packet_batch: list[PacketRecord] = []
         alert_batch: list[AlertRecord] = []
         packet_total = 0
@@ -49,7 +56,6 @@ class PcapImportWorker(QThread):
             for raw_packet in loader.load(self.pcap_path):
                 packet = parser.parse(raw_packet)
                 alerts = engine.process_packet(packet)
-
                 packet_batch.append(packet)
                 alert_batch.extend(alerts)
                 packet_total += 1
@@ -62,7 +68,6 @@ class PcapImportWorker(QThread):
 
             if packet_batch or alert_batch:
                 self.batch_processed.emit(packet_batch, alert_batch)
-
             self.import_finished.emit(packet_total, alert_total)
         except Exception as exc:
             self.import_failed.emit(str(exc))
@@ -73,15 +78,21 @@ class LiveCaptureWorker(QThread):
     capture_failed = Signal(str)
     capture_stopped = Signal()
 
-    def __init__(self, interface: str | None, rule_records: list[RuleRecord]) -> None:
+    def __init__(
+        self,
+        interface: str | None,
+        rule_records: list[RuleRecord],
+        custom_rule_records: list[CustomRuleRecord],
+    ) -> None:
         super().__init__()
         self.interface = interface
         self.rule_records = rule_records
+        self.custom_rule_records = custom_rule_records
         self.parser = PacketParser()
         self.capture: LiveCapture | None = None
 
     def run(self) -> None:
-        engine = DetectionEngine.from_rule_records(self.rule_records, alert_cooldown_seconds=10)
+        engine = DetectionEngine.from_rule_records(self.rule_records, self.custom_rule_records, alert_cooldown_seconds=10)
 
         def handle_raw_packet(raw_packet: object) -> None:
             packet = self.parser.parse(raw_packet)
@@ -108,6 +119,7 @@ class PacketPage(QWidget):
         self.packet_repository = PacketRepository(database)
         self.alert_repository = AlertRepository(database)
         self.rule_repository = RuleRepository(database)
+        self.custom_rule_repository = CustomRuleRepository(database)
         self.interface_manager = InterfaceManager()
         self.import_worker: PcapImportWorker | None = None
         self.live_worker: LiveCaptureWorker | None = None
@@ -116,7 +128,6 @@ class PacketPage(QWidget):
         self.saved_alert_count = 0
 
         layout = QVBoxLayout(self)
-
         toolbar = QHBoxLayout()
         self.interface_combo = QComboBox()
         self.interface_combo.setMinimumWidth(220)
@@ -148,7 +159,6 @@ class PacketPage(QWidget):
         self.start_capture_button.clicked.connect(self.start_live_capture)
         self.stop_capture_button.clicked.connect(self.stop_live_capture)
         self.clear_button.clicked.connect(self.clear_packets)
-
         self.refresh_interfaces()
 
     def refresh_interfaces(self) -> None:
@@ -168,10 +178,8 @@ class PacketPage(QWidget):
             "",
             "pcap 文件 (*.pcap *.pcapng *.cap);;所有文件 (*)",
         )
-        if not path:
-            return
-
-        self.start_import(path)
+        if path:
+            self.start_import(path)
 
     def start_import(self, path: str | Path) -> None:
         if self.import_worker and self.import_worker.isRunning():
@@ -185,7 +193,11 @@ class PacketPage(QWidget):
         self._set_busy(True)
         self.status_label.setText(f"正在导入并检测：{Path(path).name}")
 
-        self.import_worker = PcapImportWorker(path, self.rule_repository.list_all())
+        self.import_worker = PcapImportWorker(
+            path,
+            self.rule_repository.list_all(),
+            self.custom_rule_repository.list_all(),
+        )
         self.import_worker.batch_processed.connect(self.handle_processed_batch)
         self.import_worker.import_failed.connect(self.handle_import_failed)
         self.import_worker.import_finished.connect(self.handle_import_finished)
@@ -194,7 +206,6 @@ class PacketPage(QWidget):
     def start_live_capture(self) -> None:
         if self.live_worker and self.live_worker.isRunning():
             return
-
         interface = self.interface_combo.currentData()
         self.status_label.setText("实时抓包已启动，检测结果会持续写入数据库。")
         self.start_capture_button.setEnabled(False)
@@ -202,7 +213,11 @@ class PacketPage(QWidget):
         self.import_button.setEnabled(False)
         self.refresh_interfaces_button.setEnabled(False)
 
-        self.live_worker = LiveCaptureWorker(interface=interface, rule_records=self.rule_repository.list_all())
+        self.live_worker = LiveCaptureWorker(
+            interface=interface,
+            rule_records=self.rule_repository.list_all(),
+            custom_rule_records=self.custom_rule_repository.list_all(),
+        )
         self.live_worker.packet_processed.connect(self.handle_processed_batch)
         self.live_worker.capture_failed.connect(self.handle_capture_failed)
         self.live_worker.capture_stopped.connect(self.handle_capture_stopped)

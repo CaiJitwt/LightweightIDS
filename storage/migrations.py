@@ -49,6 +49,21 @@ CREATE TABLE IF NOT EXISTS rules (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS custom_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'LOW',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    protocol TEXT,
+    src_ip TEXT,
+    dst_ip TEXT,
+    src_port INTEGER,
+    dst_port INTEGER,
+    keyword TEXT,
+    description TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL

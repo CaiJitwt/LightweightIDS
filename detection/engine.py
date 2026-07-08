@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from models import AlertRecord, PacketRecord
+from models import AlertRecord, CustomRuleRecord, PacketRecord
 from models import RuleRecord
 from detection.rule_base import RuleBase
 from detection.rules.blacklist import BlacklistRule
+from detection.rules.custom_rule import CustomRule
 from detection.rules.icmp_flood import IcmpFloodRule
 from detection.rules.port_scan import PortScanRule
 from detection.rules.sensitive_port import SensitivePortRule
@@ -30,7 +31,12 @@ class DetectionEngine:
         )
 
     @classmethod
-    def from_rule_records(cls, rule_records: list[RuleRecord], alert_cooldown_seconds: int = 10) -> "DetectionEngine":
+    def from_rule_records(
+        cls,
+        rule_records: list[RuleRecord],
+        custom_rule_records: list[CustomRuleRecord] | None = None,
+        alert_cooldown_seconds: int = 10,
+    ) -> "DetectionEngine":
         rule_map = {
             "PORT_SCAN": PortScanRule,
             "SYN_FLOOD": SynFloodRule,
@@ -51,6 +57,9 @@ class DetectionEngine:
                     severity=record.severity,
                 )
             )
+        for record in custom_rule_records or []:
+            if record.enabled:
+                rules.append(CustomRule(record))
         return cls(rules=rules, alert_cooldown_seconds=alert_cooldown_seconds)
 
     def add_rule(self, rule: RuleBase) -> None:

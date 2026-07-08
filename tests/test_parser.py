@@ -16,7 +16,7 @@ def test_packet_parser_extracts_tcp_fields():
     assert record.dst_ip == "192.168.1.20"
     assert record.src_port == 12345
     assert record.dst_port == 443
-    assert record.protocol == "TCP"
+    assert record.protocol == "HTTPS"
     assert record.tcp_flags == "S"
 
 
@@ -43,3 +43,21 @@ def test_packet_parser_extracts_http_request_fields():
     assert record.http_method == "GET"
     assert record.http_host == "example.com"
     assert record.http_path == "/login"
+
+
+def test_packet_parser_identifies_arp():
+    packet = scapy.ARP(psrc="192.168.1.10", pdst="192.168.1.1")
+
+    record = PacketParser().parse(packet)
+
+    assert record.protocol == "ARP"
+    assert record.src_ip == "192.168.1.10"
+    assert record.dst_ip == "192.168.1.1"
+
+
+def test_packet_parser_identifies_common_udp_protocols():
+    packet = scapy.IP(src="10.0.0.10", dst="224.0.0.252") / scapy.UDP(sport=5355, dport=5355)
+
+    record = PacketParser().parse(packet)
+
+    assert record.protocol == "LLMNR"
