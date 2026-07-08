@@ -12,9 +12,10 @@ class PacketParser:
             from scapy.layers.dns import DNS, DNSQR
             from scapy.layers.inet import ICMP, IP, TCP, UDP
             from scapy.layers.inet6 import IPv6
+            from scapy.layers.l2 import ARP
             from scapy.packet import Raw
         except ImportError as exc:
-            raise RuntimeError("缺少 Scapy。请先安装 requirements.txt 中的依赖。") from exc
+            raise RuntimeError("缺少 Scapy，请先安装 requirements.txt 中的依赖。") from exc
 
         timestamp = self._format_timestamp(getattr(packet, "time", None))
         src_ip: Optional[str] = None
@@ -26,7 +27,6 @@ class PacketParser:
         http_method: Optional[str] = None
         http_host: Optional[str] = None
         http_path: Optional[str] = None
-        protocol = "UNKNOWN"
 
         if self._has_layer(packet, IP):
             ip_layer = packet[IP]  # type: ignore[index]
@@ -36,38 +36,37 @@ class PacketParser:
             ip_layer = packet[IPv6]  # type: ignore[index]
             src_ip = str(ip_layer.src)
             dst_ip = str(ip_layer.dst)
+        elif self._has_layer(packet, ARP):
+            arp_layer = packet[ARP]  # type: ignore[index]
+            src_ip = str(getattr(arp_layer, "psrc", "") or "")
+            dst_ip = str(getattr(arp_layer, "pdst", "") or "")
 
         if self._has_layer(packet, TCP):
             tcp_layer = packet[TCP]  # type: ignore[index]
-            protocol = "TCP"
             src_port = int(tcp_layer.sport)
             dst_port = int(tcp_layer.dport)
             tcp_flags = str(tcp_layer.flags)
         elif self._has_layer(packet, UDP):
             udp_layer = packet[UDP]  # type: ignore[index]
-            protocol = "UDP"
             src_port = int(udp_layer.sport)
             dst_port = int(udp_layer.dport)
-        elif self._has_layer(packet, ICMP):
-            protocol = "ICMP"
-
-        if self._has_layer(packet, DNS):
-            protocol = "DNS"
-            if self._has_layer(packet, DNSQR):
-                dns_query = self._decode_bytes(packet[DNSQR].qname).rstrip(".")  # type: ignore[index]
 
         payload_text = ""
         if self._has_layer(packet, Raw):
             payload_text = self._decode_bytes(bytes(packet[Raw].load))  # type: ignore[index]
 
-        if self._looks_like_http(src_port, dst_port, payload_text):
-            protocol = "HTTP"
+        protocol = self._detect_protocol(packet, src_port, dst_port, payload_text)
+
+        if self._has_layer(packet, DNS) and self._has_layer(packet, DNSQR):
+            dns_query = self._decode_bytes(packet[DNSQR].qname).rstrip(".")  # type: ignore[index]
+
+        if protocol == "HTTP":
             http_method, http_host, http_path = self._parse_http_payload(payload_text)
 
         return PacketRecord(
             timestamp=timestamp,
-            src_ip=src_ip,
-            dst_ip=dst_ip,
+            src_ip=src_ip or None,
+            dst_ip=dst_ip or None,
             src_port=src_port,
             dst_port=dst_port,
             protocol=protocol,
@@ -80,6 +79,49 @@ class PacketParser:
             raw_summary=self._packet_summary(packet),
         )
 
+    def _detect_protocol(self, packet: object, src_port: Optional[int], dst_port: Optional[int], payload: str) -> str:
+        try:
+            from scapy.layers.dns import DNS
+            from scapy.layers.inet import ICMP, IP, TCP, UDP
+            from scapy.layers.inet6 import IPv6
+            from scapy.layers.l2 import ARP
+        except ImportError:
+            return "UNKNOWN"
+
+        if self._has_layer(packet, ARP):
+            return "ARP"
+        if self._has_layer(packet, DNS) or 53 in {src_port, dst_port}:
+            return "DNS"
+        if self._looks_like_http(src_port, dst_port, payload):
+            return "HTTP"
+        if self._has_layer(packet, TCP):
+            if 443 in {src_port, dst_port}:
+                return "HTTPS"
+            return "TCP"
+        if self._has_layer(packet, UDP):
+            if 67 in {src_port, dst_port} or 68 in {src_port, dst_port}:
+                return "DHCP"
+            if 5353 in {src_port, dst_port}:
+                return "MDNS"
+            if 5355 in {src_port, dst_port}:
+                return "LLMNR"
+            if 137 in {src_port, dst_port}:
+                return "NBNS"
+            if 123 in {src_port, dst_port}:
+                return "NTP"
+            if 443 in {src_port, dst_port}:
+                return "QUIC"
+            return "UDP"
+        if self._has_layer(packet, ICMP):
+            return "ICMP"
+        if self._has_icmpv6(packet):
+            return "ICMPv6"
+        if self._has_layer(packet, IPv6):
+            return "IPv6"
+        if self._has_layer(packet, IP):
+            return "IP"
+        return self._first_meaningful_layer_name(packet)
+
     def _format_timestamp(self, value: Any) -> str:
         try:
             return datetime.fromtimestamp(float(value)).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
@@ -91,6 +133,25 @@ class PacketParser:
             return bool(packet.haslayer(layer))  # type: ignore[attr-defined]
         except Exception:
             return False
+
+    def _has_icmpv6(self, packet: object) -> bool:
+        for layer_name in self._layer_names(packet):
+            if layer_name.startswith("ICMPv6"):
+                return True
+        return False
+
+    def _first_meaningful_layer_name(self, packet: object) -> str:
+        ignored = {"Ether", "CookedLinux", "Padding", "Raw"}
+        for layer_name in self._layer_names(packet):
+            if layer_name not in ignored:
+                return layer_name.upper()
+        return "UNKNOWN"
+
+    def _layer_names(self, packet: object) -> list[str]:
+        try:
+            return [layer.__name__ for layer in packet.layers()]  # type: ignore[attr-defined]
+        except Exception:
+            return []
 
     def _decode_bytes(self, value: bytes | str | object) -> str:
         if isinstance(value, bytes):

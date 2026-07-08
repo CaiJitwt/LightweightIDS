@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from pathlib import Path
 
-from models import AlertRecord, PacketRecord, RuleRecord
+from models import AlertRecord, CustomRuleRecord, PacketRecord, RuleRecord
 from storage.database import Database
 from storage.migrations import DEFAULT_RULES
 
@@ -18,32 +18,23 @@ class PacketRepository:
         columns = ", ".join(data.keys())
         placeholders = ", ".join("?" for _ in data)
         with self.database.connect() as connection:
-            cursor = connection.execute(
-                f"INSERT INTO packets ({columns}) VALUES ({placeholders})",
-                tuple(data.values()),
-            )
+            cursor = connection.execute(f"INSERT INTO packets ({columns}) VALUES ({placeholders})", tuple(data.values()))
             connection.commit()
             return int(cursor.lastrowid)
 
     def add_many(self, packets: list[PacketRecord]) -> int:
         if not packets:
             return 0
-
         rows = []
         for packet in packets:
             data = asdict(packet)
             data.pop("id", None)
             rows.append(data)
-
         columns = ", ".join(rows[0].keys())
         placeholders = ", ".join("?" for _ in rows[0])
         values = [tuple(row.values()) for row in rows]
-
         with self.database.connect() as connection:
-            connection.executemany(
-                f"INSERT INTO packets ({columns}) VALUES ({placeholders})",
-                values,
-            )
+            connection.executemany(f"INSERT INTO packets ({columns}) VALUES ({placeholders})", values)
             connection.commit()
         return len(rows)
 
@@ -131,32 +122,23 @@ class AlertRepository:
         columns = ", ".join(data.keys())
         placeholders = ", ".join("?" for _ in data)
         with self.database.connect() as connection:
-            cursor = connection.execute(
-                f"INSERT INTO alerts ({columns}) VALUES ({placeholders})",
-                tuple(data.values()),
-            )
+            cursor = connection.execute(f"INSERT INTO alerts ({columns}) VALUES ({placeholders})", tuple(data.values()))
             connection.commit()
             return int(cursor.lastrowid)
 
     def add_many(self, alerts: list[AlertRecord]) -> int:
         if not alerts:
             return 0
-
         rows = []
         for alert in alerts:
             data = asdict(alert)
             data.pop("id", None)
             rows.append(data)
-
         columns = ", ".join(rows[0].keys())
         placeholders = ", ".join("?" for _ in rows[0])
         values = [tuple(row.values()) for row in rows]
-
         with self.database.connect() as connection:
-            connection.executemany(
-                f"INSERT INTO alerts ({columns}) VALUES ({placeholders})",
-                values,
-            )
+            connection.executemany(f"INSERT INTO alerts ({columns}) VALUES ({placeholders})", values)
             connection.commit()
         return len(rows)
 
@@ -168,11 +150,9 @@ class AlertRepository:
         """
         clauses: list[str] = []
         values: list[object] = []
-
         if severity and severity != "全部等级":
             clauses.append("severity = ?")
             values.append(severity)
-
         if keyword:
             like_value = f"%{keyword}%"
             clauses.append(
@@ -182,13 +162,10 @@ class AlertRepository:
                 """
             )
             values.extend([like_value] * 7)
-
         if clauses:
             sql += " WHERE " + " AND ".join(clauses)
-
         sql += " ORDER BY id DESC LIMIT ?"
         values.append(limit)
-
         with self.database.connect() as connection:
             rows = connection.execute(sql, tuple(values)).fetchall()
         return [self._from_row(row) for row in rows]
@@ -204,16 +181,12 @@ class AlertRepository:
 
     def count_by_severity(self) -> dict[str, int]:
         with self.database.connect() as connection:
-            rows = connection.execute(
-                "SELECT severity, COUNT(*) AS total FROM alerts GROUP BY severity ORDER BY total DESC"
-            ).fetchall()
+            rows = connection.execute("SELECT severity, COUNT(*) AS total FROM alerts GROUP BY severity ORDER BY total DESC").fetchall()
         return {str(row["severity"]): int(row["total"]) for row in rows}
 
     def count_by_type(self) -> dict[str, int]:
         with self.database.connect() as connection:
-            rows = connection.execute(
-                "SELECT alert_type, COUNT(*) AS total FROM alerts GROUP BY alert_type ORDER BY total DESC"
-            ).fetchall()
+            rows = connection.execute("SELECT alert_type, COUNT(*) AS total FROM alerts GROUP BY alert_type ORDER BY total DESC").fetchall()
         return {str(row["alert_type"]): int(row["total"]) for row in rows}
 
     def _from_row(self, row: object) -> AlertRecord:
@@ -303,6 +276,82 @@ class RuleRepository:
                 DEFAULT_RULES,
             )
             connection.commit()
+
+
+class CustomRuleRepository:
+    def __init__(self, database: Database) -> None:
+        self.database = database
+
+    def list_all(self) -> list[CustomRuleRecord]:
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, name, severity, enabled, protocol, src_ip, dst_ip, src_port,
+                       dst_port, keyword, description
+                FROM custom_rules
+                ORDER BY id
+                """
+            ).fetchall()
+        return [self._from_row(row) for row in rows]
+
+    def add(self, rule: CustomRuleRecord) -> int:
+        data = asdict(rule)
+        data.pop("id", None)
+        data["enabled"] = 1 if rule.enabled else 0
+        columns = ", ".join(data.keys())
+        placeholders = ", ".join("?" for _ in data)
+        with self.database.connect() as connection:
+            cursor = connection.execute(f"INSERT INTO custom_rules ({columns}) VALUES ({placeholders})", tuple(data.values()))
+            connection.commit()
+            return int(cursor.lastrowid)
+
+    def update(self, rule: CustomRuleRecord) -> None:
+        if rule.id is None:
+            self.add(rule)
+            return
+        with self.database.connect() as connection:
+            connection.execute(
+                """
+                UPDATE custom_rules
+                SET name = ?, severity = ?, enabled = ?, protocol = ?, src_ip = ?, dst_ip = ?,
+                    src_port = ?, dst_port = ?, keyword = ?, description = ?
+                WHERE id = ?
+                """,
+                (
+                    rule.name,
+                    rule.severity,
+                    1 if rule.enabled else 0,
+                    rule.protocol,
+                    rule.src_ip,
+                    rule.dst_ip,
+                    rule.src_port,
+                    rule.dst_port,
+                    rule.keyword,
+                    rule.description,
+                    rule.id,
+                ),
+            )
+            connection.commit()
+
+    def delete(self, rule_id: int) -> None:
+        with self.database.connect() as connection:
+            connection.execute("DELETE FROM custom_rules WHERE id = ?", (rule_id,))
+            connection.commit()
+
+    def _from_row(self, row: object) -> CustomRuleRecord:
+        return CustomRuleRecord(
+            id=row["id"],  # type: ignore[index]
+            name=row["name"],  # type: ignore[index]
+            severity=row["severity"],  # type: ignore[index]
+            enabled=bool(row["enabled"]),  # type: ignore[index]
+            protocol=row["protocol"],  # type: ignore[index]
+            src_ip=row["src_ip"],  # type: ignore[index]
+            dst_ip=row["dst_ip"],  # type: ignore[index]
+            src_port=row["src_port"],  # type: ignore[index]
+            dst_port=row["dst_port"],  # type: ignore[index]
+            keyword=row["keyword"],  # type: ignore[index]
+            description=row["description"],  # type: ignore[index]
+        )
 
 
 class BlacklistRepository:
