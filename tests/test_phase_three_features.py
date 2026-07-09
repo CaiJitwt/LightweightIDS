@@ -14,6 +14,7 @@ def alert(
     rule_id: str,
     alert_type: str,
     src_ip: str = "192.168.1.10",
+    dst_ip: str = "192.168.1.20",
     severity: str = "HIGH",
 ) -> AlertRecord:
     return AlertRecord(
@@ -23,7 +24,7 @@ def alert(
         alert_type=alert_type,
         severity=severity,
         src_ip=src_ip,
-        dst_ip="192.168.1.20",
+        dst_ip=dst_ip,
         description="test",
         evidence="test",
     )
@@ -77,6 +78,28 @@ def test_attack_chain_analyzer_links_stages_by_source_ip():
     assert chains[0].risk_score > 50
 
 
+def test_attack_chain_analyzer_orders_full_chain_by_source_target_and_time():
+    alerts = [
+        alert(timestamp="2026-01-01 00:00:00.000", rule_id="HOST_SCAN", alert_type="HOST_SCAN"),
+        alert(timestamp="2026-01-01 00:00:05.000", rule_id="SQL_INJECTION", alert_type="SQL_INJECTION"),
+        alert(timestamp="2026-01-01 00:00:10.000", rule_id="MALICIOUS_COMMAND", alert_type="MALICIOUS_COMMAND"),
+        alert(timestamp="2026-01-01 00:00:15.000", rule_id="ABNORMAL_OUTBOUND", alert_type="C2_HEARTBEAT_SUSPECTED"),
+        alert(timestamp="2026-01-01 00:00:20.000", rule_id="LATERAL_MOVEMENT", alert_type="LATERAL_MOVEMENT"),
+        alert(
+            timestamp="2026-01-01 00:00:25.000",
+            rule_id="SQL_INJECTION",
+            alert_type="SQL_INJECTION",
+            dst_ip="192.168.1.30",
+        ),
+    ]
+
+    chains = AttackChainAnalyzer().analyze(alerts)
+
+    assert len(chains) == 1
+    assert chains[0].target_ip == "192.168.1.20"
+    assert chains[0].stages == ["scan", "exploit", "execution", "c2", "lateral_movement"]
+
+
 def test_noise_reducer_filters_whitelist_and_merges_duplicates():
     reducer = AlertNoiseReducer(whitelist_ips={"192.168.1.10"}, merge_window_seconds=60)
     alerts = [
@@ -106,8 +129,29 @@ def test_noise_reducer_raises_severity_for_important_asset():
     assert "asset_importance=95" in adjusted.evidence
 
 
+def test_noise_reducer_applies_minimum_severity_after_asset_importance():
+    reducer = AlertNoiseReducer(asset_importance={"192.168.1.20": 95}, minimum_severity="HIGH")
+    alerts = [
+        alert(timestamp="2026-01-01 00:00:00.000", rule_id="DNS_ANOMALY", alert_type="DNS_QUERY_FREQUENCY", severity="LOW"),
+        alert(timestamp="2026-01-01 00:00:01.000", rule_id="TLS_FINGERPRINT", alert_type="TLS_WEAK_FINGERPRINT", severity="MEDIUM"),
+    ]
+
+    filtered = reducer.filter_alerts(alerts)
+
+    assert len(filtered) == 2
+    assert {alert.severity for alert in filtered} == {"HIGH"}
+
+
 def test_detection_engine_registers_phase_three_rules():
     engine = DetectionEngine.with_default_rules(alert_cooldown_seconds=0)
     rule_ids = {rule.rule_id for rule in engine.rules}
 
-    assert {"TLS_FINGERPRINT", "ML_ANOMALY"} <= rule_ids
+    assert {
+        "TLS_FINGERPRINT",
+        "ML_ANOMALY",
+        "ML_FLOW_ANOMALY",
+        "SIGNATURE_MATCH",
+        "BASELINE_DEVIATION",
+        "BANDWIDTH_SPIKE",
+        "SESSION_DURATION_ANOMALY",
+    } <= rule_ids

@@ -130,8 +130,43 @@ rules:
   - id: WEB_ATTACK
     name: Web attack (advanced)
     category: web
+  - id: ML_FLOW_ANOMALY
+    name: ML flow anomaly
+    category: behavior
+    severity: HIGH
+    enabled: true
+    threshold: 80
+    time_window: 60
+    description: Uses flow-level features with IsolationForest or a lightweight fallback model to detect anomalous host behavior.
+  - id: SIGNATURE_MATCH
+    name: External signature match
+    category: signature
     severity: HIGH
     enabled: true
     threshold: 1
     time_window: 0
     description: Detects XXE, SSTI, CRLF, LDAP/XPath injection, deserialization, webshell and sensitive file discovery.
+  - id: BASELINE_DEVIATION
+    name: Baseline deviation
+    category: behavior
+    severity: HIGH
+    enabled: true
+    threshold: 3
+    time_window: 60
+    description: Detects hosts whose activity exceeds historical packet, destination, port or byte baselines.
+  - id: BANDWIDTH_SPIKE
+    name: Bandwidth spike
+    category: behavior
+    severity: HIGH
+    enabled: true
+    threshold: 4
+    time_window: 60
+    description: Detects hosts whose byte volume sharply exceeds their historical baseline.
+  - id: SESSION_DURATION_ANOMALY
+    name: Session duration anomaly
+    category: behavior
+    severity: MEDIUM
+    enabled: true
+    threshold: 3
+    time_window: 600
+    description: Detects sessions that last much longer than the host historical average.

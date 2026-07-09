@@ -65,4 +65,14 @@ SQLite 表包括：
 - `custom_rules`：保存用户自定义规则。
 - `settings`：保存应用配置。
 
+## AI Flow Anomaly Module
+
+The course-level AI anomaly module is intentionally lightweight and local-only. `detection/features/flow_feature_extractor.py` aggregates `PacketRecord` objects by `src_ip`, `dst_ip`, and a configurable time window into `FlowFeature` records. The feature vector includes packet count, byte count, unique destination ports, unique destination IPs, SYN count, ICMP count, DNS query count, sensitive-port count, and HTTP indicator count.
+
+`detection/ml/isolation_forest_detector.py` prefers scikit-learn `IsolationForest` when scikit-learn is available in the local Python environment. If it is not installed, the detector falls back to the built-in `SimpleAnomalyDetector` and deterministic flow heuristics. This keeps the project testable without external network access. The model persistence path is `data/models/flow_anomaly.pkl`.
+
+`MlFlowAnomalyRule` consumes flow features, scores them, and emits `ML_ANOMALY` alerts with a numeric score plus top reasons. The original packet-level `MlAnomalyRule` remains available, so the flow-level model can be disabled or tuned independently through rule records.
+
+Attack-chain analysis groups alerts by source and target, then links stages in timestamp order using the defensive progression `scan -> exploit -> execution -> c2 -> lateral_movement`. Alert noise reduction supports duplicate merging, IP whitelists, asset-importance severity escalation, and a configurable minimum severity filter.
+
 数据库初始化会补齐新增默认规则，但不会覆盖用户已经调整过的启用状态、阈值和时间窗口。用户可通过规则管理页的恢复默认功能重置规则参数。

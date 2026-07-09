@@ -20,6 +20,11 @@ def test_database_initializes_default_tables_and_rules(tmp_path):
         "HOST_SCAN",
         "TLS_FINGERPRINT",
         "ML_ANOMALY",
+        "ML_FLOW_ANOMALY",
+        "SIGNATURE_MATCH",
+        "BASELINE_DEVIATION",
+        "BANDWIDTH_SPIKE",
+        "SESSION_DURATION_ANOMALY",
     }
 
 

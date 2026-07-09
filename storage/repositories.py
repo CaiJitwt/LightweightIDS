@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from pathlib import Path
 
-from models import AlertRecord, CustomRuleRecord, PacketRecord, RuleRecord
+from models import AlertRecord, BaselineRecord, CustomRuleRecord, PacketRecord, RuleRecord
 from storage.database import Database
 from storage.migrations import DEFAULT_RULES
 
@@ -358,6 +358,80 @@ class CustomRuleRepository:
             dst_port=row["dst_port"],  # type: ignore[index]
             keyword=row["keyword"],  # type: ignore[index]
             description=row["description"],  # type: ignore[index]
+        )
+
+
+class BaselineRepository:
+    def __init__(self, database: Database) -> None:
+        self.database = database
+
+    def upsert(self, baseline: BaselineRecord) -> None:
+        with self.database.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO baselines
+                    (src_ip, updated_at, window_seconds, packet_count, connection_count,
+                     unique_dst_ips, unique_dst_ports, avg_packet_length, bytes_per_window,
+                     internal_to_external_ratio)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(src_ip) DO UPDATE SET
+                    updated_at = excluded.updated_at,
+                    window_seconds = excluded.window_seconds,
+                    packet_count = excluded.packet_count,
+                    connection_count = excluded.connection_count,
+                    unique_dst_ips = excluded.unique_dst_ips,
+                    unique_dst_ports = excluded.unique_dst_ports,
+                    avg_packet_length = excluded.avg_packet_length,
+                    bytes_per_window = excluded.bytes_per_window,
+                    internal_to_external_ratio = excluded.internal_to_external_ratio
+                """,
+                (
+                    baseline.src_ip,
+                    baseline.updated_at,
+                    baseline.window_seconds,
+                    baseline.packet_count,
+                    baseline.connection_count,
+                    baseline.unique_dst_ips,
+                    baseline.unique_dst_ports,
+                    baseline.avg_packet_length,
+                    baseline.bytes_per_window,
+                    baseline.internal_to_external_ratio,
+                ),
+            )
+            connection.commit()
+
+    def upsert_many(self, baselines: list[BaselineRecord]) -> None:
+        for baseline in baselines:
+            self.upsert(baseline)
+
+    def list_all(self, limit: int = 100) -> list[BaselineRecord]:
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, src_ip, updated_at, window_seconds, packet_count, connection_count,
+                       unique_dst_ips, unique_dst_ports, avg_packet_length, bytes_per_window,
+                       internal_to_external_ratio
+                FROM baselines
+                ORDER BY bytes_per_window DESC, packet_count DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [self._from_row(row) for row in rows]
+
+    def _from_row(self, row: object) -> BaselineRecord:
+        return BaselineRecord(
+            id=row["id"],  # type: ignore[index]
+            src_ip=row["src_ip"],  # type: ignore[index]
+            updated_at=row["updated_at"],  # type: ignore[index]
+            window_seconds=int(row["window_seconds"]),  # type: ignore[index]
+            packet_count=int(row["packet_count"]),  # type: ignore[index]
+            connection_count=int(row["connection_count"]),  # type: ignore[index]
+            unique_dst_ips=int(row["unique_dst_ips"]),  # type: ignore[index]
+            unique_dst_ports=int(row["unique_dst_ports"]),  # type: ignore[index]
+            avg_packet_length=float(row["avg_packet_length"]),  # type: ignore[index]
+            bytes_per_window=int(row["bytes_per_window"]),  # type: ignore[index]
+            internal_to_external_ratio=float(row["internal_to_external_ratio"]),  # type: ignore[index]
         )
 
 

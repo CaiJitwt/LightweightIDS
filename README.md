@@ -1,5 +1,21 @@
 # Lightweight IDS
 
+## Course-Level AI Flow Anomaly Detection
+
+Lightweight IDS includes a lightweight flow anomaly module for local coursework experiments. `FlowFeatureExtractor` aggregates `PacketRecord` objects by source IP, destination IP, and time window, then produces features such as packet count, byte count, destination diversity, SYN/ICMP/DNS counts, sensitive-port count, and HTTP indicator count.
+
+`IsolationForestFlowDetector` uses scikit-learn `IsolationForest` when it is already installed. If scikit-learn is unavailable, it automatically falls back to the built-in `SimpleAnomalyDetector` plus deterministic flow heuristics, so the project remains testable without external network access or extra downloads. Models can be saved to and loaded from `data/models/flow_anomaly.pkl`.
+
+The `ML_FLOW_ANOMALY` rule emits `ML_ANOMALY` alerts with a score and top reasons. This is a defensive, explainable course feature, not a replacement for rule review or authorized lab validation.
+
+## Authorized Decrypted HTTPS Analysis
+
+Lightweight IDS can import local JSONL or CSV logs that already contain decrypted HTTP request data from an authorized lab environment. This workflow is intended for defensive coursework, controlled experiments, and traffic the user has permission to inspect.
+
+The project does not install certificates, does not perform unauthorized man-in-the-middle interception, and does not actively access public targets. The `Import decrypted HTTP log` workflow only reads a local file and converts each record into an HTTP `PacketRecord` so existing application-layer rules such as `SQL_INJECTION`, `XSS`, `HTTP_SUSPICIOUS`, and `MALICIOUS_COMMAND` can run offline.
+
+Normal pcap files that contain encrypted HTTPS payloads cannot be directly inspected for SQL injection or XSS content. For HTTPS content detection, provide logs from an authorized decrypted source, such as a course lab TLS proxy/exporter or another system where you are explicitly permitted to inspect the plaintext HTTP data.
+
 轻量级网络入侵检测系统课程项目。项目使用 Python 3.11、PySide6、Scapy 和 SQLite，实现本地 pcap 离线检测、规则匹配、告警展示、日志保存和报告导出；实时抓包能力已预留并实现基础入口。
 
 本项目只用于教学、实验和防御性检测，不包含真实攻击利用代码，不对公网目标进行扫描或攻击。测试应基于本地 pcap 文件、实验环境流量或模拟数据。

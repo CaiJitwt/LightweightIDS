@@ -12,6 +12,7 @@ class AttackChain:
     stages: list[str]
     alerts: list[AlertRecord]
     risk_score: int
+    target_ip: str = ""
 
     @property
     def summary(self) -> str:
@@ -19,6 +20,7 @@ class AttackChain:
 
 
 class AttackChainAnalyzer:
+    STAGE_ORDER = ["scan", "exploit", "execution", "c2", "lateral_movement"]
     STAGE_BY_RULE = {
         "PORT_SCAN": "scan",
         "HOST_SCAN": "scan",
@@ -28,11 +30,13 @@ class AttackChainAnalyzer:
         "HTTP_SUSPICIOUS": "exploit",
         "WEB_ATTACK": "exploit",
         "MALICIOUS_COMMAND": "execution",
+        "SIGNATURE_MATCH": "exploit",
         "BRUTE_FORCE": "credential_access",
         "DNS_ANOMALY": "c2",
         "ABNORMAL_OUTBOUND": "c2",
         "TLS_FINGERPRINT": "c2",
         "LATERAL_MOVEMENT": "lateral_movement",
+        "ML_FLOW_ANOMALY": "c2",
     }
     STAGE_BY_TYPE = {
         "C2_HEARTBEAT_SUSPECTED": "c2",
@@ -41,17 +45,20 @@ class AttackChainAnalyzer:
         "LATERAL_MOVEMENT": "lateral_movement",
         "TLS_WEAK_FINGERPRINT": "c2",
         "ML_ANOMALY": "anomaly",
+        "BASELINE_DEVIATION": "c2",
+        "BANDWIDTH_SPIKE": "c2",
+        "SESSION_DURATION_ANOMALY": "c2",
     }
 
     def analyze(self, alerts: list[AlertRecord]) -> list[AttackChain]:
-        grouped: dict[str, list[AlertRecord]] = {}
+        grouped: dict[tuple[str, str], list[AlertRecord]] = {}
         for alert in alerts:
             if not alert.src_ip:
                 continue
-            grouped.setdefault(alert.src_ip, []).append(alert)
+            grouped.setdefault((alert.src_ip, alert.dst_ip or ""), []).append(alert)
 
         chains: list[AttackChain] = []
-        for source_ip, source_alerts in grouped.items():
+        for (source_ip, target_ip), source_alerts in grouped.items():
             ordered_alerts = sorted(source_alerts, key=self._timestamp_key)
             stages = self._ordered_stages(ordered_alerts)
             if len(stages) < 2:
@@ -62,6 +69,7 @@ class AttackChainAnalyzer:
                     stages=stages,
                     alerts=ordered_alerts,
                     risk_score=self._risk_score(stages, ordered_alerts),
+                    target_ip=target_ip,
                 )
             )
 
@@ -77,13 +85,22 @@ class AttackChainAnalyzer:
 
     def _ordered_stages(self, alerts: list[AlertRecord]) -> list[str]:
         stages: list[str] = []
+        highest_stage_index = -1
         for alert in alerts:
             stage = self._stage_for(alert)
-            if stage and stage not in stages:
+            if stage not in self.STAGE_ORDER:
+                continue
+            stage_index = self.STAGE_ORDER.index(stage)
+            if stage_index < highest_stage_index:
+                continue
+            highest_stage_index = stage_index
+            if stage not in stages:
                 stages.append(stage)
         return stages
 
     def _stage_for(self, alert: AlertRecord) -> str | None:
+        if alert.rule_id == "ML_FLOW_ANOMALY":
+            return self.STAGE_BY_RULE[alert.rule_id]
         return self.STAGE_BY_TYPE.get(alert.alert_type) or self.STAGE_BY_RULE.get(alert.rule_id)
 
     def _risk_score(self, stages: list[str], alerts: list[AlertRecord]) -> int:

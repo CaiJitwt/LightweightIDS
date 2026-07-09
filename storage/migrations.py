@@ -64,6 +64,21 @@ CREATE TABLE IF NOT EXISTS custom_rules (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS baselines (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    src_ip TEXT NOT NULL UNIQUE,
+    updated_at TEXT NOT NULL,
+    window_seconds INTEGER NOT NULL,
+    packet_count INTEGER NOT NULL DEFAULT 0,
+    connection_count INTEGER NOT NULL DEFAULT 0,
+    unique_dst_ips INTEGER NOT NULL DEFAULT 0,
+    unique_dst_ports INTEGER NOT NULL DEFAULT 0,
+    avg_packet_length REAL NOT NULL DEFAULT 0,
+    bytes_per_window INTEGER NOT NULL DEFAULT 0,
+    internal_to_external_ratio REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -88,4 +103,9 @@ DEFAULT_RULES = [
     ("TLS_FINGERPRINT", "TLS fingerprint risk", "tls", "HIGH", 1, 1, 0, "Detects weak TLS versions, weak ciphers and suspicious certificate indicators in TLS metadata."),
     ("ML_ANOMALY", "ML anomaly score", "behavior", "MEDIUM", 1, 80, 0, "Uses a lightweight anomaly score based on packet size, protocol and port features."),
     ("WEB_ATTACK", "Web attack detection (advanced)", "web", "HIGH", 1, 1, 0, "Detects XXE, SSTI, CRLF injection, LDAP/XPath injection, deserialization, webshell, buffer overflow and sensitive file discovery."),
+    ("ML_FLOW_ANOMALY", "ML flow anomaly", "behavior", "HIGH", 1, 80, 60, "Uses flow-level features with IsolationForest or a lightweight fallback model to detect anomalous host behavior."),
+    ("SIGNATURE_MATCH", "External signature match", "signature", "HIGH", 1, 1, 0, "Detects packets matching the external defensive signature library."),
+    ("BASELINE_DEVIATION", "Baseline deviation", "behavior", "HIGH", 1, 3, 60, "Detects hosts whose activity exceeds historical packet, destination, port or byte baselines."),
+    ("BANDWIDTH_SPIKE", "Bandwidth spike", "behavior", "HIGH", 1, 4, 60, "Detects hosts whose byte volume sharply exceeds their historical baseline."),
+    ("SESSION_DURATION_ANOMALY", "Session duration anomaly", "behavior", "MEDIUM", 1, 3, 600, "Detects sessions that last much longer than the host historical average."),
 ]

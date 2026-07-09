@@ -13,10 +13,11 @@ from PySide6.QtWidgets import (
 )
 
 from detection.analysis.attack_chain import AttackChainAnalyzer
+from detection.baseline import BaselineManager
 from detection.ml.simple_anomaly import SimpleAnomalyDetector
-from models import AlertRecord
+from models import AlertRecord, BaselineRecord
 from storage.database import Database
-from storage.repositories import AlertRepository, PacketRepository
+from storage.repositories import AlertRepository, BaselineRepository, PacketRepository
 from ui.widgets.chart_widget import ChartWidget
 from ui.widgets.statistic_card import StatisticCard
 
@@ -27,6 +28,7 @@ class DashboardPage(QWidget):
         self.database = database
         self.packet_repository = PacketRepository(database)
         self.alert_repository = AlertRepository(database)
+        self.baseline_repository = BaselineRepository(database)
         self.attack_chain_analyzer = AttackChainAnalyzer()
 
         layout = QVBoxLayout(self)
@@ -73,11 +75,25 @@ class DashboardPage(QWidget):
         self.attack_timeline.setAlternatingRowColors(True)
         self.attack_timeline.setMinimumHeight(150)
 
+        self.baseline_title = QLabel("Baseline summary")
+        self.baseline_title.setStyleSheet("font-weight: 700; color: #1f2933;")
+        self.baseline_table = QTableWidget(0, 7)
+        self.baseline_table.setHorizontalHeaderLabels(
+            ["Source", "Packets", "Connections", "Destinations", "Ports", "Bytes", "External ratio"]
+        )
+        self.baseline_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.baseline_table.horizontalHeader().setStretchLastSection(True)
+        self.baseline_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.baseline_table.setAlternatingRowColors(True)
+        self.baseline_table.setMinimumHeight(150)
+
         layout.addLayout(toolbar)
         layout.addLayout(cards)
         layout.addLayout(charts)
         layout.addWidget(self.timeline_title)
         layout.addWidget(self.attack_timeline)
+        layout.addWidget(self.baseline_title)
+        layout.addWidget(self.baseline_table)
 
         self.refresh_button.clicked.connect(self.refresh)
         self.refresh()
@@ -105,6 +121,7 @@ class DashboardPage(QWidget):
         self.attack_chain_chart.set_data(self.attack_chain_analyzer.stage_distribution(alerts))
         self.anomaly_score_chart.set_data(self._recent_anomaly_scores())
         self._render_attack_timeline(alerts)
+        self._refresh_baseline_summary()
 
     def _render_attack_timeline(self, alerts: list[AlertRecord]) -> None:
         chains = self.attack_chain_analyzer.analyze(alerts)[:6]
@@ -129,3 +146,36 @@ class DashboardPage(QWidget):
             score = int(detector.score_packet(packet).score)
             rows.append((f"{index}. {packet.protocol}", score))
         return rows
+
+    def _refresh_baseline_summary(self) -> None:
+        manager = BaselineManager(window_seconds=60)
+        for packet in self.packet_repository.list_recent(limit=1000):
+            manager.update(packet)
+        records = manager.all_current_records()
+        self.baseline_repository.upsert_many(records)
+        self._render_baseline_summary(self.baseline_repository.list_all(limit=8))
+
+    def _render_baseline_summary(self, records: list[BaselineRecord]) -> None:
+        self.baseline_table.setRowCount(len(records))
+        for row, record in enumerate(records):
+            values = [
+                record.src_ip,
+                str(record.packet_count),
+                str(record.connection_count),
+                str(record.unique_dst_ips),
+                str(record.unique_dst_ports),
+                str(record.bytes_per_window),
+                f"{record.internal_to_external_ratio:.1%}",
+            ]
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                item.setToolTip(value)
+                self.baseline_table.setItem(row, column, item)
+
+        self.baseline_table.setColumnWidth(0, 150)
+        self.baseline_table.setColumnWidth(1, 80)
+        self.baseline_table.setColumnWidth(2, 100)
+        self.baseline_table.setColumnWidth(3, 110)
+        self.baseline_table.setColumnWidth(4, 70)
+        self.baseline_table.setColumnWidth(5, 90)
+        self.baseline_table.resizeRowsToContents()
