@@ -127,3 +127,11 @@ rules:
     threshold: 80
     time_window: 0
     description: Uses a lightweight anomaly score based on packet size, protocol and port features.
+  - id: WEB_ATTACK
+    name: Web attack (advanced)
+    category: web
+    severity: HIGH
+    enabled: true
+    threshold: 1
+    time_window: 0
+    description: Detects XXE, SSTI, CRLF, LDAP/XPath injection, deserialization, webshell and sensitive file discovery.

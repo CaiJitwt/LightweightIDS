@@ -20,6 +20,7 @@ from detection.rules.sensitive_port import SensitivePortRule
 from detection.rules.sql_injection import SqlInjectionRule
 from detection.rules.syn_flood import SynFloodRule
 from detection.rules.tls_fingerprint import TlsFingerprintRule
+from detection.rules.web_attack import WebAttackRule
 from detection.rules.xss import XssRule
 
 
@@ -57,6 +58,7 @@ class DetectionEngine:
                 HostScanRule(),
                 TlsFingerprintRule(),
                 MlAnomalyRule(),
+                WebAttackRule(),
             ],
             alert_cooldown_seconds=alert_cooldown_seconds,
         )
@@ -85,6 +87,7 @@ class DetectionEngine:
             "HOST_SCAN": HostScanRule,
             "TLS_FINGERPRINT": TlsFingerprintRule,
             "ML_ANOMALY": MlAnomalyRule,
+            "WEB_ATTACK": WebAttackRule,
         }
         rules: list[RuleBase] = []
         for record in rule_records:

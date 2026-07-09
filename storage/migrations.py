@@ -87,4 +87,5 @@ DEFAULT_RULES = [
     ("HOST_SCAN", "Host scan", "scan", "HIGH", 1, 30, 10, "Detects one source host contacting many different destination hosts in a short time window."),
     ("TLS_FINGERPRINT", "TLS fingerprint risk", "tls", "HIGH", 1, 1, 0, "Detects weak TLS versions, weak ciphers and suspicious certificate indicators in TLS metadata."),
     ("ML_ANOMALY", "ML anomaly score", "behavior", "MEDIUM", 1, 80, 0, "Uses a lightweight anomaly score based on packet size, protocol and port features."),
+    ("WEB_ATTACK", "Web attack detection (advanced)", "web", "HIGH", 1, 1, 0, "Detects XXE, SSTI, CRLF injection, LDAP/XPath injection, deserialization, webshell, buffer overflow and sensitive file discovery."),
 ]
