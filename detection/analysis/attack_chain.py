@@ -26,6 +26,7 @@ class AttackChainAnalyzer:
         "SQL_INJECTION": "exploit",
         "XSS": "exploit",
         "HTTP_SUSPICIOUS": "exploit",
+        "WEB_ATTACK": "exploit",
         "MALICIOUS_COMMAND": "execution",
         "BRUTE_FORCE": "credential_access",
         "DNS_ANOMALY": "c2",

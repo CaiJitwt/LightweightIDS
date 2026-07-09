@@ -48,6 +48,7 @@ class AlertPage(QWidget):
             "HOST_SCAN": "Host scan",
             "TLS_FINGERPRINT": "TLS fingerprint risk",
             "ML_ANOMALY": "ML anomaly score",
+            "WEB_ATTACK": "Web attack (advanced)",
         }
 
         layout = QVBoxLayout(self)
@@ -215,6 +216,7 @@ class AlertPage(QWidget):
             "SQL_INJECTION": "Detected suspicious SQL injection indicators.",
             "XSS": "Detected suspicious cross-site scripting indicators.",
             "MALICIOUS_COMMAND": "Detected suspicious command execution indicators.",
+            "WEB_ATTACK": "Detected advanced web attack indicators (XXE, SSTI, deserialization, webshell).",
         }
         return descriptions.get(alert.alert_type, "Alert matched the detection rule.")
 
