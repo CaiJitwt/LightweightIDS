@@ -16,11 +16,16 @@ class ReportPage(QWidget):
         self.report_generator = ReportGenerator()
 
         layout = QVBoxLayout(self)
-        self.hint = QLabel("可导出 HTML 检测报告，也可单独导出告警 CSV 或 JSON。")
+        layout.setSpacing(10)
+        self.hint = QLabel("Export a full HTML detection report, or export alerts as CSV or JSON.")
         self.hint.setObjectName("PageHint")
-        self.html_button = QPushButton("导出 HTML 报告")
-        self.csv_button = QPushButton("导出告警 CSV")
-        self.json_button = QPushButton("导出告警 JSON")
+        self.hint.setWordWrap(True)
+        self.html_button = QPushButton("Export HTML report")
+        self.csv_button = QPushButton("Export alerts CSV")
+        self.json_button = QPushButton("Export alerts JSON")
+
+        for button in [self.html_button, self.csv_button, self.json_button]:
+            button.setMinimumHeight(34)
 
         layout.addWidget(self.hint)
         layout.addWidget(self.html_button)
@@ -35,9 +40,9 @@ class ReportPage(QWidget):
     def export_html(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "导出 HTML 报告",
+            "Export HTML report",
             "lightweight_ids_report.html",
-            "HTML 文件 (*.html);;所有文件 (*)",
+            "HTML files (*.html);;All files (*)",
         )
         if not path:
             return
@@ -46,35 +51,35 @@ class ReportPage(QWidget):
         packets = self.packet_repository.list_recent()
         statistics = self._build_statistics()
         self.report_generator.generate_html_report(alerts, packets, statistics, path)
-        QMessageBox.information(self, "导出完成", f"HTML 报告已导出：{path}")
+        QMessageBox.information(self, "Export complete", f"HTML report exported to: {path}")
 
     def export_csv(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "导出告警 CSV",
+            "Export alerts CSV",
             "alerts.csv",
-            "CSV 文件 (*.csv);;所有文件 (*)",
+            "CSV files (*.csv);;All files (*)",
         )
         if not path:
             return
 
         alerts = self.alert_repository.list_all()
         self.report_generator.export_alerts_csv(alerts, path)
-        QMessageBox.information(self, "导出完成", f"告警 CSV 已导出：{path}")
+        QMessageBox.information(self, "Export complete", f"Alert CSV exported to: {path}")
 
     def export_json(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "导出告警 JSON",
+            "Export alerts JSON",
             "alerts.json",
-            "JSON 文件 (*.json);;所有文件 (*)",
+            "JSON files (*.json);;All files (*)",
         )
         if not path:
             return
 
         alerts = self.alert_repository.list_all()
         self.report_generator.export_alerts_json(alerts, path)
-        QMessageBox.information(self, "导出完成", f"告警 JSON 已导出：{path}")
+        QMessageBox.information(self, "Export complete", f"Alert JSON exported to: {path}")
 
     def _build_statistics(self) -> dict[str, object]:
         severity_distribution = self.alert_repository.count_by_severity()

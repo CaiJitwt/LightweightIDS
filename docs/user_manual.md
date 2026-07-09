@@ -1,42 +1,43 @@
-# 用户手册
+# Lightweight IDS User Manual
 
-当前版本可通过以下命令启动 GUI：
+## Start The Application
+
+Recommended:
 
 ```powershell
-.conda\Lightweight-IDS\python.exe main.py
+.\.conda\Lightweight-IDS\python.exe main.py
 ```
 
-左侧导航包含仪表盘、流量监控、告警中心、规则管理、报告导出、系统设置。
+With an already activated Python 3.11+ environment:
 
-## 导入 pcap
+```powershell
+python main.py
+```
 
-1. 打开“流量监控”页面。
-2. 点击“导入 pcap”。
-3. 选择本地 `.pcap`、`.pcapng` 或 `.cap` 文件。
-4. 等待状态文字显示导入完成。
+Avoid running the project with a system Python that does not have PySide6, Scapy and the other dependencies installed.
 
-导入后，表格会显示时间、源 IP、目标 IP、协议、源端口、目标端口、长度和摘要。
+## Traffic Monitor
 
-## 实时抓包
+Use `Import pcap` to select a local `.pcap`, `.pcapng` or `.cap` file. The application parses packets, saves them to SQLite, applies enabled detection rules and displays generated alerts.
 
-1. 打开“流量监控”页面。
-2. 点击“刷新网卡”。
-3. 选择网卡，或使用“默认网卡”。
-4. 点击“开始抓包”。
-5. 需要停止时点击“停止抓包”。
+Use `Import decrypted HTTP log` only for local JSONL or CSV records that already contain plaintext HTTP data from an authorized lab or defensive source. This enables SQL injection, XSS, suspicious HTTP, malicious command and advanced Web attack rules to inspect HTTP content offline.
 
-Windows 下可能需要安装 Npcap 并以管理员权限运行。
+For live capture, click `Refresh interfaces`, choose an interface or the default interface, and click `Start capture`. On Windows, install Npcap and run as administrator if capture fails.
 
-## 规则管理
+## Alert Center
 
-打开“规则管理”页面，可以启用或禁用内置规则，调整阈值和时间窗口，也可以编辑黑名单 IP。保存后，后续导入 pcap 或实时抓包会使用新的规则配置。
+The Alert Center lists generated alerts with severity, type, source, destination, protocol, description, evidence and status. Use the available actions to review, ignore or update alert status.
 
-## 自定义规则
+## Rule Management
 
-在“规则管理”的自定义规则表中点击“新增自定义规则”，填写名称、等级、协议、IP、端口和关键字后点击“保存规则”。不需要限制的条件留空即可。
+Built-in rules can be enabled or disabled, and their thresholds and time windows can be edited. Custom rules support optional protocol, source IP, destination IP, source port, destination port and keyword conditions. Empty fields mean no restriction.
 
-关键字会匹配数据包摘要、DNS 查询、HTTP method、HTTP host 和 HTTP path。
+Blacklist entries are one IP address per line. Save changes before importing new traffic or starting live capture.
 
-## 仪表盘
+## Reports
 
-打开“仪表盘”页面，点击“刷新统计”可以查看当前数据库中的协议分布、告警等级分布、Top 源 IP 和 Top 目标端口。
+Use the Reports page to export detection results as HTML, CSV or JSON. Reports summarize packets, alerts, severity distribution, alert types and key traffic statistics.
+
+## Settings
+
+The Settings page stores application options such as log level. Changes are saved to SQLite and reused on later launches.

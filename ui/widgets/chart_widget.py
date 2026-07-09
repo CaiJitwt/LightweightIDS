@@ -4,15 +4,17 @@ from PySide6.QtWidgets import QLabel, QTableWidget, QTableWidgetItem, QVBoxLayou
 
 
 class ChartWidget(QWidget):
-    def __init__(self, title: str = "图表") -> None:
+    def __init__(self, title: str = "Chart") -> None:
         super().__init__()
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
         self.title_label = QLabel(title)
         self.title_label.setStyleSheet("font-weight: 700; color: #1f2933;")
         self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["项目", "数量", "占比"])
+        self.table.setHorizontalHeaderLabels(["Item", "Value", "Percent"])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setAlternatingRowColors(True)
+        self.table.setMinimumHeight(140)
         layout.addWidget(self.title_label)
         layout.addWidget(self.table)
 
@@ -22,10 +24,13 @@ class ChartWidget(QWidget):
         else:
             rows = [(str(key), value) for key, value in data]
 
+        rows = rows[:20]
         total = sum(int(value) for _, value in rows)
         self.table.setRowCount(len(rows))
         for row_index, (label, value) in enumerate(rows):
             percent = 0 if total == 0 else int(value) / total * 100
             values = [str(label), str(value), f"{percent:.1f}%"]
             for column_index, text in enumerate(values):
-                self.table.setItem(row_index, column_index, QTableWidgetItem(text))
+                item = QTableWidgetItem(text)
+                item.setToolTip(text)
+                self.table.setItem(row_index, column_index, item)

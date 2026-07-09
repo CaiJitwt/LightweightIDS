@@ -7,7 +7,7 @@ from models import AlertRecord, PacketRecord
 
 class IcmpFloodRule(RuleBase):
     rule_id = "ICMP_FLOOD"
-    name = "ICMP Flood 检测"
+    name = "ICMP flood detection"
     category = "flood"
     severity = "MEDIUM"
     threshold = 50
@@ -35,7 +35,7 @@ class IcmpFloodRule(RuleBase):
             self.create_alert(
                 packet,
                 alert_type="ICMP_FLOOD",
-                description=f"源 IP 在 {self.time_window} 秒内向同一目标发送大量 ICMP 包。",
+                description=f"Source IP sent many ICMP packets to the same target within {self.time_window} seconds.",
                 evidence=evidence,
             )
         ]

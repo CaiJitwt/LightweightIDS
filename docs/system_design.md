@@ -1,40 +1,38 @@
-# 系统设计
+# System Design
 
-系统按职责划分为捕获、解析、检测、存储、界面和报告模块。
+## Architecture
 
-- `capture`：pcap 导入和实时抓包。
-- `parser`：Scapy 数据包解析和协议识别。
-- `detection`：检测引擎、内置规则和自定义规则。
-- `storage`：SQLite 初始化和数据访问。
-- `ui`：PySide6 桌面界面。
-- `report`：HTML、CSV、JSON 报告导出。
+Lightweight IDS is a local desktop IDS made of five main layers:
 
-## 离线检测链路
+- GUI: PySide6 pages for dashboard, traffic monitoring, alerts, rules, reports and settings.
+- Capture and import: pcap loading, live capture and authorized decrypted HTTP log loading.
+- Parsing: Scapy packet parsing plus decrypted HTTP record conversion into `PacketRecord`.
+- Detection: rule engine, built-in rules, custom rules, signatures, baseline checks and ML-style anomaly scoring.
+- Persistence and reporting: SQLite repositories, schema migrations and HTML/CSV/JSON report output.
 
-1. “流量监控”选择本地 pcap 文件。
-2. 后台线程使用 Scapy 逐包解析为 `PacketRecord`。
-3. `DetectionEngine` 对每个数据包运行内置规则和自定义规则。
-4. `PacketRecord` 和 `AlertRecord` 分别写入 SQLite。
-5. “告警中心”和“报告导出”从 SQLite 读取结果。
+## Detection Flow
 
-## 实时检测链路
+1. A pcap file, live packet or authorized decrypted HTTP log is loaded.
+2. Raw traffic is converted into `PacketRecord`.
+3. `DetectionEngine` builds active rules from database rule records and custom rules.
+4. Each rule emits zero or more `AlertRecord` objects.
+5. Noise reduction applies whitelist, asset importance, minimum severity and cooldown filtering.
+6. Packets and alerts are persisted to SQLite and shown in the GUI.
 
-1. “流量监控”刷新并选择网卡。
-2. `LiveCapture` 使用 Scapy 被动抓取本机网卡流量。
-3. 后台线程将原始包解析为 `PacketRecord`。
-4. `DetectionEngine` 使用 SQLite 中当前规则配置进行检测。
-5. 流量记录和告警写入 SQLite，界面同步显示数据包表格。
+## Rule Coverage
 
-## 规则管理链路
+The merged rule set includes both branches' work:
 
-1. “规则管理”从 SQLite 的 `rules` 表加载内置规则配置。
-2. 用户修改启用状态、阈值、时间窗口和说明。
-3. 保存后写回 SQLite。
-4. 后续 pcap 导入和实时抓包重新读取规则配置。
+- Core network rules: port scan, SYN flood, ICMP flood, sensitive port access and blacklist matches.
+- Application rules: suspicious HTTP, SQL injection, XSS, malicious command and advanced Web attack detection.
+- Advanced Web coverage: path traversal, command injection, SSRF, file inclusion, XXE, SSTI, CRLF injection, LDAP/XPath injection, deserialization, webshell indicators, JNDI probes and sensitive file discovery.
+- Behavior rules: abnormal outbound traffic, lateral movement, host scan, baseline deviation, bandwidth spike and session duration anomaly.
+- ML and signature rules: packet-level anomaly score, flow-level anomaly score, external signatures and TLS fingerprint risk.
 
-## 自定义规则链路
+## Data Model
 
-1. “规则管理”中的自定义规则写入 SQLite 的 `custom_rules` 表。
-2. pcap 导入或实时抓包开始时读取自定义规则。
-3. `CustomRule` 使用协议、IP、端口和关键字条件做字段匹配。
-4. 命中后生成 `CUSTOM_RULE` 告警。
+SQLite stores packets, alerts, built-in rule settings, custom rules, baselines and key-value settings. Baseline records track per-source activity windows including packet counts, connection counts, destination diversity, byte volume and internal-to-external ratio.
+
+## Authorized Decrypted HTTP Analysis
+
+The decrypted HTTP workflow imports local JSONL or CSV records that already contain plaintext HTTP data from an authorized lab or defensive source. The application does not install certificates or perform interception. Imported records are converted into HTTP `PacketRecord` objects so existing SQL injection, XSS, suspicious HTTP, malicious command and advanced Web rules can run offline.

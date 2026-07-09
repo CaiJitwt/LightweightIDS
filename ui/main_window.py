@@ -54,7 +54,7 @@ class MainWindow(QMainWindow):
         self.nav_list.setCurrentRow(0)
 
         status_bar = QStatusBar()
-        status_bar.showMessage(f"系统就绪，数据库：{self.database.path}")
+        status_bar.showMessage(f"System ready. Database: {self.database.path}")
         self.setStatusBar(status_bar)
 
     def _build_pages(self) -> None:

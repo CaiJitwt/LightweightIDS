@@ -10,12 +10,12 @@ def test_report_generator_exports_html_csv_and_json(tmp_path):
     alert = AlertRecord(
         timestamp="2026-01-01 00:00:00.000",
         rule_id="SENSITIVE_PORT",
-        rule_name="敏感端口访问检测",
+        rule_name="Sensitive port access",
         alert_type="SENSITIVE_PORT_ACCESS",
         severity="MEDIUM",
         src_ip="10.0.0.1",
         dst_ip="10.0.0.2",
-        description="访问敏感端口",
+        description="Detected access to a sensitive port",
         evidence="dst_port=22",
     )
     packet = PacketRecord(
@@ -49,6 +49,6 @@ def test_report_generator_exports_html_csv_and_json(tmp_path):
     generator.export_alerts_csv([alert], csv_path)
     generator.export_alerts_json([alert], json_path)
 
-    assert "Lightweight IDS 检测报告" in html_path.read_text(encoding="utf-8")
+    assert "Lightweight IDS Detection Report" in html_path.read_text(encoding="utf-8")
     assert "SENSITIVE_PORT_ACCESS" in csv_path.read_text(encoding="utf-8-sig")
     assert json.loads(json_path.read_text(encoding="utf-8"))[0]["rule_id"] == "SENSITIVE_PORT"

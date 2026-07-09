@@ -1,0 +1,99 @@
+signatures:
+  - id: SIG_SQLI_UNION_SELECT
+    name: SQL injection UNION SELECT
+    category: sql_injection
+    severity: CRITICAL
+    match_type: keyword
+    pattern: union select
+    description: Detects SQL UNION SELECT indicators in request metadata or summaries.
+  - id: SIG_SQLI_BOOLEAN_TAUTOLOGY
+    name: SQL injection boolean tautology
+    category: sql_injection
+    severity: CRITICAL
+    match_type: regex
+    pattern: "\\b(or|and)\\s+1\\s*=\\s*1\\b"
+    description: Detects common boolean tautology SQL injection indicators.
+  - id: SIG_XSS_SCRIPT_TAG
+    name: XSS script tag
+    category: xss
+    severity: HIGH
+    match_type: keyword
+    pattern: <script
+    description: Detects script tag indicators associated with cross-site scripting.
+  - id: SIG_XSS_EVENT_HANDLER
+    name: XSS event handler
+    category: xss
+    severity: HIGH
+    match_type: regex
+    pattern: "\\bon(error|load|mouseover)\\s*="
+    description: Detects suspicious browser event handler indicators.
+  - id: SIG_HTTP_TRAVERSAL_PATH
+    name: HTTP suspicious traversal path
+    category: http_suspicious_path
+    severity: HIGH
+    match_type: keyword
+    pattern: ../
+    description: Detects directory traversal indicators in HTTP paths.
+  - id: SIG_HTTP_SENSITIVE_FILE_PATH
+    name: HTTP sensitive file path
+    category: http_suspicious_path
+    severity: HIGH
+    match_type: regex
+    pattern: "(/etc/passwd|boot\\.ini|web\\.config|/\\.env)"
+    description: Detects suspicious requests for sensitive files.
+  - id: SIG_CMD_WINDOWS_SHELL
+    name: Malicious Windows shell command
+    category: malicious_command
+    severity: CRITICAL
+    match_type: keyword
+    pattern: cmd.exe
+    description: Detects suspicious Windows shell command indicators.
+  - id: SIG_CMD_DOWNLOAD_TOOL
+    name: Malicious download command
+    category: malicious_command
+    severity: CRITICAL
+    match_type: regex
+    pattern: "\\b(wget|curl|certutil)\\b"
+    description: Detects suspicious command-line download tool indicators.
+  - id: SIG_WEBSHELL_PHP_EVAL
+    name: Webshell PHP eval indicator
+    category: webshell_indicator
+    severity: CRITICAL
+    match_type: regex
+    pattern: "eval\\s*\\(\\s*\\$_(POST|GET|REQUEST)"
+    description: Detects PHP webshell-style dynamic execution indicators.
+  - id: SIG_WEBSHELL_COMMON_NAME
+    name: Common webshell name
+    category: webshell_indicator
+    severity: HIGH
+    match_type: regex
+    pattern: "\\b(c99shell|r57shell|webshell)\\b"
+    description: Detects common webshell naming indicators.
+  - id: SIG_C2_BEACON_KEYWORD
+    name: Trojan C2 beacon keyword
+    category: trojan_c2_beacon_keyword
+    severity: HIGH
+    match_type: regex
+    pattern: "\\b(beacon|c2 checkin|c2 heartbeat|implant checkin)\\b"
+    description: Detects suspicious command-and-control beacon keywords.
+  - id: SIG_C2_TOOL_KEYWORD
+    name: Trojan C2 tool keyword
+    category: trojan_c2_beacon_keyword
+    severity: HIGH
+    match_type: regex
+    pattern: "\\b(cobaltstrike|meterpreter|empire stager)\\b"
+    description: Detects known offensive tooling keywords in packet summaries.
+  - id: SIG_UA_SQLMAP
+    name: Suspicious user-agent sqlmap
+    category: suspicious_user_agent
+    severity: HIGH
+    match_type: keyword
+    pattern: sqlmap
+    description: Detects suspicious automated scanning user-agent indicators.
+  - id: SIG_UA_SCANNER
+    name: Suspicious user-agent scanner
+    category: suspicious_user_agent
+    severity: MEDIUM
+    match_type: regex
+    pattern: "\\b(nikto|nmap scripting engine|masscan|zgrab)\\b"
+    description: Detects suspicious scanner user-agent indicators.

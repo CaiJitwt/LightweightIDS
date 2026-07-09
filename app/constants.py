@@ -11,10 +11,10 @@ DEFAULT_DATABASE_PATH = PROJECT_ROOT / "data" / "lightweight_ids.db"
 DEFAULT_LOG_PATH = PROJECT_ROOT / "logs" / "lightweight_ids.log"
 
 PAGE_TITLES = {
-    "dashboard": "仪表盘",
-    "packets": "流量监控",
-    "alerts": "告警中心",
-    "rules": "规则管理",
-    "reports": "报告导出",
-    "settings": "系统设置",
+    "dashboard": "Dashboard",
+    "packets": "Traffic Monitor",
+    "alerts": "Alert Center",
+    "rules": "Rule Management",
+    "reports": "Reports",
+    "settings": "Settings",
 }
