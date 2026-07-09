@@ -28,10 +28,8 @@ class XssRule(RuleBase):
         "eval(",
     ]
 
-    # Enhanced: 25 regex patterns for deeper XSS detection.
-    # Adds event handlers (onclick, onmouseover, onfocus, oninput),
-    # SVG/iframe injection, HTML entity encoding, fromCharCode/atob/btoa,
-    # CSS expression injection, and data URI HTML smuggling.
+    # Regex patterns for event handlers, SVG/iframe injection, HTML entity
+    # encoding, fromCharCode/atob/btoa, CSS expression, and data URI smuggling.
     REGEX_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         ("script_tag", re.compile(r"<\s*script[^>]*>.*?<\s*/\s*script\s*>", re.IGNORECASE | re.DOTALL)),
         ("script_src", re.compile(r"<\s*script[^>]*src\s*=", re.IGNORECASE)),

@@ -32,11 +32,10 @@ class MaliciousCommandRule(RuleBase):
         "ncat",
     ]
 
-    # Enhanced: 50 regex patterns covering 9 categories beyond simple keywords.
-    # Adds: host recon (netstat, ipconfig, tasklist), reverse shells (python/perl/ruby/php/socat/mkfifo),
-    # encoded execution (IEX, base64, certutil, mshta), privilege escalation (sudo, su, chmod),
-    # persistence (crontab, registry Run, rc.local), lateral movement (psexec, wmiexec, schtasks),
-    # data exfiltration, credential dumping (mimikatz, procdump), and attack tools (nmap, hydra, sqlmap).
+    # Regex patterns for host recon, reverse shells (7 variants), encoded
+    # execution, privilege escalation, persistence, lateral movement tools,
+    # data exfiltration, credential dumping (mimikatz, procdump), and
+    # attack tools (nmap, hydra, sqlmap).
     REGEX_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         # ---- host reconnaissance ----
         ("hostname", re.compile(r"\bhostname\b", re.IGNORECASE)),

@@ -27,9 +27,8 @@ class SqlInjectionRule(RuleBase):
         "load_file(",
     ]
     REGEX_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-        # Enhanced: 16 named regex patterns for more precise SQL injection detection.
-        # Covers time-based blind, error-based, stacked queries, wide-byte, hex encoding,
-        # and tautology variants beyond simple keyword matching.
+        # Named regex patterns for time-based blind, error-based, stacked queries,
+        # wide-byte encoding, hex encoding, and tautology variants.
         ("union_select", re.compile(r"UNION\s+(ALL\s+)?SELECT", re.IGNORECASE)),
         ("tautology_quote", re.compile(r"'\s*OR\s+'1'\s*=\s*'1|'\s*OR\s+1\s*=\s*1|'\s*OR\s+'a'\s*=\s*'a", re.IGNORECASE)),
         ("numeric_tautology", re.compile(r"\bOR\s+1\s*=\s*1\b|\bAND\s+1\s*=\s*1\b", re.IGNORECASE)),
