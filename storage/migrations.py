@@ -78,4 +78,5 @@ DEFAULT_RULES = [
     ("BLACKLIST_IP", "黑名单 IP 检测", "reputation", "HIGH", 1, 1, 0, "检测源 IP 或目标 IP 是否命中本地黑名单。"),
     ("SQL_INJECTION", "SQL 注入检测", "injection", "CRITICAL", 1, 1, 0, "检测 HTTP 请求中的 SQL 注入攻击特征。"),
     ("XSS", "XSS 攻击检测", "injection", "HIGH", 1, 1, 0, "检测 HTTP 请求中的 XSS 跨站脚本攻击特征。"),
+    ("WEB_ATTACK", "Web 攻击检测", "web", "HIGH", 1, 1, 0, "检测目录遍历、命令注入、SSRF、文件包含、反序列化等 Web 攻击。"),
 ]

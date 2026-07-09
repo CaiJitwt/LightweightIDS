@@ -10,6 +10,7 @@ from detection.rules.port_scan import PortScanRule
 from detection.rules.sensitive_port import SensitivePortRule
 from detection.rules.sql_injection import SqlInjectionRule
 from detection.rules.syn_flood import SynFloodRule
+from detection.rules.web_attack import WebAttackRule
 from detection.rules.xss import XssRule
 
 
@@ -30,6 +31,7 @@ class DetectionEngine:
                 BlacklistRule(),
                 SqlInjectionRule(),
                 XssRule(),
+                WebAttackRule(),
             ],
             alert_cooldown_seconds=alert_cooldown_seconds,
         )
@@ -49,6 +51,7 @@ class DetectionEngine:
             "BLACKLIST_IP": BlacklistRule,
             "SQL_INJECTION": SqlInjectionRule,
             "XSS": XssRule,
+            "WEB_ATTACK": WebAttackRule,
         }
         rules: list[RuleBase] = []
         for record in rule_records:
