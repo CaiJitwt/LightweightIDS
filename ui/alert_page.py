@@ -49,6 +49,11 @@ class AlertPage(QWidget):
             "TLS_FINGERPRINT": "TLS fingerprint risk",
             "ML_ANOMALY": "ML anomaly score",
             "WEB_ATTACK": "Web attack (advanced)",
+            "ML_FLOW_ANOMALY": "ML flow anomaly",
+            "SIGNATURE_MATCH": "External signature match",
+            "BASELINE_DEVIATION": "Baseline deviation",
+            "BANDWIDTH_SPIKE": "Bandwidth spike",
+            "SESSION_DURATION_ANOMALY": "Session duration anomaly",
         }
 
         layout = QVBoxLayout(self)
@@ -241,6 +246,13 @@ class AlertPage(QWidget):
             "XSS": "Detected suspicious cross-site scripting indicators.",
             "MALICIOUS_COMMAND": "Detected suspicious command execution indicators.",
             "WEB_ATTACK": "Detected advanced web attack indicators (XXE, SSTI, deserialization, webshell).",
+            "BASELINE_DEVIATION": "Host activity exceeded historical baseline thresholds.",
+            "BANDWIDTH_SPIKE": "Host bandwidth usage sharply exceeded historical baseline.",
+            "SESSION_DURATION_ANOMALY": "Session duration significantly exceeds host average.",
+            "ML_ANOMALY": "Machine learning model flagged anomalous host behavior.",
+            "WEBSHELL_INDICATOR": "Detected webshell-related signature in packet.",
+            "TROJAN_C2_BEACON_KEYWORD": "Detected Trojan C2 beacon keyword in packet summary.",
+            "SUSPICIOUS_USER_AGENT": "Detected suspicious automated scanner user-agent.",
         }
         return descriptions.get(alert.alert_type, "Alert matched the detection rule.")
 
