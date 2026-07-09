@@ -1,13 +1,22 @@
 # Lightweight IDS
 
-轻量级网络入侵检测系统课程项目。项目使用 Python、PySide6、Scapy 和 SQLite，实现本地 pcap 离线检测、实时抓包、规则检测、告警管理和报告导出。
+轻量级网络入侵检测系统课程项目。项目使用 Python 3.11、PySide6、Scapy 和 SQLite，实现本地 pcap 离线检测、规则匹配、告警展示、日志保存和报告导出；实时抓包能力已预留并实现基础入口。
 
-## 功能状态
+本项目只用于教学、实验和防御性检测，不包含真实攻击利用代码，不对公网目标进行扫描或攻击。测试应基于本地 pcap 文件、实验环境流量或模拟数据。
 
-- 已完成：项目骨架、数据模型、SQLite 初始化、PySide6 GUI、pcap 导入、Scapy 解析、PacketRecord 表格显示。
-- 已完成：DetectionEngine、5 个核心检测规则、告警中心、SQLite 告警保存、HTML/CSV/JSON 报告导出。
-- 已完成：规则管理、黑名单管理、仪表盘统计、实时抓包、自定义规则。
-- 已增强：常见协议识别，减少实时抓包中大量 `UNKNOWN` 的情况。
+## 功能特性
+
+- PySide6 桌面 GUI：左侧导航、仪表盘、流量监控、告警中心、规则管理、报告导出、系统设置。
+- pcap 离线分析：使用 Scapy 读取 `.pcap`、`.pcapng`、`.cap` 文件。
+- 数据包标准化：转换为统一的 `PacketRecord`，表格展示时间、源/目标 IP、协议、端口、长度和摘要。
+- 协议解析：支持 TCP、UDP、ICMP、DNS、HTTP 等基础字段。
+- 检测引擎：`DetectionEngine` 加载规则并维护告警冷却，规则继承 `RuleBase`。
+- 核心规则：端口扫描、SYN Flood、ICMP Flood、敏感端口访问、黑名单 IP。
+- 扩展规则：暴力破解、DNS 异常、HTTP 可疑请求，以及 SQL/XSS/异常外联等课程展示规则。
+- SQLite 持久化：保存数据包、告警、规则和设置。
+- 管理能力：规则启用/禁用、阈值和时间窗口修改、黑名单维护、自定义规则。
+- 报告导出：HTML 检测报告、告警 CSV、告警 JSON。
+- 单元测试：覆盖模型、解析、规则、检测引擎、数据库、报告导出等主链路。
 
 ## 技术栈
 
@@ -15,14 +24,37 @@
 - PySide6
 - Scapy
 - SQLite
-- PyYAML
-- pytest
+- YAML 配置：PyYAML
+- 日志：Python `logging`
+- 测试：pytest
+- 打包预留：PyInstaller
 
-## 安装与运行
+## 安装方法
+
+建议使用项目内 Conda 环境：
 
 ```powershell
-.conda\Lightweight-IDS\python.exe -m pip install -r requirements.txt
-.conda\Lightweight-IDS\python.exe main.py
+.\.conda\Lightweight-IDS\python.exe -m pip install -r requirements.txt
+```
+
+也可以使用任意 Python 3.11+ 环境：
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+## 运行方法
+
+在项目根目录运行：
+
+```powershell
+.\.conda\Lightweight-IDS\python.exe main.py
+```
+
+如果使用系统 Python：
+
+```powershell
+python main.py
 ```
 
 首次启动会自动初始化数据库：
@@ -31,61 +63,92 @@
 data/lightweight_ids.db
 ```
 
-## pcap 导入
+## Windows 抓包环境说明
 
-进入“流量监控”，点击“导入 pcap”，选择本地 `.pcap`、`.pcapng` 或 `.cap` 文件。系统会在后台线程中读取数据包，转换为统一的 `PacketRecord`，并显示时间、源 IP、目标 IP、协议、端口、长度和摘要。
+离线 pcap 分析不需要管理员权限。实时抓包依赖本机网卡权限，Windows 下通常需要安装 [Npcap](https://npcap.com/) 并可能需要以管理员身份运行。
 
-当前常见协议识别包括 TCP、UDP、ICMP、ICMPv6、IPv4、IPv6、ARP、DNS、HTTP、HTTPS、DHCP、mDNS、LLMNR、NBNS、NTP、QUIC 等。无法归入上述类型时，会尽量显示 Scapy 的原始层名称，减少 `UNKNOWN`。
+实时抓包只被动接收本机网卡流量，不会扫描、攻击或主动访问任何目标。
 
-## 检测规则
+## 使用步骤
 
-内置 5 个核心检测规则：
+1. 启动程序，进入主窗口。
+2. 打开“流量监控”，点击“Import pcap”导入本地 pcap 文件。
+3. 程序会逐包解析、表格展示、运行检测规则，并将数据包和告警写入 SQLite。
+4. 打开“告警中心”，按等级筛选、搜索、查看详情、确认或忽略告警。
+5. 打开“规则管理”，启用/禁用规则，修改阈值和时间窗口，维护黑名单 IP。
+6. 打开“报告导出”，导出 HTML、CSV 或 JSON 报告。
 
-- 端口扫描检测
-- SYN Flood 检测
-- ICMP Flood 检测
-- 敏感端口访问检测
-- 黑名单 IP 检测
+## 目录结构
 
-## 自定义规则
+```text
+lightweight-ids/
+├── main.py
+├── requirements.txt
+├── config/              # 默认配置、规则配置、黑名单
+├── app/                 # 应用入口和常量
+├── capture/             # pcap 加载、实时抓包、网卡管理
+├── parser/              # Scapy 数据包解析和特征提取
+├── detection/           # 检测引擎、规则基类、窗口计数器、规则实现
+├── models/              # PacketRecord、AlertRecord、RuleRecord 等模型
+├── storage/             # SQLite 初始化和仓储层
+├── ui/                  # PySide6 主窗口、页面和表格组件
+├── report/              # HTML/CSV/JSON 报告导出
+├── utils/               # 配置、日志、时间、IP 工具
+├── tests/               # 单元测试
+├── sample_data/         # 示例说明和示例告警
+└── docs/                # 项目计划、系统设计、用户手册、测试报告
+```
 
-进入“规则管理”，可以新增、保存、删除自定义规则。自定义规则支持按以下条件组合匹配：
+## 检测规则说明
 
-- 协议
-- 源 IP
-- 目标 IP
-- 源端口
-- 目标端口
-- 关键字，匹配数据包摘要、DNS 查询、HTTP method/host/path
+- `PORT_SCAN`：同一源 IP 在时间窗口内访问同一目标的不同目标端口数达到阈值时告警，默认阈值 20、窗口 10 秒、等级 HIGH。
+- `SYN_FLOOD`：同一源 IP 在时间窗口内向同一目标发送大量 TCP SYN 且不含 ACK 的包时告警，默认阈值 100、窗口 10 秒、等级 HIGH。
+- `ICMP_FLOOD`：同一源 IP 在时间窗口内向同一目标发送大量 ICMP 包时告警，默认阈值 50、窗口 10 秒、等级 MEDIUM。
+- `SENSITIVE_PORT`：访问 21、22、23、25、445、1433、3306、3389、6379、9200 等敏感端口时告警，默认等级 MEDIUM。
+- `BLACKLIST_IP`：源 IP 或目标 IP 命中 `config/blacklist.txt` 时告警，默认等级 HIGH。
 
-条件为空表示不限制。自定义规则只做字段匹配和告警生成，不执行脚本，也不会主动访问任何目标。
+黑名单文件每行一个 IP，支持空行和 `#` 注释。
 
-## 告警中心与报告
+## 报告导出说明
 
-pcap 导入和实时抓包会同步运行检测引擎，生成的告警会写入 SQLite。进入“告警中心”可以按等级筛选、关键字搜索、查看详情、确认或忽略告警，并导出 CSV。
+HTML 报告包含检测时间、数据包总数、告警总数、各等级告警数量、各类型告警数量、Top 源 IP、Top 目标端口、详细告警列表和简要安全建议。
 
-进入“报告导出”可以导出：
-
-- HTML 检测报告
-- 告警 CSV
-- 告警 JSON
-
-## 实时抓包
-
-进入“流量监控”，点击“刷新网卡”后选择网卡，再点击“开始抓包”。Windows 下实时抓包通常需要安装 Npcap，并可能需要管理员权限。
-
-实时抓包只被动接收本机网卡流量，不会扫描或攻击任何目标。
+告警中心和报告页面还支持导出 CSV 和 JSON，便于课程答辩、复盘和二次分析。
 
 ## 测试
 
-如果 Windows 默认临时目录权限导致 pytest 无法创建临时文件，可使用项目内临时目录运行：
+直接运行：
 
 ```powershell
-.conda\Lightweight-IDS\python.exe -m pytest --basetemp .test_tmp -o cache_dir=.test_cache
+.\.conda\Lightweight-IDS\python.exe -m pytest
 ```
 
-最近一次验证结果：25 passed。
+当前测试配置会使用项目内 `.test_tmp` 临时目录，避免 Windows 受限环境无法访问系统临时目录。
+
+最近一次验证结果：
+
+```text
+46 passed
+```
+
+## 常见问题
+
+**缺少 PySide6 或 Scapy 怎么办？**
+
+确认当前解释器是安装依赖的 Python，然后重新运行 `python -m pip install -r requirements.txt`。
+
+**导入 pcap 后没有告警是否正常？**
+
+正常。告警取决于 pcap 中是否存在命中规则的行为，可以用测试构造数据验证规则触发。
+
+**实时抓包无法启动怎么办？**
+
+在 Windows 上确认已安装 Npcap，并尝试使用管理员权限启动；也可以先使用离线 pcap 完成课程展示。
+
+**项目会不会产生攻击流量？**
+
+不会。项目的核心流程是读取本地文件或被动接收本机流量，进行防御性检测和展示。
 
 ## 课程项目声明
 
-本项目仅用于教学、实验和防御性检测，不用于任何未授权测试、扫描或攻击。
+本项目仅用于教学、实验和防御性检测，不用于任何未授权测试、扫描、攻击或入侵活动。使用者应只分析自己有权限处理的 pcap 文件、实验环境流量或模拟数据。

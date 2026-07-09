@@ -47,3 +47,7 @@ def test_alert_repository_saves_lists_filters_and_updates_status(tmp_path):
     repository.update_status(high_alerts[0].id, "confirmed")  # type: ignore[arg-type]
     updated = repository.list_all(severity="HIGH")
     assert updated[0].status == "confirmed"
+
+    assert repository.delete(updated[0].id) is True  # type: ignore[arg-type]
+    assert repository.list_all(severity="HIGH") == []
+    assert repository.delete(999_999) is False

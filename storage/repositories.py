@@ -176,6 +176,12 @@ class AlertRepository:
             connection.commit()
             return cursor.rowcount > 0
 
+    def delete(self, alert_id: int) -> bool:
+        with self.database.connect() as connection:
+            cursor = connection.execute("DELETE FROM alerts WHERE id = ?", (alert_id,))
+            connection.commit()
+            return cursor.rowcount > 0
+
     def count(self) -> int:
         with self.database.connect() as connection:
             return int(connection.execute("SELECT COUNT(*) FROM alerts").fetchone()[0])

@@ -63,6 +63,7 @@ class AlertPage(QWidget):
         self.detail_button = QPushButton("Details")
         self.confirm_button = QPushButton("Confirm")
         self.ignore_button = QPushButton("Ignore")
+        self.delete_button = QPushButton("Delete")
         self.export_button = QPushButton("Export CSV")
 
         toolbar.addWidget(self.severity_filter)
@@ -71,6 +72,7 @@ class AlertPage(QWidget):
         toolbar.addWidget(self.detail_button)
         toolbar.addWidget(self.confirm_button)
         toolbar.addWidget(self.ignore_button)
+        toolbar.addWidget(self.delete_button)
         toolbar.addWidget(self.export_button)
 
         self.table = AlertTable()
@@ -95,6 +97,7 @@ class AlertPage(QWidget):
         self.detail_button.clicked.connect(self.show_selected_detail)
         self.confirm_button.clicked.connect(lambda: self.update_selected_status("confirmed"))
         self.ignore_button.clicked.connect(lambda: self.update_selected_status("ignored"))
+        self.delete_button.clicked.connect(self.delete_selected_alert)
         self.export_button.clicked.connect(self.export_csv)
 
         self.refresh()
@@ -154,6 +157,27 @@ class AlertPage(QWidget):
 
         if not self.alert_repository.update_status(alert_id, status):
             QMessageBox.warning(self, "Update failed", "The selected alert could not be updated. Please refresh and try again.")
+            return
+        self.refresh()
+
+    def delete_selected_alert(self) -> None:
+        alert = self._selected_alert()
+        if alert is None or alert.id is None:
+            QMessageBox.information(self, "No alert selected", "Please select an alert first.")
+            return
+
+        answer = QMessageBox.question(
+            self,
+            "Delete alert",
+            "Delete the selected alert? This cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
+
+        if not self.alert_repository.delete(alert.id):
+            QMessageBox.warning(self, "Delete failed", "The selected alert could not be deleted. Please refresh and try again.")
             return
         self.refresh()
 
