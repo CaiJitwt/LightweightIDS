@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from PySide6.QtWidgets import QLabel, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLabel, QSizePolicy, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
+
+from ui.styles import configure_responsive_table
 
 
 class ChartWidget(QWidget):
@@ -9,14 +11,14 @@ class ChartWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.title_label = QLabel(title)
-        self.title_label.setStyleSheet("font-weight: 700; color: #1f2933;")
+        self.title_label.setObjectName("SectionTitle")
         self.table = QTableWidget(0, 3)
         self.table.setHorizontalHeaderLabels(["Item", "Value", "Percent"])
-        self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.setAlternatingRowColors(True)
-        self.table.setMinimumHeight(140)
+        configure_responsive_table(self.table, stretch_columns=(0,), resize_to_contents_columns=(1, 2))
+        self.table.setMinimumHeight(120)
+        self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.title_label)
-        layout.addWidget(self.table)
+        layout.addWidget(self.table, 1)
 
     def set_data(self, data: dict[str, int] | list[tuple[object, int]]) -> None:
         if isinstance(data, dict):

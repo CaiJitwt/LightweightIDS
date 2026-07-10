@@ -5,7 +5,6 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QHeaderView,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -21,7 +20,8 @@ from PySide6.QtWidgets import (
 from app.constants import PROJECT_ROOT
 from models import CustomRuleRecord, RuleRecord
 from storage.database import Database
-from storage.repositories import AlertRepository, BlacklistRepository, CustomRuleRepository, RuleRepository
+from storage.repositories import AlertRepository, BlacklistRepository, CustomRuleRepository, PacketRepository, RuleRepository
+from ui.styles import apply_severity_style, configure_responsive_table
 
 
 PROTOCOL_OPTIONS = ["Any", "TCP", "UDP", "ICMP", "ICMPv6", "ARP", "DNS", "HTTP", "HTTPS", "TLS", "DHCP", "MDNS", "LLMNR", "NBNS", "NTP", "QUIC"]
@@ -33,11 +33,14 @@ class RulePage(QWidget):
         super().__init__()
         self.database = database
         self.alert_repository = AlertRepository(database)
+        self.packet_repository = PacketRepository(database)
         self.rule_repository = RuleRepository(database)
         self.custom_rule_repository = CustomRuleRepository(database)
         self.blacklist_repository = BlacklistRepository(PROJECT_ROOT / "config" / "blacklist.txt")
         self.current_rules: list[RuleRecord] = []
         self.current_custom_rules: list[CustomRuleRecord] = []
+        self.source_ip_options: list[str] = ["Any"]
+        self.destination_ip_options: list[str] = ["Any"]
 
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
@@ -78,13 +81,13 @@ class RulePage(QWidget):
                 "Ignored",
             ]
         )
-        self._configure_table(self.table)
+        self._configure_table(self.table, stretch_columns=(1, 7, 8), resize_to_contents_columns=(3, 4, 5, 6, 9, 10, 11))
 
         self.custom_table = QTableWidget(0, 11)
         self.custom_table.setHorizontalHeaderLabels(
             ["ID", "Name", "Severity", "Enabled", "Protocol", "Source IP", "Destination IP", "Source Port", "Destination Port", "Keyword", "Description"]
         )
-        self._configure_table(self.custom_table)
+        self._configure_table(self.custom_table, stretch_columns=(1, 5, 6, 9, 10), resize_to_contents_columns=(0, 2, 3, 4, 7, 8))
 
         self.blacklist_editor = QTextEdit()
         self.blacklist_editor.setPlaceholderText("One IP address per line. Empty lines are ignored.")
@@ -94,7 +97,7 @@ class RulePage(QWidget):
         custom_label = QLabel("Custom rules: empty fields mean no restriction. Use drop-downs for protocol and severity.")
         blacklist_label = QLabel("Blacklisted IP addresses")
         for label in [builtin_label, custom_label, blacklist_label]:
-            label.setStyleSheet("font-weight: 700; color: #1f2933;")
+            label.setObjectName("SectionTitle")
 
         layout.addLayout(button_bar)
         layout.addWidget(builtin_label)
@@ -120,6 +123,7 @@ class RulePage(QWidget):
     def refresh(self) -> None:
         self.current_rules = self.rule_repository.list_all()
         self.current_custom_rules = self.custom_rule_repository.list_all()
+        self._refresh_ip_options()
         self._render_builtin_rules()
         self._render_custom_rules()
         self.blacklist_editor.setPlainText("\n".join(self.blacklist_repository.list_all()))
@@ -132,6 +136,9 @@ class RulePage(QWidget):
                 item = QTableWidgetItem(value)
                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
                 item.setToolTip(value)
+                if column_index == 3:
+                    apply_severity_style(item, value)
+                    item.setTextAlignment(Qt.AlignCenter)
                 self.table.setItem(row_index, column_index, item)
 
             enabled_box = QCheckBox()
@@ -227,8 +234,8 @@ class RulePage(QWidget):
         protocol_box.setCurrentText(rule.protocol if rule.protocol in PROTOCOL_OPTIONS else "Any")
         self.custom_table.setCellWidget(row, 4, protocol_box)
 
-        self._set_text_item(self.custom_table, row, 5, rule.src_ip or "")
-        self._set_text_item(self.custom_table, row, 6, rule.dst_ip or "")
+        self.custom_table.setCellWidget(row, 5, self._ip_box(rule.src_ip, self.source_ip_options, "source"))
+        self.custom_table.setCellWidget(row, 6, self._ip_box(rule.dst_ip, self.destination_ip_options, "destination"))
         self.custom_table.setCellWidget(row, 7, self._port_box(rule.src_port))
         self.custom_table.setCellWidget(row, 8, self._port_box(rule.dst_port))
         self._set_text_item(self.custom_table, row, 9, rule.keyword or "")
@@ -295,8 +302,8 @@ class RulePage(QWidget):
                 severity=severity_widget.currentText() if isinstance(severity_widget, QComboBox) else "LOW",
                 enabled=enabled_widget.isChecked() if isinstance(enabled_widget, QCheckBox) else True,
                 protocol=None if protocol == "Any" else protocol,
-                src_ip=self._optional_text(self._item_text(self.custom_table, row, 5)),
-                dst_ip=self._optional_text(self._item_text(self.custom_table, row, 6)),
+                src_ip=self._optional_ip(self._combo_text(self.custom_table, row, 5)),
+                dst_ip=self._optional_ip(self._combo_text(self.custom_table, row, 6)),
                 src_port=self._spin_optional_value(src_port_widget),
                 dst_port=self._spin_optional_value(dst_port_widget),
                 keyword=self._optional_text(self._item_text(self.custom_table, row, 9)),
@@ -317,18 +324,56 @@ class RulePage(QWidget):
         QMessageBox.information(self, "Saved", "Blacklisted IP addresses saved.")
         self.refresh()
 
-    def _configure_table(self, table: QTableWidget) -> None:
-        header = table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.Interactive)
-        header.setStretchLastSection(True)
-        table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        table.setAlternatingRowColors(True)
+    def _configure_table(
+        self,
+        table: QTableWidget,
+        *,
+        stretch_columns: tuple[int, ...],
+        resize_to_contents_columns: tuple[int, ...],
+    ) -> None:
+        configure_responsive_table(
+            table,
+            stretch_columns=stretch_columns,
+            resize_to_contents_columns=resize_to_contents_columns,
+        )
         table.setWordWrap(False)
 
     def _set_text_item(self, table: QTableWidget, row: int, column: int, value: str) -> None:
         item = QTableWidgetItem(value)
         item.setToolTip(value)
         table.setItem(row, column, item)
+
+    def _refresh_ip_options(self) -> None:
+        source_ips: list[str] = []
+        destination_ips: list[str] = []
+        try:
+            packets = self.packet_repository.list_recent(limit=2000)
+        except Exception:
+            packets = []
+
+        for packet in packets:
+            if packet.src_ip and packet.src_ip not in source_ips:
+                source_ips.append(packet.src_ip)
+            if packet.dst_ip and packet.dst_ip not in destination_ips:
+                destination_ips.append(packet.dst_ip)
+
+        for rule in self.current_custom_rules:
+            if rule.src_ip and rule.src_ip not in source_ips:
+                source_ips.append(rule.src_ip)
+            if rule.dst_ip and rule.dst_ip not in destination_ips:
+                destination_ips.append(rule.dst_ip)
+
+        self.source_ip_options = ["Any", *source_ips[:40]]
+        self.destination_ip_options = ["Any", *destination_ips[:40]]
+
+    def _ip_box(self, value: str | None, options: list[str], role: str) -> QComboBox:
+        box = QComboBox()
+        box.setEditable(True)
+        box.setInsertPolicy(QComboBox.NoInsert)
+        box.addItems(options)
+        box.setCurrentText(value or "Any")
+        box.setToolTip(f"Choose a recent {role} IP, select Any, or type a custom IP.")
+        return box
 
     def _port_box(self, value: int | None) -> QSpinBox:
         box = QSpinBox()
@@ -342,6 +387,12 @@ class RulePage(QWidget):
             return None if widget.value() == 0 else widget.value()
         return None
 
+    def _combo_text(self, table: QTableWidget, row: int, column: int) -> str:
+        widget = table.cellWidget(row, column)
+        if isinstance(widget, QComboBox):
+            return widget.currentText().strip()
+        return self._item_text(table, row, column)
+
     def _item_text(self, table: QTableWidget, row: int, column: int) -> str:
         item = table.item(row, column)
         return item.text().strip() if item else ""
@@ -349,6 +400,12 @@ class RulePage(QWidget):
     def _optional_text(self, value: str) -> str | None:
         value = value.strip()
         return value or None
+
+    def _optional_ip(self, value: str) -> str | None:
+        value = value.strip()
+        if not value or value.lower() == "any":
+            return None
+        return value
 
     def _optional_int(self, value: str) -> int | None:
         value = value.strip()

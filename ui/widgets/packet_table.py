@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableWidget, QTableWidgetItem
+from PySide6.QtWidgets import QAbstractItemView, QTableWidget, QTableWidgetItem
 
 from models import PacketRecord
+from ui.styles import configure_responsive_table
 
 
 class PacketTable(QTableWidget):
@@ -11,11 +12,7 @@ class PacketTable(QTableWidget):
         self.setHorizontalHeaderLabels(
             ["Time", "Source IP", "Destination IP", "Protocol", "Source Port", "Destination Port", "Length", "Summary"]
         )
-        header = self.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.Interactive)
-        header.setStretchLastSection(True)
-        self.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.setAlternatingRowColors(True)
+        configure_responsive_table(self, stretch_columns=(7,), resize_to_contents_columns=(3, 4, 5, 6))
         self.setWordWrap(False)
         self.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)

@@ -6,11 +6,12 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QFrame,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
-    QHeaderView,
 )
 
 from detection.analysis.attack_chain import AttackChain, AttackChainAnalyzer
@@ -23,6 +24,7 @@ from storage.database import Database
 from storage.repositories import AlertRepository, BaselineRepository, PacketRepository
 from ui.widgets.chart_widget import ChartWidget
 from ui.widgets.statistic_card import StatisticCard
+from ui.styles import configure_responsive_table
 
 
 class DashboardPage(QWidget):
@@ -36,8 +38,16 @@ class DashboardPage(QWidget):
         self.host_risk_scorer = HostRiskScorer(self.attack_chain_analyzer)
         self.alert_trend_analyzer = AlertTrendAnalyzer()
 
-        layout = QVBoxLayout(self)
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.NoFrame)
+        content = QWidget()
+        layout = QVBoxLayout(content)
         layout.setSpacing(16)
+        self.scroll_area.setWidget(content)
+        outer_layout.addWidget(self.scroll_area)
 
         toolbar = QHBoxLayout()
         self.refresh_button = QPushButton("Refresh statistics")
@@ -54,6 +64,8 @@ class DashboardPage(QWidget):
         cards.addWidget(self.alert_card, 0, 1)
         cards.addWidget(self.high_card, 0, 2)
         cards.addWidget(self.status_card, 0, 3)
+        for column in range(4):
+            cards.setColumnStretch(column, 1)
 
         charts = QGridLayout()
         charts.setSpacing(12)
@@ -69,60 +81,52 @@ class DashboardPage(QWidget):
         charts.addWidget(self.top_port_chart, 1, 1)
         charts.addWidget(self.attack_chain_chart, 2, 0)
         charts.addWidget(self.anomaly_score_chart, 2, 1)
+        charts.setColumnStretch(0, 1)
+        charts.setColumnStretch(1, 1)
+        for row in range(3):
+            charts.setRowStretch(row, 1)
 
         self.trend_title = QLabel("Alert trend")
-        self.trend_title.setStyleSheet("font-weight: 700; color: #1f2933;")
+        self.trend_title.setObjectName("SectionTitle")
         self.trend_table = QTableWidget(0, 4)
         self.trend_table.setHorizontalHeaderLabels(["Bucket", "Alerts", "Spike", "Threshold"])
-        self.trend_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.trend_table.horizontalHeader().setStretchLastSection(True)
-        self.trend_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.trend_table.setAlternatingRowColors(True)
-        self.trend_table.setMinimumHeight(140)
+        configure_responsive_table(self.trend_table, stretch_columns=(0,), resize_to_contents_columns=(1, 2, 3))
+        self.trend_table.setMinimumHeight(110)
 
         self.timeline_title = QLabel("Attack chain timeline")
-        self.timeline_title.setStyleSheet("font-weight: 700; color: #1f2933;")
+        self.timeline_title.setObjectName("SectionTitle")
         self.attack_timeline = QTableWidget(0, 4)
         self.attack_timeline.setHorizontalHeaderLabels(["Source", "Timeline", "Risk", "Alerts"])
-        self.attack_timeline.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.attack_timeline.horizontalHeader().setStretchLastSection(True)
-        self.attack_timeline.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.attack_timeline.setAlternatingRowColors(True)
-        self.attack_timeline.setMinimumHeight(150)
+        configure_responsive_table(self.attack_timeline, stretch_columns=(1,), resize_to_contents_columns=(2, 3))
+        self.attack_timeline.setMinimumHeight(110)
 
         self.host_risk_title = QLabel("High-risk hosts")
-        self.host_risk_title.setStyleSheet("font-weight: 700; color: #1f2933;")
+        self.host_risk_title.setObjectName("SectionTitle")
         self.host_risk_table = QTableWidget(0, 7)
         self.host_risk_table.setHorizontalHeaderLabels(["Host", "Score", "Severity", "Chain", "Baseline", "Asset", "Reasons"])
-        self.host_risk_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.host_risk_table.horizontalHeader().setStretchLastSection(True)
-        self.host_risk_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.host_risk_table.setAlternatingRowColors(True)
-        self.host_risk_table.setMinimumHeight(150)
+        configure_responsive_table(self.host_risk_table, stretch_columns=(0, 6), resize_to_contents_columns=(1, 2, 3, 4, 5))
+        self.host_risk_table.setMinimumHeight(110)
 
         self.baseline_title = QLabel("Baseline summary")
-        self.baseline_title.setStyleSheet("font-weight: 700; color: #1f2933;")
+        self.baseline_title.setObjectName("SectionTitle")
         self.baseline_table = QTableWidget(0, 7)
         self.baseline_table.setHorizontalHeaderLabels(
             ["Source", "Packets", "Connections", "Destinations", "Ports", "Bytes", "External ratio"]
         )
-        self.baseline_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.baseline_table.horizontalHeader().setStretchLastSection(True)
-        self.baseline_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.baseline_table.setAlternatingRowColors(True)
-        self.baseline_table.setMinimumHeight(150)
+        configure_responsive_table(self.baseline_table, stretch_columns=(0,), resize_to_contents_columns=(1, 2, 3, 4, 5, 6))
+        self.baseline_table.setMinimumHeight(110)
 
-        layout.addLayout(toolbar)
-        layout.addLayout(cards)
-        layout.addLayout(charts)
+        layout.addLayout(toolbar, 0)
+        layout.addLayout(cards, 0)
+        layout.addLayout(charts, 3)
         layout.addWidget(self.trend_title)
-        layout.addWidget(self.trend_table)
+        layout.addWidget(self.trend_table, 1)
         layout.addWidget(self.timeline_title)
-        layout.addWidget(self.attack_timeline)
+        layout.addWidget(self.attack_timeline, 1)
         layout.addWidget(self.host_risk_title)
-        layout.addWidget(self.host_risk_table)
+        layout.addWidget(self.host_risk_table, 1)
         layout.addWidget(self.baseline_title)
-        layout.addWidget(self.baseline_table)
+        layout.addWidget(self.baseline_table, 1)
 
         self.refresh_button.clicked.connect(self.refresh)
         self.refresh()

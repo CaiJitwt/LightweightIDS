@@ -10,16 +10,17 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
-    QHeaderView,
 )
 
 from detection.analysis.attack_chain import AttackChainAnalyzer
-from models import AlertRecord
+from models import AlertRecord, PacketRecord
 from report.report_generator import ReportGenerator
 from storage.database import Database
-from storage.repositories import AlertRepository
+from storage.repositories import AlertRepository, PacketRepository
+from ui.styles import configure_responsive_table
 from ui.widgets.alert_table import AlertTable
 
 
@@ -28,6 +29,7 @@ class AlertPage(QWidget):
         super().__init__()
         self.database = database
         self.alert_repository = AlertRepository(database)
+        self.packet_repository = PacketRepository(database)
         self.report_generator = ReportGenerator()
         self.attack_chain_analyzer = AttackChainAnalyzer()
         self.current_alerts: list[AlertRecord] = []
@@ -81,18 +83,23 @@ class AlertPage(QWidget):
         toolbar.addWidget(self.export_button)
 
         self.table = AlertTable()
+        self.detail_title = QLabel("Selected alert details")
+        self.detail_title.setObjectName("SectionTitle")
+        self.detail_view = QTextEdit()
+        self.detail_view.setReadOnly(True)
+        self.detail_view.setPlaceholderText("Select an alert to inspect alert evidence and the matching packet record.")
+        self.detail_view.setMinimumHeight(130)
         self.chain_title = QLabel("Attack chain view")
-        self.chain_title.setStyleSheet("font-weight: 700; color: #1f2933;")
+        self.chain_title.setObjectName("SectionTitle")
         self.chain_table = QTableWidget(0, 4)
         self.chain_table.setHorizontalHeaderLabels(["Source IP", "Risk", "Stages", "Alerts"])
-        self.chain_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.chain_table.horizontalHeader().setStretchLastSection(True)
-        self.chain_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.chain_table.setAlternatingRowColors(True)
-        self.chain_table.setMinimumHeight(130)
+        configure_responsive_table(self.chain_table, stretch_columns=(2,), resize_to_contents_columns=(1, 3))
+        self.chain_table.setMinimumHeight(100)
 
-        layout.addLayout(toolbar)
+        layout.addLayout(toolbar, 0)
         layout.addWidget(self.table, 3)
+        layout.addWidget(self.detail_title)
+        layout.addWidget(self.detail_view, 2)
         layout.addWidget(self.chain_title)
         layout.addWidget(self.chain_table, 1)
 
@@ -104,6 +111,7 @@ class AlertPage(QWidget):
         self.ignore_button.clicked.connect(lambda: self.update_selected_status("ignored"))
         self.delete_button.clicked.connect(self.delete_selected_alert)
         self.export_button.clicked.connect(self.export_csv)
+        self.table.itemSelectionChanged.connect(self.render_selected_alert_detail)
 
         self.refresh()
 
@@ -118,6 +126,7 @@ class AlertPage(QWidget):
         self.current_alerts = self.alert_repository.list_all(severity=severity, keyword=keyword)
         self.current_alerts = [self._display_alert(alert) for alert in self.current_alerts]
         self.table.set_alerts(self.current_alerts)
+        self.render_selected_alert_detail()
         self._render_attack_chains()
 
     def _render_attack_chains(self) -> None:
@@ -140,7 +149,20 @@ class AlertPage(QWidget):
             QMessageBox.information(self, "No alert selected", "Please select an alert first.")
             return
 
-        detail = (
+        QMessageBox.information(self, "Alert details", self._alert_detail_text(alert))
+
+    def render_selected_alert_detail(self) -> None:
+        alert = self._selected_alert()
+        if alert is None:
+            self.detail_view.clear()
+            return
+        self.detail_view.setPlainText(self._alert_detail_text(alert))
+
+    def _alert_detail_text(self, alert: AlertRecord) -> str:
+        packet = self._matching_packet(alert)
+        packet_detail = self._packet_detail_text(packet) if packet else "Matching packet record: not found in stored packets."
+        return (
+            "Alert\n"
             f"Time: {alert.timestamp}\n"
             f"Severity: {alert.severity}\n"
             f"Type: {alert.alert_type}\n"
@@ -150,9 +172,47 @@ class AlertPage(QWidget):
             f"Protocol: {alert.protocol or ''}\n"
             f"Status: {alert.status}\n\n"
             f"Description: {alert.description}\n\n"
-            f"Evidence: {alert.evidence}"
+            f"Evidence: {alert.evidence}\n\n"
+            f"{packet_detail}"
         )
-        QMessageBox.information(self, "Alert details", detail)
+
+    def _packet_detail_text(self, packet: PacketRecord) -> str:
+        return (
+            "Matching packet record\n"
+            f"Packet ID: {packet.id or ''}\n"
+            f"Time: {packet.timestamp}\n"
+            f"Source: {packet.src_ip or ''}:{packet.src_port or ''}\n"
+            f"Destination: {packet.dst_ip or ''}:{packet.dst_port or ''}\n"
+            f"Protocol: {packet.protocol}\n"
+            f"Length: {packet.length}\n"
+            f"TCP flags: {packet.tcp_flags or ''}\n"
+            f"DNS query: {packet.dns_query or ''}\n"
+            f"HTTP method: {packet.http_method or ''}\n"
+            f"HTTP host: {packet.http_host or ''}\n"
+            f"HTTP path: {packet.http_path or ''}\n\n"
+            f"Raw summary:\n{packet.raw_summary}"
+        )
+
+    def _matching_packet(self, alert: AlertRecord) -> PacketRecord | None:
+        try:
+            packets = self.packet_repository.list_recent(limit=10_000)
+        except Exception:
+            return None
+
+        for packet in reversed(packets):
+            if self._packet_matches_alert(packet, alert):
+                return packet
+        return None
+
+    def _packet_matches_alert(self, packet: PacketRecord, alert: AlertRecord) -> bool:
+        return bool(
+            packet.timestamp == alert.timestamp
+            and packet.src_ip == alert.src_ip
+            and packet.dst_ip == alert.dst_ip
+            and packet.src_port == alert.src_port
+            and packet.dst_port == alert.dst_port
+            and packet.protocol == alert.protocol
+        )
 
     def update_selected_status(self, status: str) -> None:
         alert_id = self.table.selected_alert_id()

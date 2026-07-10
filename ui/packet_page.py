@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -183,6 +184,7 @@ class PacketPage(QWidget):
         toolbar = QHBoxLayout()
         self.interface_combo = QComboBox()
         self.interface_combo.setMinimumWidth(260)
+        self.interface_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.refresh_interfaces_button = QPushButton("Refresh interfaces")
         self.import_button = QPushButton("Import pcap")
         self.demo_button = QPushButton("Load demo data")
@@ -192,7 +194,7 @@ class PacketPage(QWidget):
         self.clear_button = QPushButton("Clear table")
         self.stop_capture_button.setEnabled(False)
 
-        toolbar.addWidget(self.interface_combo)
+        toolbar.addWidget(self.interface_combo, 1)
         toolbar.addWidget(self.refresh_interfaces_button)
         toolbar.addWidget(self.import_button)
         toolbar.addWidget(self.demo_button)
@@ -207,9 +209,9 @@ class PacketPage(QWidget):
         self.status_label.setWordWrap(True)
         self.packet_table = PacketTable()
 
-        layout.addLayout(toolbar)
+        layout.addLayout(toolbar, 0)
         layout.addWidget(self.status_label)
-        layout.addWidget(self.packet_table)
+        layout.addWidget(self.packet_table, 1)
 
         self.import_button.clicked.connect(self.select_pcap_file)
         self.demo_button.clicked.connect(self.load_demo_data)

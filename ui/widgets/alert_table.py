@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableWidget, QTableWidgetItem
+from PySide6.QtWidgets import QAbstractItemView, QTableWidget, QTableWidgetItem
 
 from models import AlertRecord
+from ui.styles import apply_severity_style, configure_responsive_table, severity_style
 
 
 class AlertTable(QTableWidget):
     def __init__(self) -> None:
         super().__init__(0, 8)
         self.setHorizontalHeaderLabels(["Time", "Severity", "Type", "Rule", "Source IP", "Destination IP", "Description", "Status"])
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.horizontalHeader().setStretchLastSection(True)
-        self.setAlternatingRowColors(True)
+        configure_responsive_table(self, stretch_columns=(2, 3, 6), resize_to_contents_columns=(1, 7))
         self.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setColumnWidth(0, 160)
@@ -41,10 +40,15 @@ class AlertTable(QTableWidget):
             for column, value in enumerate(values):
                 item = QTableWidgetItem(value)
                 item.setToolTip(value)
+                if column == 1:
+                    apply_severity_style(item, alert.severity)
+                    item.setTextAlignment(Qt.AlignCenter)
+                    item.setToolTip(f"{severity_style(alert.severity).tooltip}\n{alert.description}")
                 if alert.id is not None:
                     item.setData(Qt.UserRole, alert.id)
                 self.setItem(row, column, item)
 
+        self.resizeRowsToContents()
         self.setSortingEnabled(True)
 
     def selected_alert_id(self) -> int | None:
