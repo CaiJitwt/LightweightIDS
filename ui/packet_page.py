@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.constants import PROJECT_ROOT
 from capture.decrypted_http_loader import DecryptedHttpLoader
 from capture.interface_manager import InterfaceManager
 from capture.live_capture import LiveCapture
@@ -184,6 +185,7 @@ class PacketPage(QWidget):
         self.interface_combo.setMinimumWidth(260)
         self.refresh_interfaces_button = QPushButton("Refresh interfaces")
         self.import_button = QPushButton("Import pcap")
+        self.demo_button = QPushButton("Load demo data")
         self.import_decrypted_button = QPushButton("Import decrypted HTTP log")
         self.start_capture_button = QPushButton("Start capture")
         self.stop_capture_button = QPushButton("Stop capture")
@@ -193,6 +195,7 @@ class PacketPage(QWidget):
         toolbar.addWidget(self.interface_combo)
         toolbar.addWidget(self.refresh_interfaces_button)
         toolbar.addWidget(self.import_button)
+        toolbar.addWidget(self.demo_button)
         toolbar.addWidget(self.import_decrypted_button)
         toolbar.addWidget(self.start_capture_button)
         toolbar.addWidget(self.stop_capture_button)
@@ -209,6 +212,7 @@ class PacketPage(QWidget):
         layout.addWidget(self.packet_table)
 
         self.import_button.clicked.connect(self.select_pcap_file)
+        self.demo_button.clicked.connect(self.load_demo_data)
         self.import_decrypted_button.clicked.connect(self.select_decrypted_http_log)
         self.refresh_interfaces_button.clicked.connect(self.refresh_interfaces)
         self.start_capture_button.clicked.connect(self.start_live_capture)
@@ -235,6 +239,22 @@ class PacketPage(QWidget):
         )
         if path:
             self.start_import(path)
+
+    def load_demo_data(self) -> None:
+        demo_path = PROJECT_ROOT / "sample_data" / "demo_attack_chain.pcap"
+        if not demo_path.exists():
+            try:
+                from scripts.generate_demo_pcap import generate_demo_pcap
+
+                generate_demo_pcap(demo_path)
+            except Exception as exc:
+                QMessageBox.critical(
+                    self,
+                    "Demo data unavailable",
+                    f"Could not create the demo pcap at {demo_path}.\n\n{exc}",
+                )
+                return
+        self.start_import(demo_path)
 
     def start_import(self, path: str | Path) -> None:
         if self.import_worker and self.import_worker.isRunning():
@@ -298,6 +318,7 @@ class PacketPage(QWidget):
         self.start_capture_button.setEnabled(False)
         self.stop_capture_button.setEnabled(True)
         self.import_button.setEnabled(False)
+        self.demo_button.setEnabled(False)
         self.import_decrypted_button.setEnabled(False)
         self.refresh_interfaces_button.setEnabled(False)
 
@@ -347,6 +368,7 @@ class PacketPage(QWidget):
         self.start_capture_button.setEnabled(True)
         self.stop_capture_button.setEnabled(False)
         self.import_button.setEnabled(True)
+        self.demo_button.setEnabled(True)
         self.import_decrypted_button.setEnabled(True)
         self.refresh_interfaces_button.setEnabled(True)
         if "failed" not in self.status_label.text().lower():
@@ -361,6 +383,7 @@ class PacketPage(QWidget):
 
     def _set_busy(self, busy: bool) -> None:
         self.import_button.setEnabled(not busy)
+        self.demo_button.setEnabled(not busy)
         self.import_decrypted_button.setEnabled(not busy)
         self.clear_button.setEnabled(not busy)
         self.start_capture_button.setEnabled(not busy)

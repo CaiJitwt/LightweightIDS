@@ -196,6 +196,60 @@ class AlertRepository:
             rows = connection.execute("SELECT alert_type, COUNT(*) AS total FROM alerts GROUP BY alert_type ORDER BY total DESC").fetchall()
         return {str(row["alert_type"]): int(row["total"]) for row in rows}
 
+    def count_by_time_bucket(self, bucket: str = "hour", limit: int = 24) -> list[tuple[str, int]]:
+        formats = {
+            "hour": "%Y-%m-%d %H:00",
+            "day": "%Y-%m-%d",
+        }
+        if bucket not in formats:
+            raise ValueError("bucket must be 'hour' or 'day'")
+
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT strftime(?, timestamp) AS bucket, COUNT(*) AS total
+                FROM alerts
+                WHERE timestamp IS NOT NULL AND timestamp != ''
+                GROUP BY bucket
+                ORDER BY bucket DESC
+                LIMIT ?
+                """,
+                (formats[bucket], limit),
+            ).fetchall()
+        return [(str(row["bucket"]), int(row["total"])) for row in reversed(rows) if row["bucket"]]
+
+    def rule_feedback(self) -> dict[str, dict[str, float | int]]:
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    rule_id,
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) AS confirmed,
+                    SUM(CASE WHEN status = 'ignored' THEN 1 ELSE 0 END) AS ignored,
+                    SUM(CASE WHEN status NOT IN ('confirmed', 'ignored') THEN 1 ELSE 0 END) AS unconfirmed
+                FROM alerts
+                GROUP BY rule_id
+                ORDER BY total DESC
+                """
+            ).fetchall()
+
+        feedback: dict[str, dict[str, float | int]] = {}
+        for row in rows:
+            total = int(row["total"])
+            confirmed = int(row["confirmed"] or 0)
+            ignored = int(row["ignored"] or 0)
+            unconfirmed = int(row["unconfirmed"] or 0)
+            feedback[str(row["rule_id"])] = {
+                "total": total,
+                "confirmed": confirmed,
+                "ignored": ignored,
+                "unconfirmed": unconfirmed,
+                "confirmed_ratio": 0.0 if total == 0 else confirmed / total,
+                "ignored_ratio": 0.0 if total == 0 else ignored / total,
+            }
+        return feedback
+
     def _from_row(self, row: object) -> AlertRecord:
         return AlertRecord(
             id=row["id"],  # type: ignore[index]

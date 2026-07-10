@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -20,7 +21,7 @@ from PySide6.QtWidgets import (
 from app.constants import PROJECT_ROOT
 from models import CustomRuleRecord, RuleRecord
 from storage.database import Database
-from storage.repositories import BlacklistRepository, CustomRuleRepository, RuleRepository
+from storage.repositories import AlertRepository, BlacklistRepository, CustomRuleRepository, RuleRepository
 
 
 PROTOCOL_OPTIONS = ["Any", "TCP", "UDP", "ICMP", "ICMPv6", "ARP", "DNS", "HTTP", "HTTPS", "TLS", "DHCP", "MDNS", "LLMNR", "NBNS", "NTP", "QUIC"]
@@ -31,6 +32,7 @@ class RulePage(QWidget):
     def __init__(self, database: Database) -> None:
         super().__init__()
         self.database = database
+        self.alert_repository = AlertRepository(database)
         self.rule_repository = RuleRepository(database)
         self.custom_rule_repository = CustomRuleRepository(database)
         self.blacklist_repository = BlacklistRepository(PROJECT_ROOT / "config" / "blacklist.txt")
@@ -59,8 +61,23 @@ class RulePage(QWidget):
             button_bar.addWidget(button)
         button_bar.addStretch()
 
-        self.table = QTableWidget(0, 8)
-        self.table.setHorizontalHeaderLabels(["ID", "Name", "Category", "Severity", "Enabled", "Threshold", "Window (s)", "Description"])
+        self.table = QTableWidget(0, 12)
+        self.table.setHorizontalHeaderLabels(
+            [
+                "ID",
+                "Name",
+                "Category",
+                "Severity",
+                "Enabled",
+                "Threshold",
+                "Window (s)",
+                "Description",
+                "Feedback",
+                "Alerts",
+                "Confirmed",
+                "Ignored",
+            ]
+        )
         self._configure_table(self.table)
 
         self.custom_table = QTableWidget(0, 11)
@@ -108,6 +125,7 @@ class RulePage(QWidget):
         self.blacklist_editor.setPlainText("\n".join(self.blacklist_repository.list_all()))
 
     def _render_builtin_rules(self) -> None:
+        feedback_by_rule = self.alert_repository.rule_feedback()
         self.table.setRowCount(len(self.current_rules))
         for row_index, rule in enumerate(self.current_rules):
             for column_index, value in enumerate([rule.id, rule.name, rule.category, rule.severity]):
@@ -134,6 +152,22 @@ class RulePage(QWidget):
             description_item.setToolTip(rule.description)
             self.table.setItem(row_index, 7, description_item)
 
+            feedback = feedback_by_rule.get(rule.id, {})
+            total = int(feedback.get("total", 0))
+            confirmed = int(feedback.get("confirmed", 0))
+            ignored = int(feedback.get("ignored", 0))
+            confirmed_ratio = float(feedback.get("confirmed_ratio", 0.0))
+            ignored_ratio = float(feedback.get("ignored_ratio", 0.0))
+            feedback_text = f"Confirmed {confirmed_ratio:.0%}, ignored {ignored_ratio:.0%}" if total else "No alerts"
+            tooltip = (
+                f"Total alerts: {total}\nConfirmed: {confirmed}\nIgnored: {ignored}\n"
+                f"Unconfirmed: {int(feedback.get('unconfirmed', 0))}"
+            )
+            self._set_feedback_item(row_index, 8, feedback_text, tooltip, ignored_ratio > 0.5 and total > 0)
+            self._set_feedback_item(row_index, 9, str(total), tooltip, ignored_ratio > 0.5 and total > 0)
+            self._set_feedback_item(row_index, 10, str(confirmed), tooltip, ignored_ratio > 0.5 and total > 0)
+            self._set_feedback_item(row_index, 11, str(ignored), tooltip, ignored_ratio > 0.5 and total > 0)
+
         self.table.setColumnWidth(0, 150)
         self.table.setColumnWidth(1, 210)
         self.table.setColumnWidth(2, 120)
@@ -141,7 +175,21 @@ class RulePage(QWidget):
         self.table.setColumnWidth(4, 76)
         self.table.setColumnWidth(5, 105)
         self.table.setColumnWidth(6, 105)
+        self.table.setColumnWidth(8, 190)
+        self.table.setColumnWidth(9, 75)
+        self.table.setColumnWidth(10, 95)
+        self.table.setColumnWidth(11, 80)
         self.table.resizeRowsToContents()
+
+    def _set_feedback_item(self, row: int, column: int, value: str, tooltip: str, warn: bool) -> None:
+        item = QTableWidgetItem(value)
+        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+        item.setToolTip(
+            f"{tooltip}\nIgnored ratio is above 50%; review thresholds or evidence." if warn else tooltip
+        )
+        if warn:
+            item.setBackground(QColor("#fef3c7"))
+        self.table.setItem(row, column, item)
 
     def _render_custom_rules(self) -> None:
         self.custom_table.setRowCount(len(self.current_custom_rules))
