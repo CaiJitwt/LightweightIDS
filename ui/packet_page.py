@@ -30,113 +30,157 @@ from parser.decrypted_http_parser import DecryptedHttpParser
 from parser.packet_parser import PacketParser
 from storage.database import Database
 from storage.repositories import (
-    AlertRepository,
     CustomRuleRepository,
-    PacketRepository,
     RuleRepository,
     SettingsRepository,
+    TrafficRepository,
 )
 from ui.widgets.packet_table import PacketTable
 
 
 class PcapImportWorker(QThread):
-    batch_processed = Signal(list, list)
+    batch_processed = Signal(list, list, int, int)
     import_failed = Signal(str)
-    import_finished = Signal(int, int)
+    import_finished = Signal(int, int, int)
 
     def __init__(
         self,
         pcap_path: str | Path,
         rule_records: list[RuleRecord],
         custom_rule_records: list[CustomRuleRecord],
+        database: Database,
         batch_size: int = 100,
+        save_packets: bool = True,
+        alert_cooldown_seconds: int = 10,
     ) -> None:
         super().__init__()
         self.pcap_path = Path(pcap_path)
         self.rule_records = rule_records
         self.custom_rule_records = custom_rule_records
+        self.database = database
         self.batch_size = batch_size
+        self.save_packets = save_packets
+        self.alert_cooldown_seconds = alert_cooldown_seconds
 
     def run(self) -> None:
         loader = PcapLoader()
         parser = PacketParser()
-        engine = DetectionEngine.from_rule_records(self.rule_records, self.custom_rule_records, alert_cooldown_seconds=10)
+        engine = DetectionEngine.from_rule_records(
+            self.rule_records,
+            self.custom_rule_records,
+            alert_cooldown_seconds=self.alert_cooldown_seconds,
+        )
+        traffic_repository = TrafficRepository(self.database)
         packet_batch: list[PacketRecord] = []
         alert_batch: list[AlertRecord] = []
         packet_total = 0
         alert_total = 0
+        skipped_total = 0
 
         try:
             for raw_packet in loader.load(self.pcap_path):
-                packet = parser.parse(raw_packet)
-                alerts = engine.process_packet(packet)
+                if self.isInterruptionRequested():
+                    break
+                try:
+                    packet = parser.parse(raw_packet)
+                    alerts = engine.process_packet(packet)
+                except Exception:
+                    skipped_total += 1
+                    continue
                 packet_batch.append(packet)
                 alert_batch.extend(alerts)
                 packet_total += 1
                 alert_total += len(alerts)
 
                 if len(packet_batch) >= self.batch_size:
-                    self.batch_processed.emit(packet_batch, alert_batch)
+                    packets_to_save = packet_batch if self.save_packets else []
+                    saved_packets, saved_alerts = traffic_repository.add_batch(packets_to_save, alert_batch)
+                    self.batch_processed.emit(packet_batch, alert_batch, saved_packets, saved_alerts)
                     packet_batch = []
                     alert_batch = []
 
             if packet_batch or alert_batch:
-                self.batch_processed.emit(packet_batch, alert_batch)
-            self.import_finished.emit(packet_total, alert_total)
+                packets_to_save = packet_batch if self.save_packets else []
+                saved_packets, saved_alerts = traffic_repository.add_batch(packets_to_save, alert_batch)
+                self.batch_processed.emit(packet_batch, alert_batch, saved_packets, saved_alerts)
+            self.import_finished.emit(packet_total, alert_total, skipped_total)
         except Exception as exc:
             self.import_failed.emit(str(exc))
 
 
 class DecryptedHttpImportWorker(QThread):
-    batch_processed = Signal(list, list)
+    batch_processed = Signal(list, list, int, int)
     import_failed = Signal(str)
-    import_finished = Signal(int, int)
+    import_finished = Signal(int, int, int)
 
     def __init__(
         self,
         log_path: str | Path,
         rule_records: list[RuleRecord],
         custom_rule_records: list[CustomRuleRecord],
+        database: Database,
         batch_size: int = 100,
+        save_packets: bool = True,
+        alert_cooldown_seconds: int = 10,
     ) -> None:
         super().__init__()
         self.log_path = Path(log_path)
         self.rule_records = rule_records
         self.custom_rule_records = custom_rule_records
+        self.database = database
         self.batch_size = batch_size
+        self.save_packets = save_packets
+        self.alert_cooldown_seconds = alert_cooldown_seconds
 
     def run(self) -> None:
         loader = DecryptedHttpLoader()
         parser = DecryptedHttpParser()
-        engine = DetectionEngine.from_rule_records(self.rule_records, self.custom_rule_records, alert_cooldown_seconds=10)
+        engine = DetectionEngine.from_rule_records(
+            self.rule_records,
+            self.custom_rule_records,
+            alert_cooldown_seconds=self.alert_cooldown_seconds,
+        )
+        traffic_repository = TrafficRepository(self.database)
         packet_batch: list[PacketRecord] = []
         alert_batch: list[AlertRecord] = []
         packet_total = 0
         alert_total = 0
+        skipped_total = 0
 
         try:
             for decrypted_record in loader.load(self.log_path):
-                packet = parser.parse(decrypted_record)
-                alerts = engine.process_packet(packet)
+                if self.isInterruptionRequested():
+                    break
+                try:
+                    packet = parser.parse(decrypted_record)
+                    alerts = engine.process_packet(packet)
+                except Exception:
+                    skipped_total += 1
+                    continue
                 packet_batch.append(packet)
                 alert_batch.extend(alerts)
                 packet_total += 1
                 alert_total += len(alerts)
 
                 if len(packet_batch) >= self.batch_size:
-                    self.batch_processed.emit(packet_batch, alert_batch)
+                    packets_to_save = packet_batch if self.save_packets else []
+                    saved_packets, saved_alerts = traffic_repository.add_batch(packets_to_save, alert_batch)
+                    self.batch_processed.emit(packet_batch, alert_batch, saved_packets, saved_alerts)
                     packet_batch = []
                     alert_batch = []
 
             if packet_batch or alert_batch:
-                self.batch_processed.emit(packet_batch, alert_batch)
-            self.import_finished.emit(packet_total, alert_total)
+                packets_to_save = packet_batch if self.save_packets else []
+                saved_packets, saved_alerts = traffic_repository.add_batch(packets_to_save, alert_batch)
+                self.batch_processed.emit(packet_batch, alert_batch, saved_packets, saved_alerts)
+            self.import_finished.emit(packet_total, alert_total, skipped_total)
         except Exception as exc:
             self.import_failed.emit(str(exc))
 
 
 class LiveCaptureWorker(QThread):
-    packet_processed = Signal(list, list)
+    packet_processed = Signal(list, list, int, int)
+    capture_progress = Signal(int, int, float)
     capture_failed = Signal(str)
     capture_stopped = Signal()
 
@@ -145,43 +189,67 @@ class LiveCaptureWorker(QThread):
         interface: str | None,
         rule_records: list[RuleRecord],
         custom_rule_records: list[CustomRuleRecord],
+        database: Database,
         batch_size: int = 50,
         flush_interval_seconds: float = 0.5,
         capture_filter: str | None = None,
+        save_packets: bool = True,
+        detection_enabled: bool = True,
+        alert_cooldown_seconds: int = 10,
     ) -> None:
         super().__init__()
         self.interface = interface
         self.rule_records = rule_records
         self.custom_rule_records = custom_rule_records
+        self.database = database
         self.batch_size = batch_size
         self.flush_interval_seconds = flush_interval_seconds
         self.capture_filter = capture_filter
+        self.save_packets = save_packets
+        self.detection_enabled = detection_enabled
+        self.alert_cooldown_seconds = alert_cooldown_seconds
         self.parser = PacketParser()
         self.capture: LiveCapture | None = None
 
     def run(self) -> None:
-        engine = DetectionEngine.from_rule_records(self.rule_records, self.custom_rule_records, alert_cooldown_seconds=10)
+        engine = DetectionEngine.from_rule_records(
+            self.rule_records,
+            self.custom_rule_records,
+            alert_cooldown_seconds=self.alert_cooldown_seconds,
+        )
+        traffic_repository = TrafficRepository(self.database)
         packet_batch: list[PacketRecord] = []
         alert_batch: list[AlertRecord] = []
         last_flush = monotonic()
+        started_at = last_flush
+        packet_total = 0
+        skipped_total = 0
 
         def flush_batch(force: bool = False) -> None:
             nonlocal last_flush
-            if not packet_batch and not alert_batch:
-                return
-            if not force and len(packet_batch) < self.batch_size and monotonic() - last_flush < self.flush_interval_seconds:
-                return
-            self.packet_processed.emit(packet_batch.copy(), alert_batch.copy())
-            packet_batch.clear()
-            alert_batch.clear()
-            last_flush = monotonic()
+            now = monotonic()
+            if packet_batch or alert_batch:
+                if not force and len(packet_batch) < self.batch_size and now - last_flush < self.flush_interval_seconds:
+                    return
+                packets_to_save = packet_batch if self.save_packets else []
+                saved_packets, saved_alerts = traffic_repository.add_batch(packets_to_save, alert_batch)
+                self.packet_processed.emit(packet_batch.copy(), alert_batch.copy(), saved_packets, saved_alerts)
+                packet_batch.clear()
+                alert_batch.clear()
+                last_flush = now
+            if force:
+                elapsed = max(now - started_at, 0.001)
+                self.capture_progress.emit(packet_total, skipped_total, packet_total / elapsed)
 
         def handle_raw_packet(raw_packet: object) -> None:
+            nonlocal packet_total, skipped_total
             try:
                 packet = self.parser.parse(raw_packet)
-                alerts = engine.process_packet(packet)
+                alerts = engine.process_packet(packet) if self.detection_enabled else []
             except Exception:
+                skipped_total += 1
                 return
+            packet_total += 1
             packet_batch.append(packet)
             alert_batch.extend(alerts)
             flush_batch()
@@ -197,8 +265,12 @@ class LiveCaptureWorker(QThread):
         except Exception as exc:
             self.capture_failed.emit(str(exc))
         finally:
-            flush_batch(force=True)
-            self.capture_stopped.emit()
+            try:
+                flush_batch(force=True)
+            except Exception as exc:
+                self.capture_failed.emit(str(exc))
+            finally:
+                self.capture_stopped.emit()
 
     def stop_capture(self) -> None:
         if self.capture:
@@ -216,8 +288,6 @@ class PacketPage(QWidget):
     def __init__(self, database: Database) -> None:
         super().__init__()
         self.database = database
-        self.packet_repository = PacketRepository(database)
-        self.alert_repository = AlertRepository(database)
         self.rule_repository = RuleRepository(database)
         self.custom_rule_repository = CustomRuleRepository(database)
         self.settings_repository = SettingsRepository(database)
@@ -227,6 +297,9 @@ class PacketPage(QWidget):
         self.loaded_count = 0
         self.saved_packet_count = 0
         self.saved_alert_count = 0
+        self.capture_skipped_count = 0
+        self.capture_rate = 0.0
+        self.capture_failed_flag = False
 
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
@@ -348,11 +421,16 @@ class PacketPage(QWidget):
         self.packet_table.clear_packets()
         self._set_busy(True)
         self.status_label.setText(f"Importing and detecting: {Path(path).name}")
+        save_packets = self.settings_repository.get_bool("auto_save_packets", True)
+        alert_cooldown = max(0, self.settings_repository.get_int("alert_cooldown_seconds", 10))
 
         self.import_worker = PcapImportWorker(
             path,
             self.rule_repository.list_all(),
             self.custom_rule_repository.list_all(),
+            self.database,
+            save_packets=save_packets,
+            alert_cooldown_seconds=alert_cooldown,
         )
         self.import_worker.batch_processed.connect(self.handle_processed_batch)
         self.import_worker.import_failed.connect(self.handle_import_failed)
@@ -380,11 +458,16 @@ class PacketPage(QWidget):
         self.packet_table.clear_packets()
         self._set_busy(True)
         self.status_label.setText(f"Importing authorized decrypted HTTP log: {Path(path).name}")
+        save_packets = self.settings_repository.get_bool("auto_save_packets", True)
+        alert_cooldown = max(0, self.settings_repository.get_int("alert_cooldown_seconds", 10))
 
         self.import_worker = DecryptedHttpImportWorker(
             path,
             self.rule_repository.list_all(),
             self.custom_rule_repository.list_all(),
+            self.database,
+            save_packets=save_packets,
+            alert_cooldown_seconds=alert_cooldown,
         )
         self.import_worker.batch_processed.connect(self.handle_processed_batch)
         self.import_worker.import_failed.connect(self.handle_import_failed)
@@ -397,7 +480,21 @@ class PacketPage(QWidget):
         interface = self.interface_combo.currentData()
         capture_filter = self.capture_filter_input.text().strip() or None
         filter_label = capture_filter or "none"
-        self.status_label.setText(f"Live capture started. Capture filter: {filter_label}. Packets and alerts will be written to the database.")
+        save_packets = self.settings_repository.get_bool("auto_save_packets", True)
+        detection_enabled = self.settings_repository.get_bool("enable_realtime_detection", True)
+        alert_cooldown = max(0, self.settings_repository.get_int("alert_cooldown_seconds", 10))
+        self.loaded_count = 0
+        self.saved_packet_count = 0
+        self.saved_alert_count = 0
+        self.capture_skipped_count = 0
+        self.capture_rate = 0.0
+        self.capture_failed_flag = False
+        detection_label = "enabled" if detection_enabled else "disabled"
+        storage_label = "enabled" if save_packets else "disabled"
+        self.status_label.setText(
+            f"Live capture started. Filter: {filter_label}. Detection: {detection_label}. "
+            f"Packet storage: {storage_label}."
+        )
         self.start_capture_button.setEnabled(False)
         self.stop_capture_button.setEnabled(True)
         self.import_button.setEnabled(False)
@@ -411,9 +508,14 @@ class PacketPage(QWidget):
             interface=interface,
             rule_records=self.rule_repository.list_all(),
             custom_rule_records=self.custom_rule_repository.list_all(),
+            database=self.database,
             capture_filter=capture_filter,
+            save_packets=save_packets,
+            detection_enabled=detection_enabled,
+            alert_cooldown_seconds=alert_cooldown,
         )
         self.live_worker.packet_processed.connect(self.handle_processed_batch)
+        self.live_worker.capture_progress.connect(self.handle_capture_progress)
         self.live_worker.capture_failed.connect(self.handle_capture_failed)
         self.live_worker.capture_stopped.connect(self.handle_capture_stopped)
         self.live_worker.start()
@@ -423,11 +525,17 @@ class PacketPage(QWidget):
             self.status_label.setText("Stopping live capture...")
             self.live_worker.stop_capture()
 
-    def handle_processed_batch(self, packets: list[PacketRecord], alerts: list[AlertRecord]) -> None:
+    def handle_processed_batch(
+        self,
+        packets: list[PacketRecord],
+        alerts: list[AlertRecord],
+        saved_packets: int,
+        saved_alerts: int,
+    ) -> None:
         self.loaded_count += len(packets)
         self.packet_table.add_packets(packets)
-        self.saved_packet_count += self.packet_repository.add_many(packets)
-        self.saved_alert_count += self.alert_repository.add_many(alerts)
+        self.saved_packet_count += saved_packets
+        self.saved_alert_count += saved_alerts
         self.status_label.setText(
             f"Processed {self.loaded_count} packets, saved {self.saved_packet_count} packet records, "
             f"and generated {self.saved_alert_count} alerts."
@@ -435,14 +543,28 @@ class PacketPage(QWidget):
 
     def handle_import_failed(self, message: str) -> None:
         self._set_busy(False)
-        self.status_label.setText("pcap import failed.")
+        self.status_label.setText("Traffic import failed.")
         QMessageBox.critical(self, "Import failed", message)
 
-    def handle_import_finished(self, packet_total: int, alert_total: int) -> None:
+    def handle_import_finished(self, packet_total: int, alert_total: int, skipped_total: int) -> None:
         self._set_busy(False)
-        self.status_label.setText(f"Import complete: parsed {packet_total} packets and generated {alert_total} alerts.")
+        self.status_label.setText(
+            f"Import complete: parsed {packet_total} packets, generated {alert_total} alerts, "
+            f"and skipped {skipped_total} unreadable records."
+        )
+
+    def handle_capture_progress(self, packet_total: int, skipped_total: int, packets_per_second: float) -> None:
+        if self.capture_failed_flag:
+            return
+        self.capture_skipped_count = skipped_total
+        self.capture_rate = packets_per_second
+        self.status_label.setText(
+            f"Live capture: {packet_total} packets processed at {packets_per_second:.1f} packets/s; "
+            f"{self.saved_alert_count} alerts saved; {skipped_total} packets skipped."
+        )
 
     def handle_capture_failed(self, message: str) -> None:
+        self.capture_failed_flag = True
         self.status_label.setText("Live capture failed.")
         QMessageBox.critical(
             self,
@@ -459,14 +581,19 @@ class PacketPage(QWidget):
         self.refresh_interfaces_button.setEnabled(True)
         self.capture_filter_combo.setEnabled(True)
         self.capture_filter_input.setEnabled(True)
-        if "failed" not in self.status_label.text().lower():
-            self.status_label.setText("Live capture stopped.")
+        if not self.capture_failed_flag:
+            self.status_label.setText(
+                f"Live capture stopped: processed {self.loaded_count} packets, saved {self.saved_alert_count} alerts, "
+                f"and skipped {self.capture_skipped_count} packets."
+            )
 
     def clear_packets(self) -> None:
         self.packet_table.clear_packets()
         self.loaded_count = 0
         self.saved_packet_count = 0
         self.saved_alert_count = 0
+        self.capture_skipped_count = 0
+        self.capture_rate = 0.0
         self.status_label.setText("Table cleared. You can import a pcap file or start live capture again.")
 
     def _set_busy(self, busy: bool) -> None:
@@ -498,3 +625,14 @@ class PacketPage(QWidget):
         if path.parent.exists():
             return str(path.parent)
         return ""
+
+    def shutdown(self, timeout_ms: int = 12_000) -> bool:
+        workers: list[QThread] = []
+        if self.import_worker and self.import_worker.isRunning():
+            self.import_worker.requestInterruption()
+            workers.append(self.import_worker)
+        if self.live_worker and self.live_worker.isRunning():
+            self.live_worker.stop_capture()
+            workers.append(self.live_worker)
+
+        return all(worker.wait(timeout_ms) for worker in workers)

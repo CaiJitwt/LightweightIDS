@@ -22,7 +22,7 @@ class LiveCapture:
         try:
             from scapy.sendrecv import sniff
         except ImportError as exc:
-            raise RuntimeError("缺少 Scapy，无法启动实时抓包。") from exc
+            raise RuntimeError("Scapy is required for live capture. Install the project dependencies and try again.") from exc
 
         self._stop_event.clear()
         while not self._stop_event.is_set():

@@ -68,9 +68,10 @@ class MainWindow(QMainWindow):
     def _build_pages(self) -> None:
         if self.overlay_pet is None:
             raise RuntimeError("Overlay pet widget must be created before pages are built.")
+        self.packet_page = PacketPage(self.database)
         pages = [
             DashboardPage(self.database),
-            PacketPage(self.database),
+            self.packet_page,
             AlertPage(self.database),
             RulePage(self.database),
             ReportPage(self.database),
@@ -134,3 +135,10 @@ class MainWindow(QMainWindow):
         if self.overlay_pet:
             self.overlay_pet.reposition()
         super().resizeEvent(event)  # type: ignore[arg-type]
+
+    def closeEvent(self, event: object) -> None:
+        if not self.packet_page.shutdown():
+            self.statusBar().showMessage("Waiting for the active traffic task to stop. Please close the window again.")
+            event.ignore()  # type: ignore[attr-defined]
+            return
+        super().closeEvent(event)  # type: ignore[arg-type]

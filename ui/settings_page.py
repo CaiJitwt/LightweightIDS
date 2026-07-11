@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from PySide6.QtWidgets import (
@@ -54,25 +55,48 @@ class SettingsPage(QWidget):
         pcap_row.addWidget(self.browse_pcap_button)
         pcap_row.addWidget(self.clear_pcap_button)
 
-        auto_save = QCheckBox()
-        auto_save.setChecked(True)
-        realtime = QCheckBox()
-        realtime.setChecked(True)
-        cooldown = QSpinBox()
-        cooldown.setRange(0, 3600)
-        cooldown.setSuffix(" s")
-        cooldown.setValue(int(config.get("detection", {}).get("alert_cooldown_seconds", 10)))
-        log_level = QComboBox()
-        log_level.addItems(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
-        configured_log_level = str(config.get("logging", {}).get("level", "INFO")).upper()
-        log_level.setCurrentText(configured_log_level if configured_log_level in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"} else "INFO")
+        detection_config = config.get("detection", {})
+        self.auto_save_check = QCheckBox()
+        self.auto_save_check.setChecked(
+            self.settings_repository.get_bool(
+                "auto_save_packets",
+                bool(detection_config.get("auto_save_packets", True)),
+            )
+        )
+        self.realtime_check = QCheckBox()
+        self.realtime_check.setChecked(
+            self.settings_repository.get_bool(
+                "enable_realtime_detection",
+                bool(detection_config.get("enable_realtime_detection", True)),
+            )
+        )
+        self.cooldown_box = QSpinBox()
+        self.cooldown_box.setRange(0, 3600)
+        self.cooldown_box.setSuffix(" s")
+        self.cooldown_box.setValue(
+            self.settings_repository.get_int(
+                "alert_cooldown_seconds",
+                int(detection_config.get("alert_cooldown_seconds", 10)),
+            )
+        )
+        self.log_level_combo = QComboBox()
+        self.log_level_combo.addItems(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
+        configured_log_level = self.settings_repository.get(
+            "log_level",
+            str(config.get("logging", {}).get("level", "INFO")),
+        ).upper()
+        self.log_level_combo.setCurrentText(
+            configured_log_level
+            if configured_log_level in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+            else "INFO"
+        )
 
         form.addRow("Database path", self.database_path)
         form.addRow("Default pcap path", pcap_row)
-        form.addRow("Auto-save packets", auto_save)
-        form.addRow("Enable live detection", realtime)
-        form.addRow("Alert cooldown", cooldown)
-        form.addRow("Log level", log_level)
+        form.addRow("Auto-save packets", self.auto_save_check)
+        form.addRow("Enable live detection", self.realtime_check)
+        form.addRow("Alert cooldown", self.cooldown_box)
+        form.addRow("Log level", self.log_level_combo)
 
         self.status_label = QLabel("")
         self.status_label.setObjectName("PageHint")
@@ -84,6 +108,10 @@ class SettingsPage(QWidget):
 
         self.browse_pcap_button.clicked.connect(self.choose_default_pcap)
         self.clear_pcap_button.clicked.connect(self.clear_default_pcap)
+        self.auto_save_check.toggled.connect(self.save_runtime_settings)
+        self.realtime_check.toggled.connect(self.save_runtime_settings)
+        self.cooldown_box.valueChanged.connect(self.save_runtime_settings)
+        self.log_level_combo.currentTextChanged.connect(self.save_runtime_settings)
 
     def choose_default_pcap(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -104,3 +132,16 @@ class SettingsPage(QWidget):
         self.pcap_path.setToolTip("")
         self.settings_repository.set("default_pcap_path", "")
         self.status_label.setText("Default pcap path cleared.")
+
+    def save_runtime_settings(self) -> None:
+        log_level = self.log_level_combo.currentText()
+        self.settings_repository.set_many(
+            {
+                "auto_save_packets": "true" if self.auto_save_check.isChecked() else "false",
+                "enable_realtime_detection": "true" if self.realtime_check.isChecked() else "false",
+                "alert_cooldown_seconds": str(self.cooldown_box.value()),
+                "log_level": log_level,
+            }
+        )
+        logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
+        self.status_label.setText("Settings saved. Capture options apply to the next import or live capture.")

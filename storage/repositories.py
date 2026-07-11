@@ -1,11 +1,30 @@
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import asdict
 from pathlib import Path
 
 from models import AlertRecord, BaselineRecord, CustomRuleRecord, PacketRecord, RuleRecord
 from storage.database import Database
 from storage.migrations import DEFAULT_RULES
+
+
+def _insert_record_batch(connection: sqlite3.Connection, table: str, records: list[object]) -> int:
+    if not records:
+        return 0
+    rows = []
+    for record in records:
+        data = asdict(record)  # type: ignore[arg-type]
+        data.pop("id", None)
+        rows.append(data)
+    columns = ", ".join(rows[0].keys())
+    placeholders = ", ".join("?" for _ in rows[0])
+    values = [tuple(row.values()) for row in rows]
+    connection.executemany(
+        f"INSERT INTO {table} ({columns}) VALUES ({placeholders})",
+        values,
+    )
+    return len(rows)
 
 
 class SettingsRepository:
@@ -20,16 +39,47 @@ class SettingsRepository:
         return str(row["value"])
 
     def set(self, key: str, value: str) -> None:
+        self.set_many({key: value})
+
+    def set_many(self, values: dict[str, str]) -> None:
+        if not values:
+            return
         with self.database.connect() as connection:
-            connection.execute(
+            connection.executemany(
                 """
                 INSERT INTO settings (key, value)
                 VALUES (?, ?)
                 ON CONFLICT(key) DO UPDATE SET value = excluded.value
                 """,
-                (key, value),
+                values.items(),
             )
             connection.commit()
+
+    def get_bool(self, key: str, default: bool = False) -> bool:
+        fallback = "true" if default else "false"
+        return self.get(key, fallback).strip().lower() in {"1", "true", "yes", "on"}
+
+    def get_int(self, key: str, default: int = 0) -> int:
+        try:
+            return int(self.get(key, str(default)).strip())
+        except ValueError:
+            return default
+
+
+class TrafficRepository:
+    """Persists one capture batch in a single SQLite transaction."""
+
+    def __init__(self, database: Database) -> None:
+        self.database = database
+
+    def add_batch(self, packets: list[PacketRecord], alerts: list[AlertRecord]) -> tuple[int, int]:
+        if not packets and not alerts:
+            return 0, 0
+        with self.database.connect() as connection:
+            packet_count = _insert_record_batch(connection, "packets", packets)
+            alert_count = _insert_record_batch(connection, "alerts", alerts)
+            connection.commit()
+        return packet_count, alert_count
 
 
 class PacketRepository:
@@ -49,18 +99,10 @@ class PacketRepository:
     def add_many(self, packets: list[PacketRecord]) -> int:
         if not packets:
             return 0
-        rows = []
-        for packet in packets:
-            data = asdict(packet)
-            data.pop("id", None)
-            rows.append(data)
-        columns = ", ".join(rows[0].keys())
-        placeholders = ", ".join("?" for _ in rows[0])
-        values = [tuple(row.values()) for row in rows]
         with self.database.connect() as connection:
-            connection.executemany(f"INSERT INTO packets ({columns}) VALUES ({placeholders})", values)
+            inserted = _insert_record_batch(connection, "packets", packets)
             connection.commit()
-        return len(rows)
+        return inserted
 
     def list_recent(self, limit: int = 10_000) -> list[PacketRecord]:
         with self.database.connect() as connection:
@@ -79,6 +121,33 @@ class PacketRepository:
     def count(self) -> int:
         with self.database.connect() as connection:
             return int(connection.execute("SELECT COUNT(*) FROM packets").fetchone()[0])
+
+    def find_matching_alert(self, alert: AlertRecord) -> PacketRecord | None:
+        with self.database.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT id, timestamp, src_ip, dst_ip, src_port, dst_port, protocol, length,
+                       tcp_flags, dns_query, http_method, http_host, http_path, raw_summary
+                FROM packets
+                WHERE timestamp = ?
+                  AND src_ip IS ?
+                  AND dst_ip IS ?
+                  AND src_port IS ?
+                  AND dst_port IS ?
+                  AND protocol IS ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (
+                    alert.timestamp,
+                    alert.src_ip,
+                    alert.dst_ip,
+                    alert.src_port,
+                    alert.dst_port,
+                    alert.protocol,
+                ),
+            ).fetchone()
+        return None if row is None else self._from_row(row)
 
     def protocol_distribution(self) -> dict[str, int]:
         with self.database.connect() as connection:
@@ -153,18 +222,10 @@ class AlertRepository:
     def add_many(self, alerts: list[AlertRecord]) -> int:
         if not alerts:
             return 0
-        rows = []
-        for alert in alerts:
-            data = asdict(alert)
-            data.pop("id", None)
-            rows.append(data)
-        columns = ", ".join(rows[0].keys())
-        placeholders = ", ".join("?" for _ in rows[0])
-        values = [tuple(row.values()) for row in rows]
         with self.database.connect() as connection:
-            connection.executemany(f"INSERT INTO alerts ({columns}) VALUES ({placeholders})", values)
+            inserted = _insert_record_batch(connection, "alerts", alerts)
             connection.commit()
-        return len(rows)
+        return inserted
 
     def list_all(self, severity: str | None = None, keyword: str | None = None, limit: int = 10_000) -> list[AlertRecord]:
         sql = """
@@ -174,7 +235,7 @@ class AlertRepository:
         """
         clauses: list[str] = []
         values: list[object] = []
-        if severity and severity != "全部等级":
+        if severity and severity != "All severities":
             clauses.append("severity = ?")
             values.append(severity)
         if keyword:
@@ -479,8 +540,45 @@ class BaselineRepository:
             connection.commit()
 
     def upsert_many(self, baselines: list[BaselineRecord]) -> None:
-        for baseline in baselines:
-            self.upsert(baseline)
+        if not baselines:
+            return
+        values = [
+            (
+                baseline.src_ip,
+                baseline.updated_at,
+                baseline.window_seconds,
+                baseline.packet_count,
+                baseline.connection_count,
+                baseline.unique_dst_ips,
+                baseline.unique_dst_ports,
+                baseline.avg_packet_length,
+                baseline.bytes_per_window,
+                baseline.internal_to_external_ratio,
+            )
+            for baseline in baselines
+        ]
+        with self.database.connect() as connection:
+            connection.executemany(
+                """
+                INSERT INTO baselines
+                    (src_ip, updated_at, window_seconds, packet_count, connection_count,
+                     unique_dst_ips, unique_dst_ports, avg_packet_length, bytes_per_window,
+                     internal_to_external_ratio)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(src_ip) DO UPDATE SET
+                    updated_at = excluded.updated_at,
+                    window_seconds = excluded.window_seconds,
+                    packet_count = excluded.packet_count,
+                    connection_count = excluded.connection_count,
+                    unique_dst_ips = excluded.unique_dst_ips,
+                    unique_dst_ports = excluded.unique_dst_ports,
+                    avg_packet_length = excluded.avg_packet_length,
+                    bytes_per_window = excluded.bytes_per_window,
+                    internal_to_external_ratio = excluded.internal_to_external_ratio
+                """,
+                values,
+            )
+            connection.commit()
 
     def list_all(self, limit: int = 100) -> list[BaselineRecord]:
         with self.database.connect() as connection:
@@ -534,7 +632,7 @@ class BlacklistRepository:
             value = ip.strip()
             if value and value not in cleaned:
                 cleaned.append(value)
-        content = "# 每行一个 IP，空行和 # 注释会被忽略。\n" + "\n".join(cleaned)
+        content = "# One IP per line. Blank lines and comments are ignored.\n" + "\n".join(cleaned)
         if cleaned:
             content += "\n"
         self.path.write_text(content, encoding="utf-8")

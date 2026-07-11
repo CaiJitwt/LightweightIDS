@@ -83,6 +83,16 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_packets_alert_match
+ON packets (timestamp, src_ip, dst_ip, src_port, dst_port, protocol);
+
+CREATE INDEX IF NOT EXISTS idx_packets_protocol ON packets (protocol);
+CREATE INDEX IF NOT EXISTS idx_packets_src_ip ON packets (src_ip);
+CREATE INDEX IF NOT EXISTS idx_packets_dst_port ON packets (dst_port);
+CREATE INDEX IF NOT EXISTS idx_alerts_timestamp ON alerts (timestamp);
+CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts (severity);
+CREATE INDEX IF NOT EXISTS idx_alerts_rule_status ON alerts (rule_id, status);
 """
 
 DEFAULT_RULES = [

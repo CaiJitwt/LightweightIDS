@@ -23,13 +23,13 @@ def run(argv: list[str]) -> int:
     try:
         from PySide6.QtWidgets import QApplication
     except ImportError as exc:
-        print("缺少 PySide6，当前启动程序使用的 Python 解释器是：")
+        print("PySide6 is missing. The current Python interpreter is:")
         print(f"  {sys.executable}")
         print()
-        print("请使用已安装依赖的 conda 环境启动，例如：")
+        print("Start the app with the project environment, for example:")
         print(r"  D:\Miniconda\envs\Lightweight-IDS\python.exe main.py")
         print()
-        print("如果要用当前解释器启动，则需要先在当前解释器中安装依赖：")
+        print("To use the current interpreter, install the project dependencies first:")
         print("  python -m pip install -r requirements.txt")
         raise SystemExit(1) from exc
 

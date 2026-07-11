@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -25,6 +26,8 @@ from ui.widgets.alert_table import AlertTable
 
 
 class AlertPage(QWidget):
+    RESULT_LIMIT = 2_000
+
     def __init__(self, database: Database) -> None:
         super().__init__()
         self.database = database
@@ -72,6 +75,8 @@ class AlertPage(QWidget):
         self.ignore_button = QPushButton("Ignore")
         self.delete_button = QPushButton("Delete")
         self.export_button = QPushButton("Export CSV")
+        self.result_label = QLabel()
+        self.result_label.setObjectName("PageHint")
 
         toolbar.addWidget(self.severity_filter)
         toolbar.addWidget(self.keyword_input, 1)
@@ -97,14 +102,19 @@ class AlertPage(QWidget):
         self.chain_table.setMinimumHeight(100)
 
         layout.addLayout(toolbar, 0)
+        layout.addWidget(self.result_label)
         layout.addWidget(self.table, 3)
         layout.addWidget(self.detail_title)
         layout.addWidget(self.detail_view, 2)
         layout.addWidget(self.chain_title)
         layout.addWidget(self.chain_table, 1)
 
+        self.search_timer = QTimer(self)
+        self.search_timer.setSingleShot(True)
+        self.search_timer.setInterval(250)
+        self.search_timer.timeout.connect(self.refresh)
         self.severity_filter.currentTextChanged.connect(self.refresh)
-        self.keyword_input.textChanged.connect(self.refresh)
+        self.keyword_input.textChanged.connect(lambda _text: self.search_timer.start())
         self.refresh_button.clicked.connect(self.refresh)
         self.detail_button.clicked.connect(self.show_selected_detail)
         self.confirm_button.clicked.connect(lambda: self.update_selected_status("confirmed"))
@@ -120,12 +130,22 @@ class AlertPage(QWidget):
         super().showEvent(event)  # type: ignore[arg-type]
 
     def refresh(self) -> None:
+        selected_alert_id = self.table.selected_alert_id()
         severity_text = self.severity_filter.currentText()
         severity = None if severity_text == "All severities" else severity_text
         keyword = self.keyword_input.text().strip()
-        self.current_alerts = self.alert_repository.list_all(severity=severity, keyword=keyword)
+        self.current_alerts = self.alert_repository.list_all(
+            severity=severity,
+            keyword=keyword,
+            limit=self.RESULT_LIMIT,
+        )
         self.current_alerts = [self._display_alert(alert) for alert in self.current_alerts]
         self.table.set_alerts(self.current_alerts)
+        if selected_alert_id is not None:
+            self.table.select_alert_id(selected_alert_id)
+        self.result_label.setText(
+            f"Showing {len(self.current_alerts)} matching alerts, newest first (limit {self.RESULT_LIMIT})."
+        )
         self.render_selected_alert_detail()
         self._render_attack_chains()
 
@@ -195,24 +215,9 @@ class AlertPage(QWidget):
 
     def _matching_packet(self, alert: AlertRecord) -> PacketRecord | None:
         try:
-            packets = self.packet_repository.list_recent(limit=10_000)
+            return self.packet_repository.find_matching_alert(alert)
         except Exception:
             return None
-
-        for packet in reversed(packets):
-            if self._packet_matches_alert(packet, alert):
-                return packet
-        return None
-
-    def _packet_matches_alert(self, packet: PacketRecord, alert: AlertRecord) -> bool:
-        return bool(
-            packet.timestamp == alert.timestamp
-            and packet.src_ip == alert.src_ip
-            and packet.dst_ip == alert.dst_ip
-            and packet.src_port == alert.src_port
-            and packet.dst_port == alert.dst_port
-            and packet.protocol == alert.protocol
-        )
 
     def update_selected_status(self, status: str) -> None:
         alert_id = self.table.selected_alert_id()
