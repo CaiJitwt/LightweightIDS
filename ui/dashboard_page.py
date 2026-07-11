@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from PySide6.QtCore import Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QGridLayout,
@@ -24,6 +25,7 @@ from detection.baseline import BaselineManager
 from detection.ml.simple_anomaly import SimpleAnomalyDetector
 from models import AlertRecord, BaselineRecord
 from storage.database import Database
+from storage.analyst_repositories import AssetRepository
 from storage.repositories import AlertRepository, BaselineRepository, PacketRepository
 from ui.widgets.chart_widget import ChartWidget
 from ui.widgets.statistic_card import StatisticCard
@@ -31,12 +33,15 @@ from ui.styles import configure_responsive_table
 
 
 class DashboardPage(QWidget):
+    host_activated = Signal(str)
+
     def __init__(self, database: Database) -> None:
         super().__init__()
         self.database = database
         self.packet_repository = PacketRepository(database)
         self.alert_repository = AlertRepository(database)
         self.baseline_repository = BaselineRepository(database)
+        self.asset_repository = AssetRepository(database)
         self.attack_chain_analyzer = AttackChainAnalyzer()
         self.host_risk_scorer = HostRiskScorer(self.attack_chain_analyzer)
         self.alert_trend_analyzer = AlertTrendAnalyzer()
@@ -138,7 +143,13 @@ class DashboardPage(QWidget):
 
         self.refresh_button.clicked.connect(self.handle_refresh_clicked)
         self.reset_button.clicked.connect(self.handle_reset_clicked)
+        self.host_risk_table.cellDoubleClicked.connect(self._activate_host)
         self.refresh()
+
+    def _activate_host(self, row: int, _column: int) -> None:
+        item = self.host_risk_table.item(row, 0)
+        if item and item.text():
+            self.host_activated.emit(item.text())
 
     def showEvent(self, event: object) -> None:
         self.refresh()
@@ -248,7 +259,13 @@ class DashboardPage(QWidget):
         chains: list[AttackChain],
         baseline_records: list[BaselineRecord],
     ) -> None:
-        risks = self.host_risk_scorer.score_hosts(alerts, chains, baseline_records, limit=8)
+        risks = self.host_risk_scorer.score_hosts(
+            alerts,
+            chains,
+            baseline_records,
+            asset_importance=self.asset_repository.importance_map(),
+            limit=8,
+        )
         self.host_risk_table.setRowCount(len(risks))
         for row, risk in enumerate(risks):
             self._set_host_risk_row(row, risk)

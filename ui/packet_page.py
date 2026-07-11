@@ -29,6 +29,7 @@ from models import AlertRecord, CustomRuleRecord, PacketRecord, RuleRecord
 from parser.decrypted_http_parser import DecryptedHttpParser
 from parser.packet_parser import PacketParser
 from storage.database import Database
+from storage.analyst_repositories import AssetRepository
 from storage.repositories import (
     CustomRuleRepository,
     RuleRepository,
@@ -69,6 +70,7 @@ class PcapImportWorker(QThread):
             self.rule_records,
             self.custom_rule_records,
             alert_cooldown_seconds=self.alert_cooldown_seconds,
+            asset_importance=AssetRepository(self.database).importance_map(),
         )
         traffic_repository = TrafficRepository(self.database)
         packet_batch: list[PacketRecord] = []
@@ -139,6 +141,7 @@ class DecryptedHttpImportWorker(QThread):
             self.rule_records,
             self.custom_rule_records,
             alert_cooldown_seconds=self.alert_cooldown_seconds,
+            asset_importance=AssetRepository(self.database).importance_map(),
         )
         traffic_repository = TrafficRepository(self.database)
         packet_batch: list[PacketRecord] = []
@@ -216,6 +219,7 @@ class LiveCaptureWorker(QThread):
             self.rule_records,
             self.custom_rule_records,
             alert_cooldown_seconds=self.alert_cooldown_seconds,
+            asset_importance=AssetRepository(self.database).importance_map(),
         )
         traffic_repository = TrafficRepository(self.database)
         packet_batch: list[PacketRecord] = []

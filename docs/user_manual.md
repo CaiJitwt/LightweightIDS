@@ -60,6 +60,33 @@ python main.py
 
 攻击链视图会展示源 IP、风险分数、攻击阶段和关联告警数量。
 
+## 主机分析
+
+`Host Explorer` 汇总 packets、alerts、baselines 和 assets 中出现的主机。左侧列表展示风险分数、资产重要性、数据包数量、告警数量和最后活动时间；右侧可查看：
+
+- `Overview`：资产属性、风险原因、入站/出站流量、常见协议和端口。
+- `Connections`：通信对端、方向、协议、端口和数据包数量。
+- `Alerts`：该 IP 作为源或目标时关联的告警。
+- `Timeline`：按时间合并的数据包活动和告警事件。
+
+在 Dashboard 的 `High-risk hosts` 表格中双击主机，可直接跳转到 Host Explorer。`Create investigation` 会以当前主机和相关告警创建调查记录。
+
+## 调查管理
+
+`Investigations` 用于保留人工核实过程和证据：
+
+- 调查状态包括 `Open`、`Monitoring` 和 `Closed`。
+- 优先级包括 `LOW`、`MEDIUM`、`HIGH` 和 `CRITICAL`。
+- Alert Center 的 `Add to investigation` 可把选中告警加入现有调查或新建调查。
+- 调查证据保存告警快照；删除原告警或重置统计后，快照仍然保留。
+- `Export HTML` 可导出当前调查、备注和证据列表。
+
+## 资产管理
+
+`Assets` 用于为 IP 设置显示名称、角色、重要性和备注。角色使用固定选项，重要性范围为 0–100。
+
+高重要性资产会参与 Dashboard 主机风险评分。新启动的导入或实时抓包也会读取资产重要性，并通过现有降噪模块对高价值资产相关告警进行等级提升。资产不会自动加入白名单。
+
 ## 规则管理
 
 规则管理页面包含内置规则、自定义规则和黑名单。

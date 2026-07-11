@@ -18,10 +18,14 @@ from PySide6.QtWidgets import (
 )
 
 from app.constants import APP_NAME, PAGE_TITLES
+from models import AlertRecord
 from storage.database import Database
 from ui.theme_manager import ThemeManager
 from ui.alert_page import AlertPage
+from ui.assets_page import AssetsPage
 from ui.dashboard_page import DashboardPage
+from ui.host_explorer_page import HostExplorerPage
+from ui.investigations_page import InvestigationsPage
 from ui.packet_page import PacketPage
 from ui.personalization_page import PersonalizationPage
 from ui.report_page import ReportPage
@@ -35,8 +39,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.database = database
         self.config = config
-        self.page_titles = {**PAGE_TITLES, "personalization": "Personalization"}
-        self.page_keys = list(PAGE_TITLES.keys()) + ["personalization"]
+        self.page_titles = dict(PAGE_TITLES)
+        self.page_keys = list(PAGE_TITLES.keys())
 
         ui_config = config.get("ui", {})
         self.setWindowTitle(APP_NAME)
@@ -68,22 +72,37 @@ class MainWindow(QMainWindow):
     def _build_pages(self) -> None:
         if self.overlay_pet is None:
             raise RuntimeError("Overlay pet widget must be created before pages are built.")
+        self.dashboard_page = DashboardPage(self.database)
         self.packet_page = PacketPage(self.database)
-        pages = [
-            DashboardPage(self.database),
-            self.packet_page,
-            AlertPage(self.database),
-            RulePage(self.database),
-            ReportPage(self.database),
-            SettingsPage(self.database, self.config),
-            PersonalizationPage(self.theme_manager, self.overlay_pet),
-        ]
+        self.host_explorer_page = HostExplorerPage(self.database)
+        self.alert_page = AlertPage(self.database)
+        self.investigations_page = InvestigationsPage(self.database)
+        self.assets_page = AssetsPage(self.database)
+        self.page_by_key = {
+            "dashboard": self.dashboard_page,
+            "packets": self.packet_page,
+            "hosts": self.host_explorer_page,
+            "alerts": self.alert_page,
+            "investigations": self.investigations_page,
+            "assets": self.assets_page,
+            "rules": RulePage(self.database),
+            "reports": ReportPage(self.database),
+            "settings": SettingsPage(self.database, self.config),
+            "personalization": PersonalizationPage(self.theme_manager, self.overlay_pet),
+        }
 
-        for key, page in zip(self.page_keys, pages, strict=True):
+        for key in self.page_keys:
+            page = self.page_by_key[key]
             item = QListWidgetItem(self.page_titles[key])
             item.setData(Qt.UserRole, key)
             self.nav_list.addItem(item)
             self.stack.addWidget(page)
+
+        self.dashboard_page.host_activated.connect(lambda host_ip: self.navigate_to("hosts", host_ip))
+        self.alert_page.investigation_requested.connect(self._add_alert_to_investigation)
+        self.host_explorer_page.investigation_requested.connect(self._create_host_investigation)
+        self.assets_page.assets_changed.connect(self.host_explorer_page.refresh)
+        self.assets_page.assets_changed.connect(self.dashboard_page.refresh)
 
     def _build_layout(self) -> None:
         root = QWidget()
@@ -126,6 +145,22 @@ class MainWindow(QMainWindow):
         key = self.nav_list.item(index).data(Qt.UserRole)
         self.title_label.setText(self.page_titles[key])
         self.stack.setCurrentIndex(index)
+
+    def navigate_to(self, page_key: str, context: object | None = None) -> None:
+        if page_key not in self.page_by_key:
+            raise KeyError(f"Unknown page: {page_key}")
+        index = self.page_keys.index(page_key)
+        self.nav_list.setCurrentRow(index)
+        if page_key == "hosts" and isinstance(context, str):
+            self.host_explorer_page.select_host(context)
+
+    def _add_alert_to_investigation(self, alert: AlertRecord) -> None:
+        self.navigate_to("investigations")
+        self.investigations_page.add_alert(alert)
+
+    def _create_host_investigation(self, host_ip: str, summary: str, alerts: list[AlertRecord]) -> None:
+        self.navigate_to("investigations")
+        self.investigations_page.create_for_host(host_ip, summary, alerts)
 
     def _apply_style(self) -> None:
         self.theme_manager.apply_default()

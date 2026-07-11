@@ -84,6 +84,7 @@ class DetectionEngine:
         rule_records: list[RuleRecord],
         custom_rule_records: list[CustomRuleRecord] | None = None,
         alert_cooldown_seconds: int = 10,
+        asset_importance: dict[str, int] | None = None,
     ) -> "DetectionEngine":
         rule_map = {
             "PORT_SCAN": PortScanRule,
@@ -125,7 +126,11 @@ class DetectionEngine:
         for record in custom_rule_records or []:
             if record.enabled:
                 rules.append(CustomRule(record))
-        return cls(rules=rules, alert_cooldown_seconds=alert_cooldown_seconds)
+        return cls(
+            rules=rules,
+            alert_cooldown_seconds=alert_cooldown_seconds,
+            asset_importance=asset_importance,
+        )
 
     def add_rule(self, rule: RuleBase) -> None:
         self.rules.append(rule)

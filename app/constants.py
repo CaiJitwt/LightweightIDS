@@ -13,8 +13,12 @@ DEFAULT_LOG_PATH = PROJECT_ROOT / "logs" / "lightweight_ids.log"
 PAGE_TITLES = {
     "dashboard": "Dashboard",
     "packets": "Traffic Monitor",
+    "hosts": "Host Explorer",
     "alerts": "Alert Center",
+    "investigations": "Investigations",
+    "assets": "Assets",
     "rules": "Rule Management",
     "reports": "Reports",
     "settings": "Settings",
+    "personalization": "Personalization",
 }

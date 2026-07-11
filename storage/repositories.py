@@ -255,6 +255,20 @@ class AlertRepository:
             rows = connection.execute(sql, tuple(values)).fetchall()
         return [self._from_row(row) for row in rows]
 
+    def list_for_host(self, host_ip: str, limit: int = 1_000) -> list[AlertRecord]:
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, timestamp, rule_id, rule_name, alert_type, severity, src_ip, dst_ip,
+                       src_port, dst_port, protocol, description, evidence, status
+                FROM alerts
+                WHERE src_ip = ? OR dst_ip = ?
+                ORDER BY id DESC LIMIT ?
+                """,
+                (host_ip, host_ip, limit),
+            ).fetchall()
+        return [self._from_row(row) for row in rows]
+
     def update_status(self, alert_id: int, status: str) -> bool:
         with self.database.connect() as connection:
             cursor = connection.execute("UPDATE alerts SET status = ? WHERE id = ?", (status, alert_id))

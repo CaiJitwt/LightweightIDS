@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -27,6 +27,7 @@ from ui.widgets.alert_table import AlertTable
 
 class AlertPage(QWidget):
     RESULT_LIMIT = 2_000
+    investigation_requested = Signal(object)
 
     def __init__(self, database: Database) -> None:
         super().__init__()
@@ -74,6 +75,7 @@ class AlertPage(QWidget):
         self.confirm_button = QPushButton("Confirm")
         self.ignore_button = QPushButton("Ignore")
         self.delete_button = QPushButton("Delete")
+        self.investigate_button = QPushButton("Add to investigation")
         self.export_button = QPushButton("Export CSV")
         self.result_label = QLabel()
         self.result_label.setObjectName("PageHint")
@@ -85,6 +87,7 @@ class AlertPage(QWidget):
         toolbar.addWidget(self.confirm_button)
         toolbar.addWidget(self.ignore_button)
         toolbar.addWidget(self.delete_button)
+        toolbar.addWidget(self.investigate_button)
         toolbar.addWidget(self.export_button)
 
         self.table = AlertTable()
@@ -120,10 +123,18 @@ class AlertPage(QWidget):
         self.confirm_button.clicked.connect(lambda: self.update_selected_status("confirmed"))
         self.ignore_button.clicked.connect(lambda: self.update_selected_status("ignored"))
         self.delete_button.clicked.connect(self.delete_selected_alert)
+        self.investigate_button.clicked.connect(self.add_selected_to_investigation)
         self.export_button.clicked.connect(self.export_csv)
         self.table.itemSelectionChanged.connect(self.render_selected_alert_detail)
 
         self.refresh()
+
+    def add_selected_to_investigation(self) -> None:
+        alert = self._selected_alert()
+        if alert is None:
+            QMessageBox.information(self, "No alert selected", "Please select an alert first.")
+            return
+        self.investigation_requested.emit(alert)
 
     def showEvent(self, event: object) -> None:
         self.refresh()

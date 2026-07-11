@@ -84,6 +84,46 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS assets (
+    ip TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL DEFAULT '',
+    role TEXT NOT NULL DEFAULT 'Other',
+    importance INTEGER NOT NULL DEFAULT 50 CHECK (importance BETWEEN 0 AND 100),
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS investigations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'Open',
+    priority TEXT NOT NULL DEFAULT 'MEDIUM',
+    host_ip TEXT,
+    summary TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS investigation_evidence (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    investigation_id INTEGER NOT NULL,
+    alert_id INTEGER,
+    alert_timestamp TEXT NOT NULL,
+    rule_id TEXT NOT NULL,
+    rule_name TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    src_ip TEXT,
+    dst_ip TEXT,
+    description TEXT NOT NULL,
+    evidence TEXT NOT NULL,
+    added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (investigation_id) REFERENCES investigations(id) ON DELETE CASCADE,
+    FOREIGN KEY (alert_id) REFERENCES alerts(id) ON DELETE SET NULL,
+    UNIQUE (investigation_id, alert_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_packets_alert_match
 ON packets (timestamp, src_ip, dst_ip, src_port, dst_port, protocol);
 
@@ -93,6 +133,12 @@ CREATE INDEX IF NOT EXISTS idx_packets_dst_port ON packets (dst_port);
 CREATE INDEX IF NOT EXISTS idx_alerts_timestamp ON alerts (timestamp);
 CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts (severity);
 CREATE INDEX IF NOT EXISTS idx_alerts_rule_status ON alerts (rule_id, status);
+CREATE INDEX IF NOT EXISTS idx_packets_src_timestamp ON packets (src_ip, timestamp);
+CREATE INDEX IF NOT EXISTS idx_packets_dst_timestamp ON packets (dst_ip, timestamp);
+CREATE INDEX IF NOT EXISTS idx_alerts_src_timestamp ON alerts (src_ip, timestamp);
+CREATE INDEX IF NOT EXISTS idx_alerts_dst_timestamp ON alerts (dst_ip, timestamp);
+CREATE INDEX IF NOT EXISTS idx_investigations_status ON investigations (status, updated_at);
+CREATE INDEX IF NOT EXISTS idx_investigation_evidence_case ON investigation_evidence (investigation_id, added_at);
 """
 
 DEFAULT_RULES = [
