@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QFrame,
     QScrollArea,
@@ -51,7 +54,12 @@ class DashboardPage(QWidget):
 
         toolbar = QHBoxLayout()
         self.refresh_button = QPushButton("Refresh statistics")
+        self.reset_button = QPushButton("Reset statistics")
+        self.refresh_status_label = QLabel("Last refreshed: Never")
+        self.refresh_status_label.setObjectName("PageHint")
         toolbar.addWidget(self.refresh_button)
+        toolbar.addWidget(self.reset_button)
+        toolbar.addWidget(self.refresh_status_label)
         toolbar.addStretch()
 
         cards = QGridLayout()
@@ -128,12 +136,51 @@ class DashboardPage(QWidget):
         layout.addWidget(self.baseline_title)
         layout.addWidget(self.baseline_table, 1)
 
-        self.refresh_button.clicked.connect(self.refresh)
+        self.refresh_button.clicked.connect(self.handle_refresh_clicked)
+        self.reset_button.clicked.connect(self.handle_reset_clicked)
         self.refresh()
 
     def showEvent(self, event: object) -> None:
         self.refresh()
         super().showEvent(event)  # type: ignore[arg-type]
+
+    def handle_refresh_clicked(self) -> None:
+        self.refresh_button.setEnabled(False)
+        try:
+            self.refresh()
+        except Exception as exc:
+            QMessageBox.warning(self, "Refresh failed", f"Dashboard statistics could not be refreshed.\n\n{exc}")
+        finally:
+            self.refresh_button.setEnabled(True)
+
+    def handle_reset_clicked(self) -> None:
+        answer = QMessageBox.question(
+            self,
+            "Reset statistics",
+            "Clear all packets, alerts, baselines, trends, and risk statistics? Rule settings and custom rules will be kept.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
+
+        self.reset_button.setEnabled(False)
+        try:
+            self._reset_runtime_data()
+            self.refresh()
+            QMessageBox.information(self, "Statistics reset", "Runtime statistics and alerts have been cleared.")
+        except Exception as exc:
+            QMessageBox.warning(self, "Reset failed", f"Dashboard statistics could not be reset.\n\n{exc}")
+        finally:
+            self.reset_button.setEnabled(True)
+
+    def _reset_runtime_data(self) -> None:
+        with self.database.connect() as connection:
+            connection.execute("DELETE FROM alerts")
+            connection.execute("DELETE FROM packets")
+            connection.execute("DELETE FROM baselines")
+            connection.execute("DELETE FROM sqlite_sequence WHERE name IN ('alerts', 'packets', 'baselines')")
+            connection.commit()
 
     def refresh(self) -> None:
         packet_count = self.packet_repository.count()
@@ -158,6 +205,7 @@ class DashboardPage(QWidget):
         self._render_attack_timeline(chains)
         baseline_records = self._refresh_baseline_summary()
         self._render_host_risk(alerts, chains, baseline_records)
+        self.refresh_status_label.setText(f"Last refreshed: {datetime.now().strftime('%H:%M:%S')}")
 
     def _render_alert_trend(self) -> None:
         points = self.alert_trend_analyzer.analyze(self.alert_repository.count_by_time_bucket(bucket="hour", limit=24))

@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QPushButton,
     QSizePolicy,
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from storage.database import Database
+from storage.repositories import SettingsRepository
 
 
 class SettingsPage(QWidget):
@@ -24,6 +26,7 @@ class SettingsPage(QWidget):
         super().__init__()
         self.database = database
         self.config = config
+        self.settings_repository = SettingsRepository(database)
 
         layout = QVBoxLayout(self)
         form = QFormLayout()
@@ -31,7 +34,12 @@ class SettingsPage(QWidget):
         form.setLabelAlignment(form.labelAlignment())
 
         self.database_path = QLineEdit(str(database.path))
-        self.pcap_path = QLineEdit(str(config.get("settings", {}).get("default_pcap_path", "")))
+        self.pcap_path = QLineEdit(
+            self.settings_repository.get(
+                "default_pcap_path",
+                str(config.get("settings", {}).get("default_pcap_path", "")),
+            )
+        )
         self.pcap_path.setReadOnly(True)
         self.pcap_path.setPlaceholderText("Choose a default pcap file")
         for field in [self.database_path, self.pcap_path]:
@@ -66,7 +74,12 @@ class SettingsPage(QWidget):
         form.addRow("Alert cooldown", cooldown)
         form.addRow("Log level", log_level)
 
+        self.status_label = QLabel("")
+        self.status_label.setObjectName("PageHint")
+        self.status_label.setWordWrap(True)
+
         layout.addLayout(form)
+        layout.addWidget(self.status_label)
         layout.addStretch()
 
         self.browse_pcap_button.clicked.connect(self.choose_default_pcap)
@@ -83,7 +96,11 @@ class SettingsPage(QWidget):
             return
         self.pcap_path.setText(path)
         self.pcap_path.setToolTip(path)
+        self.settings_repository.set("default_pcap_path", path)
+        self.status_label.setText("Default pcap path saved.")
 
     def clear_default_pcap(self) -> None:
         self.pcap_path.clear()
         self.pcap_path.setToolTip("")
+        self.settings_repository.set("default_pcap_path", "")
+        self.status_label.setText("Default pcap path cleared.")

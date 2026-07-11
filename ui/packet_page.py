@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+from time import monotonic
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QPushButton,
     QSizePolicy,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -25,7 +29,13 @@ from models import AlertRecord, CustomRuleRecord, PacketRecord, RuleRecord
 from parser.decrypted_http_parser import DecryptedHttpParser
 from parser.packet_parser import PacketParser
 from storage.database import Database
-from storage.repositories import AlertRepository, CustomRuleRepository, PacketRepository, RuleRepository
+from storage.repositories import (
+    AlertRepository,
+    CustomRuleRepository,
+    PacketRepository,
+    RuleRepository,
+    SettingsRepository,
+)
 from ui.widgets.packet_table import PacketTable
 
 
@@ -135,28 +145,59 @@ class LiveCaptureWorker(QThread):
         interface: str | None,
         rule_records: list[RuleRecord],
         custom_rule_records: list[CustomRuleRecord],
+        batch_size: int = 50,
+        flush_interval_seconds: float = 0.5,
+        capture_filter: str | None = None,
     ) -> None:
         super().__init__()
         self.interface = interface
         self.rule_records = rule_records
         self.custom_rule_records = custom_rule_records
+        self.batch_size = batch_size
+        self.flush_interval_seconds = flush_interval_seconds
+        self.capture_filter = capture_filter
         self.parser = PacketParser()
         self.capture: LiveCapture | None = None
 
     def run(self) -> None:
         engine = DetectionEngine.from_rule_records(self.rule_records, self.custom_rule_records, alert_cooldown_seconds=10)
+        packet_batch: list[PacketRecord] = []
+        alert_batch: list[AlertRecord] = []
+        last_flush = monotonic()
+
+        def flush_batch(force: bool = False) -> None:
+            nonlocal last_flush
+            if not packet_batch and not alert_batch:
+                return
+            if not force and len(packet_batch) < self.batch_size and monotonic() - last_flush < self.flush_interval_seconds:
+                return
+            self.packet_processed.emit(packet_batch.copy(), alert_batch.copy())
+            packet_batch.clear()
+            alert_batch.clear()
+            last_flush = monotonic()
 
         def handle_raw_packet(raw_packet: object) -> None:
-            packet = self.parser.parse(raw_packet)
-            alerts = engine.process_packet(packet)
-            self.packet_processed.emit([packet], alerts)
+            try:
+                packet = self.parser.parse(raw_packet)
+                alerts = engine.process_packet(packet)
+            except Exception:
+                return
+            packet_batch.append(packet)
+            alert_batch.extend(alerts)
+            flush_batch()
 
-        self.capture = LiveCapture(interface=self.interface, packet_callback=handle_raw_packet)
+        self.capture = LiveCapture(
+            interface=self.interface,
+            packet_callback=handle_raw_packet,
+            idle_callback=lambda: flush_batch(force=True),
+            capture_filter=self.capture_filter,
+        )
         try:
             self.capture.start()
         except Exception as exc:
             self.capture_failed.emit(str(exc))
         finally:
+            flush_batch(force=True)
             self.capture_stopped.emit()
 
     def stop_capture(self) -> None:
@@ -165,6 +206,13 @@ class LiveCaptureWorker(QThread):
 
 
 class PacketPage(QWidget):
+    CAPTURE_FILTER_PRESETS = {
+        "All traffic": "",
+        "Web + DNS": "tcp port 80 or tcp port 443 or udp port 53 or tcp port 53",
+        "Internal TCP/UDP": "ip and (tcp or udp) and (net 10.0.0.0/8 or net 172.16.0.0/12 or net 192.168.0.0/16)",
+        "Custom": "",
+    }
+
     def __init__(self, database: Database) -> None:
         super().__init__()
         self.database = database
@@ -172,6 +220,7 @@ class PacketPage(QWidget):
         self.alert_repository = AlertRepository(database)
         self.rule_repository = RuleRepository(database)
         self.custom_rule_repository = CustomRuleRepository(database)
+        self.settings_repository = SettingsRepository(database)
         self.interface_manager = InterfaceManager()
         self.import_worker: PcapImportWorker | None = None
         self.live_worker: LiveCaptureWorker | None = None
@@ -189,6 +238,9 @@ class PacketPage(QWidget):
         self.import_button = QPushButton("Import pcap")
         self.demo_button = QPushButton("Load demo data")
         self.import_decrypted_button = QPushButton("Import decrypted HTTP log")
+        self.import_decrypted_button.setToolTip(
+            "Import authorized decrypted HTTP request logs for payload checks. Raw HTTPS pcaps are analyzed as TLS metadata only."
+        )
         self.start_capture_button = QPushButton("Start capture")
         self.stop_capture_button = QPushButton("Stop capture")
         self.clear_button = QPushButton("Clear table")
@@ -204,12 +256,35 @@ class PacketPage(QWidget):
         toolbar.addWidget(self.clear_button)
         toolbar.addStretch()
 
+        capture_options = QHBoxLayout()
+        self.capture_filter_combo = QComboBox()
+        self.capture_filter_combo.addItems(self.CAPTURE_FILTER_PRESETS.keys())
+        self.capture_filter_input = QLineEdit(self.CAPTURE_FILTER_PRESETS["All traffic"])
+        self.capture_filter_input.setPlaceholderText("Optional BPF capture filter")
+        self.capture_filter_input.setReadOnly(True)
+        self.capture_filter_input.setToolTip("Use a BPF filter to reduce live-capture volume before packets reach the parser.")
+        self.visible_rows_box = QSpinBox()
+        self.visible_rows_box.setRange(100, 20_000)
+        self.visible_rows_box.setSingleStep(100)
+        self.visible_rows_box.setValue(PacketTable.MAX_VISIBLE_ROWS)
+        self.visible_rows_box.setSuffix(" visible rows")
+        self.auto_scroll_check = QCheckBox("Auto-scroll")
+        self.auto_scroll_check.setChecked(True)
+        self.auto_scroll_check.setToolTip("Keep the packet table pinned to the newest packet while capture or import is running.")
+        capture_options.addWidget(QLabel("Capture filter"))
+        capture_options.addWidget(self.capture_filter_combo)
+        capture_options.addWidget(self.capture_filter_input, 1)
+        capture_options.addWidget(QLabel("Table window"))
+        capture_options.addWidget(self.visible_rows_box)
+        capture_options.addWidget(self.auto_scroll_check)
+
         self.status_label = QLabel("Import a local pcap file for offline analysis, or choose a network interface for live capture.")
         self.status_label.setObjectName("PageHint")
         self.status_label.setWordWrap(True)
         self.packet_table = PacketTable()
 
         layout.addLayout(toolbar, 0)
+        layout.addLayout(capture_options, 0)
         layout.addWidget(self.status_label)
         layout.addWidget(self.packet_table, 1)
 
@@ -217,10 +292,14 @@ class PacketPage(QWidget):
         self.demo_button.clicked.connect(self.load_demo_data)
         self.import_decrypted_button.clicked.connect(self.select_decrypted_http_log)
         self.refresh_interfaces_button.clicked.connect(self.refresh_interfaces)
+        self.capture_filter_combo.currentTextChanged.connect(self.update_capture_filter_mode)
+        self.visible_rows_box.valueChanged.connect(self.packet_table.set_max_visible_rows)
+        self.auto_scroll_check.toggled.connect(self.packet_table.set_auto_scroll)
         self.start_capture_button.clicked.connect(self.start_live_capture)
         self.stop_capture_button.clicked.connect(self.stop_live_capture)
         self.clear_button.clicked.connect(self.clear_packets)
         self.refresh_interfaces()
+        self.update_capture_filter_mode(self.capture_filter_combo.currentText())
 
     def refresh_interfaces(self) -> None:
         self.interface_combo.clear()
@@ -236,7 +315,7 @@ class PacketPage(QWidget):
         path, _ = QFileDialog.getOpenFileName(
             self,
             "Select pcap file",
-            "",
+            self._default_pcap_dialog_location(),
             "pcap files (*.pcap *.pcapng *.cap);;All files (*)",
         )
         if path:
@@ -316,18 +395,23 @@ class PacketPage(QWidget):
         if self.live_worker and self.live_worker.isRunning():
             return
         interface = self.interface_combo.currentData()
-        self.status_label.setText("Live capture started. Packets and alerts will be written to the database.")
+        capture_filter = self.capture_filter_input.text().strip() or None
+        filter_label = capture_filter or "none"
+        self.status_label.setText(f"Live capture started. Capture filter: {filter_label}. Packets and alerts will be written to the database.")
         self.start_capture_button.setEnabled(False)
         self.stop_capture_button.setEnabled(True)
         self.import_button.setEnabled(False)
         self.demo_button.setEnabled(False)
         self.import_decrypted_button.setEnabled(False)
         self.refresh_interfaces_button.setEnabled(False)
+        self.capture_filter_combo.setEnabled(False)
+        self.capture_filter_input.setEnabled(False)
 
         self.live_worker = LiveCaptureWorker(
             interface=interface,
             rule_records=self.rule_repository.list_all(),
             custom_rule_records=self.custom_rule_repository.list_all(),
+            capture_filter=capture_filter,
         )
         self.live_worker.packet_processed.connect(self.handle_processed_batch)
         self.live_worker.capture_failed.connect(self.handle_capture_failed)
@@ -373,6 +457,8 @@ class PacketPage(QWidget):
         self.demo_button.setEnabled(True)
         self.import_decrypted_button.setEnabled(True)
         self.refresh_interfaces_button.setEnabled(True)
+        self.capture_filter_combo.setEnabled(True)
+        self.capture_filter_input.setEnabled(True)
         if "failed" not in self.status_label.text().lower():
             self.status_label.setText("Live capture stopped.")
 
@@ -390,3 +476,25 @@ class PacketPage(QWidget):
         self.clear_button.setEnabled(not busy)
         self.start_capture_button.setEnabled(not busy)
         self.refresh_interfaces_button.setEnabled(not busy)
+        self.capture_filter_combo.setEnabled(not busy)
+        self.capture_filter_input.setEnabled(not busy)
+
+    def update_capture_filter_mode(self, mode: str) -> None:
+        preset = self.CAPTURE_FILTER_PRESETS.get(mode, "")
+        self.capture_filter_input.setReadOnly(mode != "Custom")
+        if mode != "Custom":
+            self.capture_filter_input.setText(preset)
+        self.capture_filter_input.setPlaceholderText("Type a BPF capture filter" if mode == "Custom" else "No capture filter")
+
+    def _default_pcap_dialog_location(self) -> str:
+        configured_path = self.settings_repository.get("default_pcap_path", "").strip()
+        if not configured_path:
+            return ""
+        path = Path(configured_path)
+        if path.is_file():
+            return str(path.parent)
+        if path.is_dir():
+            return str(path)
+        if path.parent.exists():
+            return str(path.parent)
+        return ""

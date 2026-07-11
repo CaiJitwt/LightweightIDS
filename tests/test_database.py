@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from storage.database import Database
-from storage.repositories import RuleRepository
+from storage.repositories import RuleRepository, SettingsRepository
 
 
 def test_database_initializes_default_tables_and_rules(tmp_path):
@@ -40,3 +40,18 @@ def test_database_initialization_keeps_user_rule_tuning(tmp_path):
 
     rules = {rule.id: rule for rule in RuleRepository(database).list_all()}
     assert rules["ML_ANOMALY"].threshold == 999
+
+
+def test_settings_repository_reads_and_updates_values(tmp_path):
+    database = Database(tmp_path / "ids.db")
+    database.initialize()
+    repository = SettingsRepository(database)
+
+    assert repository.get("default_pcap_path") == ""
+    assert repository.get("missing_key", "fallback") == "fallback"
+
+    repository.set("default_pcap_path", str(tmp_path / "traffic.pcap"))
+    assert repository.get("default_pcap_path") == str(tmp_path / "traffic.pcap")
+
+    repository.set("default_pcap_path", "")
+    assert repository.get("default_pcap_path") == ""
