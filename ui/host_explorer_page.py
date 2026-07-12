@@ -17,7 +17,13 @@ from PySide6.QtWidgets import (
 from detection.analysis.host_profile import HostProfileService
 from models import HostSummary
 from storage.database import Database
-from ui.styles import apply_severity_style, configure_responsive_table
+from ui.styles import (
+    apply_importance_style,
+    apply_score_style,
+    apply_semantic_style,
+    apply_severity_style,
+    configure_responsive_table,
+)
 from ui.widgets.alert_table import AlertTable
 
 
@@ -109,6 +115,12 @@ class HostExplorerPage(QWidget):
                 item = QTableWidgetItem(value)
                 item.setToolTip(value)
                 item.setData(Qt.UserRole, host.ip)
+                if column == 2:
+                    apply_semantic_style(item, host.role)
+                elif column == 3:
+                    apply_score_style(item, host.risk_score)
+                elif column == 4:
+                    apply_importance_style(item, host.importance)
                 self.host_table.setItem(row, column, item)
         if selected_ip:
             self._select_row(selected_ip)
@@ -162,6 +174,8 @@ class HostExplorerPage(QWidget):
             for column, value in enumerate(values):
                 item = QTableWidgetItem(value)
                 item.setToolTip(value)
+                if column in {1, 2}:
+                    apply_semantic_style(item, value)
                 self.connections_table.setItem(row, column, item)
 
         alerts = self.service.alerts_for_host(host.ip)
@@ -175,6 +189,8 @@ class HostExplorerPage(QWidget):
                 item.setToolTip(value)
                 if column == 4 and event.severity:
                     apply_severity_style(item, event.severity)
+                elif column == 2:
+                    apply_semantic_style(item, event.direction)
                 self.timeline_table.setItem(row, column, item)
 
     def request_investigation(self) -> None:
@@ -201,4 +217,3 @@ class HostExplorerPage(QWidget):
 
     def _format_mapping(self, values: dict[str, int]) -> str:
         return ", ".join(f"{key}={value}" for key, value in values.items()) or "None"
-

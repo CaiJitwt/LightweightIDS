@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QMessageBox,
     QPushButton,
@@ -19,9 +20,11 @@ from PySide6.QtWidgets import (
 
 from app.constants import PROJECT_ROOT
 from models import CustomRuleRecord, RuleRecord
+from protection import BlocklistService
+from storage.blocklist_repository import BlocklistEntryRepository
 from storage.database import Database
 from storage.repositories import AlertRepository, BlacklistRepository, CustomRuleRepository, PacketRepository, RuleRepository
-from ui.styles import apply_severity_style, configure_responsive_table
+from ui.styles import apply_semantic_style, apply_severity_style, configure_responsive_table
 
 
 PROTOCOL_OPTIONS = ["Any", "TCP", "UDP", "ICMP", "ICMPv6", "ARP", "DNS", "HTTP", "HTTPS", "TLS", "DHCP", "MDNS", "LLMNR", "NBNS", "NTP", "QUIC"]
@@ -37,6 +40,8 @@ class RulePage(QWidget):
         self.rule_repository = RuleRepository(database)
         self.custom_rule_repository = CustomRuleRepository(database)
         self.blacklist_repository = BlacklistRepository(PROJECT_ROOT / "config" / "blacklist.txt")
+        self.blocklist_entry_repository = BlocklistEntryRepository(database)
+        self.blocklist_service = BlocklistService(database)
         self.current_rules: list[RuleRecord] = []
         self.current_custom_rules: list[CustomRuleRecord] = []
         self.source_ip_options: list[str] = ["Any"]
@@ -52,6 +57,9 @@ class RulePage(QWidget):
         self.add_custom_button = QPushButton("Add custom rule")
         self.delete_custom_button = QPushButton("Delete selected rule")
         self.save_blacklist_button = QPushButton("Save blacklist")
+        self.add_enforced_block_button = QPushButton("Add enforced block")
+        self.remove_enforced_block_button = QPushButton("Remove enforced block")
+        self.retry_enforcement_button = QPushButton("Retry enforcement")
         for button in [
             self.refresh_button,
             self.save_button,
@@ -92,11 +100,30 @@ class RulePage(QWidget):
         self.blacklist_editor = QTextEdit()
         self.blacklist_editor.setPlaceholderText("One IP address per line. Empty lines are ignored.")
         self.blacklist_editor.setMaximumHeight(100)
+        blocklist_button_bar = QHBoxLayout()
+        for button in [
+            self.add_enforced_block_button,
+            self.remove_enforced_block_button,
+            self.retry_enforcement_button,
+        ]:
+            button.setMinimumHeight(32)
+            blocklist_button_bar.addWidget(button)
+        blocklist_button_bar.addStretch()
+        self.enforced_blocklist_table = QTableWidget(0, 8)
+        self.enforced_blocklist_table.setHorizontalHeaderLabels(
+            ["ID", "Kind", "Value", "Field", "Protocol", "Status", "Error", "Updated"]
+        )
+        self._configure_table(
+            self.enforced_blocklist_table,
+            stretch_columns=(2, 6),
+            resize_to_contents_columns=(0, 1, 3, 4, 5, 7),
+        )
 
         builtin_label = QLabel("Built-in detection rules")
         custom_label = QLabel("Custom rules: empty fields mean no restriction. Use drop-downs for protocol and severity.")
-        blacklist_label = QLabel("Blacklisted IP addresses")
-        for label in [builtin_label, custom_label, blacklist_label]:
+        blacklist_label = QLabel("Detection-only IP watchlist")
+        enforced_label = QLabel("Enforced IP and port blocklist")
+        for label in [builtin_label, custom_label, blacklist_label, enforced_label]:
             label.setObjectName("SectionTitle")
 
         layout.addLayout(button_bar)
@@ -106,6 +133,9 @@ class RulePage(QWidget):
         layout.addWidget(self.custom_table, 3)
         layout.addWidget(blacklist_label)
         layout.addWidget(self.blacklist_editor)
+        layout.addWidget(enforced_label)
+        layout.addLayout(blocklist_button_bar)
+        layout.addWidget(self.enforced_blocklist_table, 1)
 
         self.refresh_button.clicked.connect(self.refresh)
         self.save_button.clicked.connect(self.save_rules)
@@ -113,6 +143,9 @@ class RulePage(QWidget):
         self.add_custom_button.clicked.connect(self.add_custom_rule_row)
         self.delete_custom_button.clicked.connect(self.delete_selected_custom_rule)
         self.save_blacklist_button.clicked.connect(self.save_blacklist)
+        self.add_enforced_block_button.clicked.connect(self.add_enforced_block)
+        self.remove_enforced_block_button.clicked.connect(self.remove_enforced_block)
+        self.retry_enforcement_button.clicked.connect(self.retry_enforcement)
 
         self.refresh()
 
@@ -127,6 +160,29 @@ class RulePage(QWidget):
         self._render_builtin_rules()
         self._render_custom_rules()
         self.blacklist_editor.setPlainText("\n".join(self.blacklist_repository.list_all()))
+        self._render_enforced_blocklist()
+
+    def _render_enforced_blocklist(self) -> None:
+        entries = self.blocklist_entry_repository.list_all()
+        self.enforced_blocklist_table.setRowCount(len(entries))
+        for row, entry in enumerate(entries):
+            values = [
+                str(entry.id or ""),
+                entry.kind,
+                entry.value,
+                entry.field,
+                entry.protocol,
+                entry.enforcement_status,
+                entry.enforcement_error,
+                entry.updated_at,
+            ]
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                item.setToolTip(value)
+                item.setData(Qt.UserRole, entry.id)
+                if column == 5:
+                    apply_semantic_style(item, entry.enforcement_status)
+                self.enforced_blocklist_table.setItem(row, column, item)
 
     def _render_builtin_rules(self) -> None:
         feedback_by_rule = self.alert_repository.rule_feedback()
@@ -323,6 +379,71 @@ class RulePage(QWidget):
         self.blacklist_repository.save_all(self.blacklist_editor.toPlainText().splitlines())
         QMessageBox.information(self, "Saved", "Blacklisted IP addresses saved.")
         self.refresh()
+
+    def add_enforced_block(self) -> None:
+        labels = ["Source IP", "Destination IP", "Source Port", "Destination Port"]
+        label, accepted = QInputDialog.getItem(self, "Add enforced block", "Field", labels, 0, False)
+        if not accepted:
+            return
+        field = {
+            "Source IP": "SRC_IP",
+            "Destination IP": "DST_IP",
+            "Source Port": "SRC_PORT",
+            "Destination Port": "DST_PORT",
+        }[label]
+        value, accepted = QInputDialog.getText(self, "Add enforced block", "IP address or port")
+        if not accepted or not value.strip():
+            return
+        protocol = "ANY"
+        if field.endswith("PORT"):
+            protocol, accepted = QInputDialog.getItem(self, "Port protocol", "Protocol", ["ANY", "TCP", "UDP"], 0, False)
+            if not accepted:
+                return
+        try:
+            _entry, result = self.blocklist_service.add_and_enforce(
+                kind="IP" if field.endswith("IP") else "PORT",
+                value=value.strip(),
+                field=field,
+                protocol=protocol,
+            )
+        except ValueError as exc:
+            QMessageBox.warning(self, "Invalid blocklist value", str(exc))
+            return
+        self._show_enforcement_result(result.status, result.message, result.success)
+        self.refresh()
+
+    def remove_enforced_block(self) -> None:
+        entry_id = self._selected_enforced_block_id()
+        if entry_id is None:
+            QMessageBox.information(self, "No block selected", "Please select an enforced block first.")
+            return
+        result = self.blocklist_service.remove(entry_id)
+        self._show_enforcement_result(result.status, result.message, result.success)
+        self.refresh()
+
+    def retry_enforcement(self) -> None:
+        entry_id = self._selected_enforced_block_id()
+        if entry_id is None:
+            QMessageBox.information(self, "No block selected", "Please select an enforced block first.")
+            return
+        result = self.blocklist_service.retry(entry_id)
+        self._show_enforcement_result(result.status, result.message, result.success)
+        self.refresh()
+
+    def _selected_enforced_block_id(self) -> int | None:
+        row = self.enforced_blocklist_table.currentRow()
+        item = self.enforced_blocklist_table.item(row, 0) if row >= 0 else None
+        value = item.data(Qt.UserRole) if item else None
+        return int(value) if value is not None else None
+
+    def _show_enforcement_result(self, status: str, message: str, success: bool) -> None:
+        text = f"Enforcement status: {status}."
+        if message:
+            text += f"\n\n{message}"
+        if success:
+            QMessageBox.information(self, "Enforcement updated", text)
+        else:
+            QMessageBox.warning(self, "Enforcement unavailable", text)
 
     def _configure_table(
         self,

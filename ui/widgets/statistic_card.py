@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
 
+from ui.styles import statistic_card_style
+
 
 class StatisticCard(QFrame):
-    def __init__(self, title: str, value: str) -> None:
+    def __init__(self, title: str, value: str, *, tone: str = "neutral") -> None:
         super().__init__()
         self.setObjectName("Card")
+        self.setStyleSheet(statistic_card_style(tone))
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 14, 16, 14)
 

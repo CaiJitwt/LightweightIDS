@@ -60,6 +60,10 @@ python main.py
 
 攻击链视图会展示源 IP、风险分数、攻击阶段和关联告警数量。
 
+选中告警后，`Related packets` 会按规则时间窗口列出关联数据包。主机扫描、端口扫描、泛洪和横向移动告警可能对应多个数据包。右键数据包可将源 IP、目标 IP、源端口或目标端口加入 enforced blocklist。
+
+Windows 下 enforced blocklist 会尝试创建 Windows Firewall 规则，通常需要管理员权限。只有状态为 `Active` 才表示操作系统已经接受规则；`Failed` 或 `Unsupported` 不能视为已经阻断。离线 pcap 只能分析，不能拒绝历史流量。
+
 ## 主机分析
 
 `Host Explorer` 汇总 packets、alerts、baselines 和 assets 中出现的主机。左侧列表展示风险分数、资产重要性、数据包数量、告警数量和最后活动时间；右侧可查看：

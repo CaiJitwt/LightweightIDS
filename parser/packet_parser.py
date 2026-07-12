@@ -168,7 +168,13 @@ class PacketParser:
 
     def _looks_like_tls(self, payload: str) -> bool:
         lowered = payload.lower()
-        return payload.startswith("\x16\x03") or "client hello" in lowered or "server hello" in lowered
+        tls_record = (
+            len(payload) >= 3
+            and payload[0] in {"\x14", "\x15", "\x16", "\x17"}
+            and payload[1] == "\x03"
+            and payload[2] in {"\x00", "\x01", "\x02", "\x03", "\x04"}
+        )
+        return tls_record or "client hello" in lowered or "server hello" in lowered
 
     def _parse_http_payload(self, payload: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
         if not payload:

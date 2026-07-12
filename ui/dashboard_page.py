@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
+    QCheckBox,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -29,11 +30,12 @@ from storage.analyst_repositories import AssetRepository
 from storage.repositories import AlertRepository, BaselineRepository, PacketRepository
 from ui.widgets.chart_widget import ChartWidget
 from ui.widgets.statistic_card import StatisticCard
-from ui.styles import configure_responsive_table
+from ui.styles import apply_importance_style, apply_score_style, apply_semantic_style, configure_responsive_table
 
 
 class DashboardPage(QWidget):
     host_activated = Signal(str)
+    AUTO_REFRESH_INTERVAL_MS = 5_000
 
     def __init__(self, database: Database) -> None:
         super().__init__()
@@ -45,6 +47,8 @@ class DashboardPage(QWidget):
         self.attack_chain_analyzer = AttackChainAnalyzer()
         self.host_risk_scorer = HostRiskScorer(self.attack_chain_analyzer)
         self.alert_trend_analyzer = AlertTrendAnalyzer()
+        self._refreshing = False
+        self._last_snapshot: tuple[int, int] | None = None
 
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
@@ -60,19 +64,23 @@ class DashboardPage(QWidget):
         toolbar = QHBoxLayout()
         self.refresh_button = QPushButton("Refresh statistics")
         self.reset_button = QPushButton("Reset statistics")
+        self.auto_refresh_checkbox = QCheckBox("Auto-refresh")
+        self.auto_refresh_checkbox.setChecked(True)
+        self.auto_refresh_checkbox.setToolTip("Refresh dashboard statistics every 5 seconds while this page is visible.")
         self.refresh_status_label = QLabel("Last refreshed: Never")
         self.refresh_status_label.setObjectName("PageHint")
         toolbar.addWidget(self.refresh_button)
         toolbar.addWidget(self.reset_button)
+        toolbar.addWidget(self.auto_refresh_checkbox)
         toolbar.addWidget(self.refresh_status_label)
         toolbar.addStretch()
 
         cards = QGridLayout()
         cards.setSpacing(12)
-        self.packet_card = StatisticCard("Processed packets", "0")
-        self.alert_card = StatisticCard("Total alerts", "0")
-        self.high_card = StatisticCard("High-risk alerts", "0")
-        self.status_card = StatisticCard("Detection status", "Waiting")
+        self.packet_card = StatisticCard("Processed packets", "0", tone="blue")
+        self.alert_card = StatisticCard("Total alerts", "0", tone="violet")
+        self.high_card = StatisticCard("High-risk alerts", "0", tone="red")
+        self.status_card = StatisticCard("Detection status", "Waiting", tone="green")
         cards.addWidget(self.packet_card, 0, 0)
         cards.addWidget(self.alert_card, 0, 1)
         cards.addWidget(self.high_card, 0, 2)
@@ -143,7 +151,11 @@ class DashboardPage(QWidget):
 
         self.refresh_button.clicked.connect(self.handle_refresh_clicked)
         self.reset_button.clicked.connect(self.handle_reset_clicked)
+        self.auto_refresh_checkbox.toggled.connect(self._sync_auto_refresh_timer)
         self.host_risk_table.cellDoubleClicked.connect(self._activate_host)
+        self.auto_refresh_timer = QTimer(self)
+        self.auto_refresh_timer.setInterval(self.AUTO_REFRESH_INTERVAL_MS)
+        self.auto_refresh_timer.timeout.connect(self._auto_refresh)
         self.refresh()
 
     def _activate_host(self, row: int, _column: int) -> None:
@@ -153,7 +165,24 @@ class DashboardPage(QWidget):
 
     def showEvent(self, event: object) -> None:
         self.refresh()
+        self._sync_auto_refresh_timer()
         super().showEvent(event)  # type: ignore[arg-type]
+
+    def hideEvent(self, event: object) -> None:
+        self.auto_refresh_timer.stop()
+        super().hideEvent(event)  # type: ignore[arg-type]
+
+    def _sync_auto_refresh_timer(self, _enabled: bool | None = None) -> None:
+        if self.auto_refresh_checkbox.isChecked() and self.isVisible():
+            self.auto_refresh_timer.start()
+        else:
+            self.auto_refresh_timer.stop()
+
+    def _auto_refresh(self) -> None:
+        try:
+            self.refresh(force=False)
+        except Exception as exc:
+            self.refresh_status_label.setText(f"Auto-refresh failed: {exc}")
 
     def handle_refresh_clicked(self) -> None:
         self.refresh_button.setEnabled(False)
@@ -193,9 +222,24 @@ class DashboardPage(QWidget):
             connection.execute("DELETE FROM sqlite_sequence WHERE name IN ('alerts', 'packets', 'baselines')")
             connection.commit()
 
-    def refresh(self) -> None:
+    def refresh(self, *, force: bool = True) -> None:
+        if self._refreshing:
+            return
+        self._refreshing = True
+        try:
+            self._refresh_statistics(force=force)
+        finally:
+            self._refreshing = False
+
+    def _refresh_statistics(self, *, force: bool) -> None:
         packet_count = self.packet_repository.count()
         alert_count = self.alert_repository.count()
+        snapshot = (packet_count, alert_count)
+        if not force and snapshot == self._last_snapshot:
+            self.refresh_status_label.setText(
+                f"Last checked: {datetime.now().strftime('%H:%M:%S')} (no changes)"
+            )
+            return
         severity_distribution = self.alert_repository.count_by_severity()
         high_count = severity_distribution.get("HIGH", 0) + severity_distribution.get("CRITICAL", 0)
 
@@ -216,6 +260,7 @@ class DashboardPage(QWidget):
         self._render_attack_timeline(chains)
         baseline_records = self._refresh_baseline_summary()
         self._render_host_risk(alerts, chains, baseline_records)
+        self._last_snapshot = snapshot
         self.refresh_status_label.setText(f"Last refreshed: {datetime.now().strftime('%H:%M:%S')}")
 
     def _render_alert_trend(self) -> None:
@@ -246,6 +291,8 @@ class DashboardPage(QWidget):
             for column, value in enumerate(values):
                 item = QTableWidgetItem(value)
                 item.setToolTip(value)
+                if column == 2:
+                    apply_score_style(item, chain.risk_score, label="Attack chain risk")
                 self.attack_timeline.setItem(row, column, item)
 
         self.attack_timeline.setColumnWidth(0, 150)
@@ -292,6 +339,10 @@ class DashboardPage(QWidget):
         for column, value in enumerate(values):
             item = QTableWidgetItem(value)
             item.setToolTip(value)
+            if column == 1:
+                apply_score_style(item, risk.score)
+            elif column == 5:
+                apply_importance_style(item, int(risk.asset_score * 10))
             self.host_risk_table.setItem(row, column, item)
 
     def _recent_anomaly_scores(self) -> list[tuple[str, int]]:
@@ -328,6 +379,9 @@ class DashboardPage(QWidget):
             for column, value in enumerate(values):
                 item = QTableWidgetItem(value)
                 item.setToolTip(value)
+                if column == 6:
+                    direction = "OUTBOUND" if record.internal_to_external_ratio >= 0.5 else "INBOUND"
+                    apply_semantic_style(item, direction, value)
                 self.baseline_table.setItem(row, column, item)
 
         self.baseline_table.setColumnWidth(0, 150)

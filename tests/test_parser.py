@@ -54,6 +54,16 @@ def test_packet_parser_identifies_tls_handshake_payload():
     assert record.protocol == "TLS"
 
 
+def test_packet_parser_identifies_tls_application_data_on_nonstandard_port():
+    payload = b"\x17\x03\x03\x00\x10encrypted-content"
+    packet = scapy.IP(src="10.0.0.10", dst="8.8.8.8") / scapy.TCP(sport=52000, dport=3000) / scapy.Raw(payload)
+
+    record = PacketParser().parse(packet)
+
+    assert record.protocol == "TLS"
+    assert record.http_method is None
+
+
 def test_packet_parser_identifies_arp():
     packet = scapy.ARP(psrc="192.168.1.10", pdst="192.168.1.1")
 

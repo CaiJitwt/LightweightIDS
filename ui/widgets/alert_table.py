@@ -4,7 +4,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableWidget, QTableWidgetItem
 
 from models import AlertRecord
-from ui.styles import apply_severity_style, configure_responsive_table, severity_style
+from ui.styles import apply_semantic_style, apply_severity_style, configure_responsive_table, severity_style
 
 
 class AlertTable(QTableWidget):
@@ -50,6 +50,9 @@ class AlertTable(QTableWidget):
                         apply_severity_style(item, alert.severity)
                         item.setTextAlignment(Qt.AlignCenter)
                         item.setToolTip(f"{severity_style(alert.severity).tooltip}\n{alert.description}")
+                    elif column == 7:
+                        apply_semantic_style(item, alert.status)
+                        item.setTextAlignment(Qt.AlignCenter)
                     if alert.id is not None:
                         item.setData(Qt.UserRole, alert.id)
                     self.setItem(row, column, item)

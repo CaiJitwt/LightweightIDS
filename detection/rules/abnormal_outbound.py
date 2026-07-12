@@ -11,6 +11,7 @@ from utils.ip_utils import is_private_ip, is_public_ip
 @dataclass(frozen=True)
 class OutboundHit:
     timestamp: float
+    src_port: int | None = None
 
 
 class AbnormalOutboundRule(RuleBase):
@@ -22,30 +23,42 @@ class AbnormalOutboundRule(RuleBase):
     time_window = 300
 
     COMMON_OUTBOUND_PORTS = {20, 21, 22, 25, 53, 80, 110, 123, 143, 443, 465, 587, 993, 995, 853}
+    HIGH_RISK_PORTS = {1337, 31337, 4444, 5555, 6666, 6667, 7777, 9001}
 
     def __init__(self, **kwargs: object) -> None:
         super().__init__(**kwargs)  # type: ignore[arg-type]
         self._hits: dict[tuple[str, str, int | None, str], deque[OutboundHit]] = defaultdict(deque)
+        self._uncommon_connections: dict[tuple[str, str, int | None, str], deque[OutboundHit]] = defaultdict(deque)
+        self._last_flow_seen: dict[tuple[str, str, int | None, int | None, str], float] = {}
+        self._last_uncommon_alert: dict[tuple[str, str, int | None, str], float] = {}
 
     def process(self, packet: PacketRecord) -> list[AlertRecord]:
         if not self._is_internal_to_public(packet):
             return []
 
         alerts: list[AlertRecord] = []
-        if packet.dst_port is not None and packet.dst_port not in self.COMMON_OUTBOUND_PORTS:
+        connection_start = self._is_connection_start(packet)
+        uncommon_count = self._track_uncommon_connections(packet) if connection_start else None
+        if uncommon_count is not None:
+            description = (
+                "Internal host connected to a high-risk public service port."
+                if packet.dst_port in self.HIGH_RISK_PORTS
+                else "Internal host repeatedly opened connections to a public address on an uncommon port."
+            )
             alerts.append(
                 self.create_alert(
                     packet,
                     alert_type="NON_STANDARD_OUTBOUND",
-                    description="Internal host connected to a public address on an uncommon outbound port.",
+                    description=description,
                     evidence=(
                         f"src_ip={packet.src_ip}; dst_ip={packet.dst_ip}; "
-                        f"dst_port={packet.dst_port}; protocol={packet.protocol}"
+                        f"dst_port={packet.dst_port}; protocol={packet.protocol}; "
+                        f"distinct_connections={uncommon_count}"
                     ),
                 )
             )
 
-        heartbeat = self._track_heartbeat(packet)
+        heartbeat = self._track_heartbeat(packet) if connection_start else None
         if heartbeat is not None:
             avg_interval, jitter, sample_count = heartbeat
             alerts.append(
@@ -65,6 +78,9 @@ class AbnormalOutboundRule(RuleBase):
 
     def reset(self) -> None:
         self._hits.clear()
+        self._uncommon_connections.clear()
+        self._last_flow_seen.clear()
+        self._last_uncommon_alert.clear()
 
     def _is_internal_to_public(self, packet: PacketRecord) -> bool:
         return bool(packet.src_ip and packet.dst_ip and is_private_ip(packet.src_ip) and is_public_ip(packet.dst_ip))
@@ -94,6 +110,44 @@ class AbnormalOutboundRule(RuleBase):
         if 3 <= avg_interval <= self.time_window and jitter <= allowed_jitter:
             return avg_interval, jitter, sample_count
         return None
+
+    def _track_uncommon_connections(self, packet: PacketRecord) -> int | None:
+        if packet.dst_port is None or packet.dst_port in self.COMMON_OUTBOUND_PORTS:
+            return None
+        if packet.dst_port in self.HIGH_RISK_PORTS:
+            return 1
+
+        now = self.packet_time(packet)
+        key = (packet.src_ip or "", packet.dst_ip or "", packet.dst_port, packet.protocol)
+        hits = self._uncommon_connections[key]
+        hits.append(OutboundHit(timestamp=now, src_port=packet.src_port))
+        self._prune(hits, now)
+        distinct_connections = len({hit.src_port for hit in hits})
+        if distinct_connections < max(2, self.threshold):
+            return None
+
+        previous_alert = self._last_uncommon_alert.get(key)
+        if previous_alert is not None and now - previous_alert < self.time_window:
+            return None
+        self._last_uncommon_alert[key] = now
+        return distinct_connections
+
+    def _is_connection_start(self, packet: PacketRecord) -> bool:
+        now = self.packet_time(packet)
+        key = (
+            packet.src_ip or "",
+            packet.dst_ip or "",
+            packet.src_port,
+            packet.dst_port,
+            packet.protocol,
+        )
+        previous = self._last_flow_seen.get(key)
+        self._last_flow_seen[key] = now
+
+        flags = (packet.tcp_flags or "").upper()
+        if "S" in flags and "A" not in flags:
+            return previous is None or now - previous >= 3
+        return previous is None or now - previous > self.time_window
 
     def _prune(self, hits: deque[OutboundHit], now: float) -> None:
         while hits and now - hits[0].timestamp > self.time_window:

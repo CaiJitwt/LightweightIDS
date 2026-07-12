@@ -91,14 +91,14 @@ def test_session_duration_anomaly_rule_uses_approximate_flow_duration():
 
     for index in range(4):
         first_seen = index * 20
-        dst_port = 8000 + index
-        alerts.extend(rule.process(packet(second=first_seen, dst_port=dst_port)))
-        alerts.extend(rule.process(packet(second=first_seen + 5, dst_port=dst_port)))
+        dst_ip = f"8.8.8.{index + 1}"
+        alerts.extend(rule.process(packet(second=first_seen, dst_ip=dst_ip, dst_port=22)))
+        alerts.extend(rule.process(packet(second=first_seen + 5, dst_ip=dst_ip, dst_port=22)))
 
     assert alerts == []
 
-    alerts.extend(rule.process(packet(second=120, dst_port=9000)))
-    alerts.extend(rule.process(packet(second=170, dst_port=9000)))
+    alerts.extend(rule.process(packet(second=120, dst_ip="8.8.8.20", dst_port=22)))
+    alerts.extend(rule.process(packet(second=170, dst_ip="8.8.8.20", dst_port=22)))
 
     assert any(alert.alert_type == "SESSION_DURATION_ANOMALY" for alert in alerts)
 

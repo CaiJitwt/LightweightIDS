@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 from models import AssetRecord
 from storage.analyst_repositories import AssetRepository
 from storage.database import Database
-from ui.styles import configure_responsive_table
+from ui.styles import apply_importance_style, apply_semantic_style, configure_responsive_table
 
 
 class AssetDialog(QDialog):
@@ -119,6 +119,10 @@ class AssetsPage(QWidget):
                 item = QTableWidgetItem(value)
                 item.setToolTip(value)
                 item.setData(Qt.UserRole, asset.ip)
+                if column == 2:
+                    apply_semantic_style(item, asset.role)
+                elif column == 3:
+                    apply_importance_style(item, asset.importance)
                 self.table.setItem(row, column, item)
 
     def add_asset(self) -> None:
@@ -168,4 +172,3 @@ class AssetsPage(QWidget):
         item = self.table.item(row, 0)
         ip = item.data(Qt.UserRole) if item else None
         return next((asset for asset in self.assets if asset.ip == ip), None)
-

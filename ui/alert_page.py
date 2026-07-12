@@ -19,10 +19,12 @@ from PySide6.QtWidgets import (
 from detection.analysis.attack_chain import AttackChainAnalyzer
 from models import AlertRecord, PacketRecord
 from report.report_generator import ReportGenerator
+from protection import BlocklistService
 from storage.database import Database
 from storage.repositories import AlertRepository, PacketRepository
 from ui.styles import configure_responsive_table
 from ui.widgets.alert_table import AlertTable
+from ui.widgets.evidence_packet_table import EvidencePacketTable
 
 
 class AlertPage(QWidget):
@@ -36,6 +38,7 @@ class AlertPage(QWidget):
         self.packet_repository = PacketRepository(database)
         self.report_generator = ReportGenerator()
         self.attack_chain_analyzer = AttackChainAnalyzer()
+        self.blocklist_service = BlocklistService(database)
         self.current_alerts: list[AlertRecord] = []
         self.rule_display_names = {
             "PORT_SCAN": "Port scan detection",
@@ -97,6 +100,10 @@ class AlertPage(QWidget):
         self.detail_view.setReadOnly(True)
         self.detail_view.setPlaceholderText("Select an alert to inspect alert evidence and the matching packet record.")
         self.detail_view.setMinimumHeight(130)
+        self.related_title = QLabel("Related packets (0)")
+        self.related_title.setObjectName("SectionTitle")
+        self.related_packets_table = EvidencePacketTable()
+        self.related_packets_table.setMinimumHeight(150)
         self.chain_title = QLabel("Attack chain view")
         self.chain_title.setObjectName("SectionTitle")
         self.chain_table = QTableWidget(0, 4)
@@ -109,6 +116,8 @@ class AlertPage(QWidget):
         layout.addWidget(self.table, 3)
         layout.addWidget(self.detail_title)
         layout.addWidget(self.detail_view, 2)
+        layout.addWidget(self.related_title)
+        layout.addWidget(self.related_packets_table, 2)
         layout.addWidget(self.chain_title)
         layout.addWidget(self.chain_table, 1)
 
@@ -126,6 +135,8 @@ class AlertPage(QWidget):
         self.investigate_button.clicked.connect(self.add_selected_to_investigation)
         self.export_button.clicked.connect(self.export_csv)
         self.table.itemSelectionChanged.connect(self.render_selected_alert_detail)
+        self.related_packets_table.block_requested.connect(self.add_blocklist_entry)
+        self.related_packets_table.packet_activated.connect(self.show_packet_detail)
 
         self.refresh()
 
@@ -186,11 +197,17 @@ class AlertPage(QWidget):
         alert = self._selected_alert()
         if alert is None:
             self.detail_view.clear()
+            self.related_title.setText("Related packets (0)")
+            self.related_packets_table.set_packets([])
             return
-        self.detail_view.setPlainText(self._alert_detail_text(alert))
+        packets = self.packet_repository.list_related_to_alert(alert)
+        self.detail_view.setPlainText(self._alert_detail_text(alert, packets))
+        self.related_title.setText(f"Related packets ({len(packets)})")
+        self.related_packets_table.set_packets(packets)
 
-    def _alert_detail_text(self, alert: AlertRecord) -> str:
-        packet = self._matching_packet(alert)
+    def _alert_detail_text(self, alert: AlertRecord, packets: list[PacketRecord] | None = None) -> str:
+        packets = packets if packets is not None else self.packet_repository.list_related_to_alert(alert)
+        packet = packets[-1] if packets else None
         packet_detail = self._packet_detail_text(packet) if packet else "Matching packet record: not found in stored packets."
         return (
             "Alert\n"
@@ -204,8 +221,43 @@ class AlertPage(QWidget):
             f"Status: {alert.status}\n\n"
             f"Description: {alert.description}\n\n"
             f"Evidence: {alert.evidence}\n\n"
+            f"Related packets: {len(packets)}\n\n"
             f"{packet_detail}"
         )
+
+    def add_blocklist_entry(self, field: str, value: str, protocol: str) -> None:
+        kind = "IP" if field.endswith("IP") else "PORT"
+        answer = QMessageBox.question(
+            self,
+            "Enforce block",
+            f"Add {field}={value} to the enforced blocklist?\n\n"
+            "On Windows this creates firewall rules and may require administrator privileges.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
+        try:
+            entry, result = self.blocklist_service.add_and_enforce(
+                kind=kind,
+                value=value,
+                field=field,
+                protocol=protocol,
+            )
+        except ValueError as exc:
+            QMessageBox.warning(self, "Invalid blocklist value", str(exc))
+            return
+        message = f"Blocklist entry #{entry.id}: {result.status}."
+        if result.message:
+            message += f"\n\n{result.message}"
+        if result.success:
+            QMessageBox.information(self, "Block active", message)
+        else:
+            QMessageBox.warning(self, "Block not enforced", message)
+
+    def show_packet_detail(self, packet: object) -> None:
+        if isinstance(packet, PacketRecord):
+            QMessageBox.information(self, "Packet details", self._packet_detail_text(packet))
 
     def _packet_detail_text(self, packet: PacketRecord) -> str:
         return (
@@ -226,7 +278,8 @@ class AlertPage(QWidget):
 
     def _matching_packet(self, alert: AlertRecord) -> PacketRecord | None:
         try:
-            return self.packet_repository.find_matching_alert(alert)
+            packets = self.packet_repository.list_related_to_alert(alert)
+            return packets[-1] if packets else None
         except Exception:
             return None
 

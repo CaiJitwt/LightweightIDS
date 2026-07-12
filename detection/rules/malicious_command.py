@@ -96,6 +96,8 @@ class MaliciousCommandRule(RuleBase):
         ("hydra", re.compile(r"\bhydra\s+-[lL]\s+\S+\s+-[pP]\s+\S+\s+\S+:\d+\b", re.IGNORECASE)),
         ("sqlmap", re.compile(r"\bsqlmap\s+-u\s+http", re.IGNORECASE)),
         ("gobuster", re.compile(r"\bgobuster\s+dir\s+-u\s+http", re.IGNORECASE)),
+        ("shell_separator", re.compile(r"(?:;|&&|\|\||\||`|\$\()\s*(whoami|id|uname|cat|type|cmd|powershell|bash|sh|nc|curl|wget)\b", re.IGNORECASE)),
+        ("ip_parameter_injection", re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\s*(?:;|&&|\|\|)\s*\w+", re.IGNORECASE)),
     ]
 
     def process(self, packet: PacketRecord) -> list[AlertRecord]:

@@ -55,3 +55,29 @@ def test_main_window_builds_analyst_pages_and_navigates_to_host(tmp_path):
     window.deleteLater()
     app.processEvents()
 
+
+def test_dashboard_auto_refresh_runs_only_while_visible(tmp_path):
+    app = QApplication.instance() or QApplication([])
+    database = Database(tmp_path / "ids.db")
+    database.initialize()
+    window = MainWindow(database, {"ui": {}, "detection": {}, "logging": {}})
+    window.show()
+    app.processEvents()
+
+    assert window.dashboard_page.auto_refresh_timer.isActive()
+    assert window.dashboard_page.auto_refresh_timer.interval() == 5_000
+
+    window.navigate_to("alerts")
+    app.processEvents()
+    assert not window.dashboard_page.auto_refresh_timer.isActive()
+
+    window.navigate_to("dashboard")
+    app.processEvents()
+    assert window.dashboard_page.auto_refresh_timer.isActive()
+    window.dashboard_page.auto_refresh_checkbox.setChecked(False)
+    assert not window.dashboard_page.auto_refresh_timer.isActive()
+
+    assert window.packet_page.shutdown()
+    window.close()
+    window.deleteLater()
+    app.processEvents()

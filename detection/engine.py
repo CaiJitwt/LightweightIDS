@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from models import AlertRecord, CustomRuleRecord, PacketRecord
+from models import AlertRecord, BlocklistEntry, CustomRuleRecord, PacketRecord
 from models import RuleRecord
 from detection.analysis.false_positive import AlertNoiseReducer
 from detection.rule_base import RuleBase
@@ -85,6 +85,7 @@ class DetectionEngine:
         custom_rule_records: list[CustomRuleRecord] | None = None,
         alert_cooldown_seconds: int = 10,
         asset_importance: dict[str, int] | None = None,
+        blocklist_entries: list[BlocklistEntry] | None = None,
     ) -> "DetectionEngine":
         rule_map = {
             "PORT_SCAN": PortScanRule,
@@ -115,14 +116,15 @@ class DetectionEngine:
             rule_class = rule_map.get(record.id)
             if rule_class is None:
                 continue
-            rules.append(
-                rule_class(
-                    enabled=record.enabled,
-                    threshold=record.threshold,
-                    time_window=record.time_window,
-                    severity=record.severity,
-                )
-            )
+            arguments = {
+                "enabled": record.enabled,
+                "threshold": record.threshold,
+                "time_window": record.time_window,
+                "severity": record.severity,
+            }
+            if record.id == "BLACKLIST_IP":
+                arguments["entries"] = blocklist_entries or []
+            rules.append(rule_class(**arguments))
         for record in custom_rule_records or []:
             if record.enabled:
                 rules.append(CustomRule(record))

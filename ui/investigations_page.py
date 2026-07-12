@@ -26,7 +26,7 @@ from models import AlertRecord, InvestigationRecord
 from report.report_generator import ReportGenerator
 from storage.analyst_repositories import InvestigationRepository
 from storage.database import Database
-from ui.styles import apply_severity_style, configure_responsive_table
+from ui.styles import apply_semantic_style, apply_severity_style, configure_responsive_table
 
 
 class InvestigationDialog(QDialog):
@@ -174,6 +174,8 @@ class InvestigationsPage(QWidget):
                 item.setData(Qt.UserRole, record.id)
                 if column == 1:
                     apply_severity_style(item, record.priority)
+                elif column == 2:
+                    apply_semantic_style(item, record.status)
                 self.case_table.setItem(row, column, item)
         if selected_id:
             self.select_investigation(selected_id)

@@ -45,6 +45,10 @@ class SqlInjectionRule(RuleBase):
         ("hex_encode", re.compile(r"0x[0-9a-fA-F]{6,}", re.IGNORECASE)),
         ("or_tautology", re.compile(r"\bOR\s+1\s*=\s*1\b", re.IGNORECASE)),
         ("quote_tautology", re.compile(r"'\s*OR\s*'[^']*'\s*=\s*'", re.IGNORECASE)),
+        ("char_obfuscation", re.compile(r"\b(CHAR|CHR)\s*\(\s*\d+(\s*,\s*\d+){2,}\s*\)", re.IGNORECASE)),
+        ("conditional_probe", re.compile(r"\bCASE\s+WHEN\b|\bIF\s*\([^)]*(SLEEP|BENCHMARK)\s*\(", re.IGNORECASE)),
+        ("metadata_probe", re.compile(r"\b(pg_catalog|sqlite_master|sysobjects|all_tables)\b", re.IGNORECASE)),
+        ("union_obfuscated", re.compile(r"\bUNION\s*SELECT\b", re.IGNORECASE)),
     ]
 
     def process(self, packet: PacketRecord) -> list[AlertRecord]:

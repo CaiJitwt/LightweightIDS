@@ -28,14 +28,20 @@ class MlFlowAnomalyRule(RuleBase):
         self.extractor = FlowFeatureExtractor(time_window=self.time_window)
         self.detector = detector or IsolationForestFlowDetector(model_path=DEFAULT_MODEL_PATH if model_path is None else model_path)
         self.detector.load()
+        self._alerted_windows: set[tuple[str, str, float]] = set()
 
     def process(self, packet: PacketRecord) -> list[AlertRecord]:
         feature = self.extractor.observe(packet)
         result = self.detector.score_feature(feature)
-        if result.score < self.threshold:
+        window_key = (feature.src_ip, feature.dst_ip, feature.window_start)
+        self._prune_alerted_windows(feature.window_start)
+        if result.score < self.threshold or window_key in self._alerted_windows:
+            return []
+        if not self._has_actionable_reason(result.reasons, result.score):
             return []
 
         reasons = result.reasons or ["flow behavior differs from local baseline"]
+        self._alerted_windows.add(window_key)
         return [
             self.create_alert(
                 packet,
@@ -57,3 +63,23 @@ class MlFlowAnomalyRule(RuleBase):
     def reset(self) -> None:
         self.extractor.reset()
         self.detector.reset()
+        self._alerted_windows.clear()
+
+    def _has_actionable_reason(self, reasons: list[str], score: float) -> bool:
+        independent_signals = (
+            "unique_dst_ports",
+            "unique_dst_ips",
+            "many_dst_ports",
+            "many_dst_ips",
+            "syn_count",
+            "sensitive_port_count",
+            "dns_query_count",
+            "icmp_count",
+        )
+        if any(reason.startswith(independent_signals) for reason in reasons):
+            return True
+        return score >= 95 and any(reason.startswith("isolation_forest_score") for reason in reasons)
+
+    def _prune_alerted_windows(self, current_window: float) -> None:
+        oldest = current_window - self.time_window * 2
+        self._alerted_windows = {key for key in self._alerted_windows if key[2] >= oldest}

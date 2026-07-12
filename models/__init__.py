@@ -1,6 +1,7 @@
 from models.alert_record import AlertRecord
 from models.asset_record import AssetRecord
 from models.baseline_record import BaselineRecord
+from models.blocklist_entry import BlocklistEntry
 from models.custom_rule_record import CustomRuleRecord
 from models.decrypted_http_record import DecryptedHttpRecord
 from models.packet_record import PacketRecord
@@ -13,6 +14,7 @@ __all__ = [
     "AlertRecord",
     "AssetRecord",
     "BaselineRecord",
+    "BlocklistEntry",
     "CustomRuleRecord",
     "DecryptedHttpRecord",
     "PacketRecord",

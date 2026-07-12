@@ -124,6 +124,20 @@ CREATE TABLE IF NOT EXISTS investigation_evidence (
     UNIQUE (investigation_id, alert_id)
 );
 
+CREATE TABLE IF NOT EXISTS blocklist_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,
+    value TEXT NOT NULL,
+    field TEXT NOT NULL,
+    protocol TEXT NOT NULL DEFAULT 'ANY',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    enforcement_status TEXT NOT NULL DEFAULT 'Pending',
+    enforcement_error TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (kind, value, field, protocol)
+);
+
 CREATE INDEX IF NOT EXISTS idx_packets_alert_match
 ON packets (timestamp, src_ip, dst_ip, src_port, dst_port, protocol);
 
@@ -139,6 +153,7 @@ CREATE INDEX IF NOT EXISTS idx_alerts_src_timestamp ON alerts (src_ip, timestamp
 CREATE INDEX IF NOT EXISTS idx_alerts_dst_timestamp ON alerts (dst_ip, timestamp);
 CREATE INDEX IF NOT EXISTS idx_investigations_status ON investigations (status, updated_at);
 CREATE INDEX IF NOT EXISTS idx_investigation_evidence_case ON investigation_evidence (investigation_id, added_at);
+CREATE INDEX IF NOT EXISTS idx_blocklist_enabled ON blocklist_entries (enabled, kind, field);
 """
 
 DEFAULT_RULES = [

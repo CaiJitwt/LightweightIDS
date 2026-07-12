@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import asdict
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from models import AlertRecord, BaselineRecord, CustomRuleRecord, PacketRecord, RuleRecord
@@ -148,6 +149,65 @@ class PacketRepository:
                 ),
             ).fetchone()
         return None if row is None else self._from_row(row)
+
+    def list_related_to_alert(self, alert: AlertRecord, limit: int = 500) -> list[PacketRecord]:
+        try:
+            end_time = datetime.fromisoformat(alert.timestamp)
+        except ValueError:
+            packet = self.find_matching_alert(alert)
+            return [packet] if packet else []
+
+        with self.database.connect() as connection:
+            rule_row = connection.execute(
+                "SELECT time_window FROM rules WHERE id = ?",
+                (alert.rule_id,),
+            ).fetchone()
+            window_seconds = max(1, int(rule_row["time_window"]) if rule_row else 1)
+            start_time = end_time - timedelta(seconds=window_seconds)
+            clauses = ["timestamp BETWEEN ? AND ?"]
+            values: list[object] = [
+                start_time.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+                end_time.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+            ]
+            if alert.src_ip:
+                clauses.append("src_ip = ?")
+                values.append(alert.src_ip)
+
+            source_only_rules = {"HOST_SCAN", "LATERAL_MOVEMENT", "DNS_ANOMALY", "ABNORMAL_OUTBOUND"}
+            if alert.rule_id not in source_only_rules and alert.dst_ip:
+                clauses.append("dst_ip = ?")
+                values.append(alert.dst_ip)
+            if alert.rule_id == "BRUTE_FORCE" and alert.dst_port is not None:
+                clauses.append("dst_port = ?")
+                values.append(alert.dst_port)
+            if alert.rule_id not in source_only_rules | {"PORT_SCAN", "SYN_FLOOD", "ICMP_FLOOD", "BRUTE_FORCE"}:
+                if alert.src_port is not None:
+                    clauses.append("src_port = ?")
+                    values.append(alert.src_port)
+                if alert.dst_port is not None:
+                    clauses.append("dst_port = ?")
+                    values.append(alert.dst_port)
+                if alert.protocol:
+                    clauses.append("protocol = ?")
+                    values.append(alert.protocol)
+
+            values.append(limit)
+            rows = connection.execute(
+                f"""
+                SELECT id, timestamp, src_ip, dst_ip, src_port, dst_port, protocol, length,
+                       tcp_flags, dns_query, http_method, http_host, http_path, raw_summary
+                FROM packets
+                WHERE {' AND '.join(clauses)}
+                ORDER BY timestamp, id
+                LIMIT ?
+                """,
+                tuple(values),
+            ).fetchall()
+        packets = [self._from_row(row) for row in rows]
+        if packets:
+            return packets
+        packet = self.find_matching_alert(alert)
+        return [packet] if packet else []
 
     def protocol_distribution(self) -> dict[str, int]:
         with self.database.connect() as connection:

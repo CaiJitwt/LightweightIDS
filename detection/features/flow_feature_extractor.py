@@ -183,7 +183,7 @@ def _has_http_indicator(packet: PacketRecord) -> bool:
     if packet.http_method or packet.http_host or packet.http_path:
         return True
     protocol = (packet.protocol or "").upper()
-    if protocol in {"HTTP", "HTTPS"}:
+    if protocol == "HTTP":
         return True
     text = packet.raw_summary.lower()
     return any(value in text for value in ("http ", "http/", "host:", "user-agent:", " get ", " post "))

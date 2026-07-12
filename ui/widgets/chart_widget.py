@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QLabel, QSizePolicy, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 
-from ui.styles import configure_responsive_table
+from ui.styles import apply_category_style, configure_responsive_table
 
 
 class ChartWidget(QWidget):
@@ -35,4 +35,6 @@ class ChartWidget(QWidget):
             for column_index, text in enumerate(values):
                 item = QTableWidgetItem(text)
                 item.setToolTip(text)
+                if column_index == 0:
+                    apply_category_style(item, text)
                 self.table.setItem(row_index, column_index, item)
