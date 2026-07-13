@@ -41,6 +41,19 @@ class ThemeManager:
         self.target.setStyleSheet(DEFAULT_APP_STYLE + self._background_style())
         self.refresh_background_layer()
 
+    def apply_state(self, state: ThemeState) -> None:
+        self.state = ThemeState(
+            background_color=state.background_color,
+            background_image=state.background_image,
+            background_position=state.background_position,
+            background_size=state.background_size,
+            background_opacity=state.background_opacity,
+            overlay_color=state.overlay_color,
+            mode=state.mode,
+        )
+        self._background_pixmap = QPixmap(self.state.background_image) if self.state.background_image else QPixmap()
+        self.apply_default()
+
     def set_background_color(self, color: str) -> None:
         self.state.background_color = color
         self.state.background_image = ""

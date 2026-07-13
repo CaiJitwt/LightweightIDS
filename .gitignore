@@ -21,9 +21,19 @@ env/
 data/*.db
 data/*.sqlite
 data/*.sqlite3
+data/personalization/wallpapers/*
+data/personalization/pets/*
+!data/personalization/wallpapers/.gitkeep
+!data/personalization/pets/.gitkeep
 logs/*.log
 reports/
 exports/
+
+# Experimental frontend
+test/modern_frontend/node_modules/
+test/modern_frontend/dist/
+test/modern_frontend/playwright-report/
+test/modern_frontend/test-results/
 
 # Local captures and generated samples
 sample_data/*.pcap

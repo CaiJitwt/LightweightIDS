@@ -28,6 +28,7 @@ from ui.host_explorer_page import HostExplorerPage
 from ui.investigations_page import InvestigationsPage
 from ui.packet_page import PacketPage
 from ui.personalization_page import PersonalizationPage
+from ui.personalization_store import PersonalizationStore
 from ui.report_page import ReportPage
 from ui.rule_page import RulePage
 from ui.settings_page import SettingsPage
@@ -57,8 +58,10 @@ class MainWindow(QMainWindow):
 
         self.stack = QStackedWidget()
         self.theme_manager = ThemeManager(self)
+        self.personalization_store = PersonalizationStore(database)
         self.overlay_pet: OverlayPetWidget | None = None
         self._build_layout()
+        self._restore_personalization()
         self._build_pages()
         self._apply_style()
 
@@ -88,7 +91,11 @@ class MainWindow(QMainWindow):
             "rules": RulePage(self.database),
             "reports": ReportPage(self.database),
             "settings": SettingsPage(self.database, self.config),
-            "personalization": PersonalizationPage(self.theme_manager, self.overlay_pet),
+            "personalization": PersonalizationPage(
+                self.theme_manager,
+                self.overlay_pet,
+                self.personalization_store,
+            ),
         }
 
         for key in self.page_keys:
@@ -164,6 +171,18 @@ class MainWindow(QMainWindow):
 
     def _apply_style(self) -> None:
         self.theme_manager.apply_default()
+
+    def _restore_personalization(self) -> None:
+        if self.overlay_pet is None:
+            return
+        state = self.personalization_store.load()
+        self.theme_manager.apply_state(state.theme)
+        if state.pet.image_path:
+            self.overlay_pet.set_pet_image(state.pet.image_path)
+        self.overlay_pet.set_pet_position(state.pet.position)
+        self.overlay_pet.set_pet_size(state.pet.size)
+        self.overlay_pet.set_pet_opacity(state.pet.opacity)
+        self.overlay_pet.set_pet_visible(state.pet.visible)
 
     def resizeEvent(self, event: object) -> None:
         self.theme_manager.refresh_background_layer()
