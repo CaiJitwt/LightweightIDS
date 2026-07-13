@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QSizePolicy, QTableWidget, QTableWidgetItem
+from PySide6.QtWidgets import QAbstractItemView, QApplication, QHeaderView, QLabel, QSizePolicy, QTableWidget, QTableWidgetItem
 
 
 @dataclass(frozen=True)
@@ -61,106 +62,286 @@ CARD_TONES = {
 }
 
 
-GLOBAL_APP_STYLE = """
-QWidget {
-    background-color: #f5f5f5;
-    color: #202020;
-}
-QLabel,
-QCheckBox,
-QRadioButton,
-QGroupBox {
-    color: #202020;
-}
-QLineEdit,
-QTextEdit,
-QPlainTextEdit,
-QComboBox,
-QSpinBox,
-QDoubleSpinBox,
-QTableView,
-QTreeView,
-QListView {
-    background-color: #ffffff;
-    color: #202020;
-    selection-background-color: #3478f6;
-    selection-color: #ffffff;
-}
-QPushButton {
-    background-color: #e6e6e6;
-    color: #202020;
-}
-"""
+def apply_dark_palette(app: QApplication) -> None:
+    if not _is_dark_mode():
+        return
+    from PySide6.QtGui import QPalette
+    palette = QPalette()
+    palette.setColor(QPalette.Window, QColor("#1a1a2e"))
+    palette.setColor(QPalette.WindowText, QColor("#e0e0e0"))
+    palette.setColor(QPalette.Base, QColor("#252540"))
+    palette.setColor(QPalette.AlternateBase, QColor("#2a2a45"))
+    palette.setColor(QPalette.ToolTipBase, QColor("#252540"))
+    palette.setColor(QPalette.ToolTipText, QColor("#e0e0e0"))
+    palette.setColor(QPalette.Text, QColor("#e0e0e0"))
+    palette.setColor(QPalette.Button, QColor("#2a2a45"))
+    palette.setColor(QPalette.ButtonText, QColor("#e0e0e0"))
+    palette.setColor(QPalette.BrightText, QColor("#ffffff"))
+    palette.setColor(QPalette.Link, QColor("#60a5fa"))
+    palette.setColor(QPalette.Highlight, QColor("#2d8cff"))
+    palette.setColor(QPalette.HighlightedText, QColor("#ffffff"))
+    app.setPalette(palette)
 
 
-DEFAULT_APP_STYLE = """
-QMainWindow {
-    background: #f6f7f9;
-}
-#AppRoot {
-    background: #f6f7f9;
-}
-#Sidebar {
-    background: #17202a;
-    border: none;
-}
-#Brand {
-    color: #ffffff;
-    font-size: 20px;
-    font-weight: 700;
-}
-#NavList {
-    background: transparent;
-    border: none;
-    color: #d7dde6;
-    font-size: 14px;
-    outline: 0;
-}
-#NavList::item {
-    height: 40px;
-    padding-left: 10px;
-    border-radius: 6px;
-}
-#NavList::item:selected {
-    background: #2d8cff;
-    color: #ffffff;
-}
-#PageTitle {
-    color: #1f2933;
-    font-size: 24px;
-    font-weight: 700;
-}
-QLabel#SectionTitle {
-    color: #1f2933;
-    font-weight: 700;
-}
-QLabel#PageHint {
-    color: #617083;
-    font-size: 14px;
-}
-QFrame#Card {
-    background: #ffffff;
-    border: 1px solid #dde3ea;
-    border-radius: 8px;
-}
-QTableWidget {
-    background: #ffffff;
-    alternate-background-color: #f8fafc;
-    border: 1px solid #dde3ea;
-    gridline-color: #e5e7eb;
-    selection-background-color: #dbeafe;
-    selection-color: #111827;
-}
-QHeaderView::section {
-    background: #edf2f7;
-    color: #1f2933;
-    border: none;
-    border-right: 1px solid #dde3ea;
-    border-bottom: 1px solid #d5dde7;
-    padding: 6px;
-    font-weight: 700;
-}
-"""
+def _build_dark_palette() -> "QPalette":
+    from PySide6.QtGui import QPalette
+    p = QPalette()
+    p.setColor(QPalette.WindowText, QColor("#d0d0d8"))
+    p.setColor(QPalette.Button, QColor("#353550"))
+    p.setColor(QPalette.ButtonText, QColor("#d0d0d8"))
+    p.setColor(QPalette.Base, QColor("#252540"))
+    p.setColor(QPalette.AlternateBase, QColor("#2a2a45"))
+    p.setColor(QPalette.Text, QColor("#d0d0d8"))
+    p.setColor(QPalette.ToolTipBase, QColor("#353550"))
+    p.setColor(QPalette.ToolTipText, QColor("#d0d0d8"))
+    p.setColor(QPalette.BrightText, QColor("#ffffff"))
+    p.setColor(QPalette.Highlight, QColor("#2d8cff"))
+    p.setColor(QPalette.HighlightedText, QColor("#ffffff"))
+    p.setColor(QPalette.Link, QColor("#60a5fa"))
+    p.setColor(QPalette.Window, QColor("#1a1a2e"))
+    return p
+
+
+DARK_PALETTE = _build_dark_palette()
+
+
+_SKIP_LABEL_NAMES = {"Brand", "NavList", "SectionTitle"}
+
+def apply_label_colors(root: "QWidget") -> None:
+    for widget in root.findChildren(QLabel):
+        if widget.objectName() in _SKIP_LABEL_NAMES:
+            continue
+        if not widget.styleSheet():
+            widget.setStyleSheet("color: #1f2933;")
+
+
+def _is_dark_mode() -> bool:
+    app = QApplication.instance()
+    if app is not None:
+        return app.styleHints().colorScheme() == Qt.ColorScheme.Dark
+    return False
+
+
+def _global_text_style() -> str:
+    if _is_dark_mode():
+        return """
+        QLabel {
+            color: #d0d0d8;
+        }
+        """
+    return """
+    QLabel {
+        color: #1f2933;
+    }
+    """
+
+
+GLOBAL_APP_STYLE = _global_text_style()
+
+
+def _app_style() -> str:
+    if _is_dark_mode():
+        return """
+        QMainWindow {
+            background: #1a1a2e;
+        }
+        #AppRoot {
+            background: #1a1a2e;
+        }
+        #Sidebar {
+            background: #0f0f1a;
+            border: none;
+        }
+        #Brand {
+            color: #ffffff;
+            font-size: 20px;
+            font-weight: 700;
+        }
+        #NavList {
+            background: transparent;
+            border: none;
+            color: #b0b0c0;
+            font-size: 14px;
+            outline: 0;
+        }
+        #NavList::item {
+            height: 40px;
+            padding-left: 10px;
+            border-radius: 6px;
+        }
+        #NavList::item:selected {
+            background: #2d8cff;
+            color: #ffffff;
+        }
+        #PageTitle {
+            color: #f0f0f5;
+            font-size: 24px;
+            font-weight: 700;
+        }
+        QLabel#SectionTitle {
+            color: #f0f0f5;
+            font-weight: 700;
+        }
+        QLabel#PageHint {
+            color: #9090a0;
+            font-size: 14px;
+        }
+        QFrame#Card {
+            background: #252540;
+            border: 1px solid #3a3a50;
+            border-radius: 8px;
+        }
+        QLabel#CardTitle {
+            color: #9090a0;
+            font-size: 13px;
+        }
+        QLabel#CardValue {
+            color: #f0f0f5;
+            font-size: 24px;
+            font-weight: 700;
+        }
+        QTableWidget {
+            background: #252540;
+            alternate-background-color: #2a2a45;
+            border: 1px solid #3a3a50;
+            gridline-color: #353550;
+            selection-background-color: #3b3b5c;
+            selection-color: #e0e0e0;
+        }
+        QHeaderView::section {
+            background: #2a2a45;
+            color: #e0e0e0;
+            border: none;
+            border-right: 1px solid #3a3a50;
+            border-bottom: 1px solid #3a3a50;
+            padding: 6px;
+            font-weight: 700;
+        }
+        QPushButton {
+            background: #1a1a2e;
+            color: #e0e0e0;
+            border: 1px solid #3a3a50;
+            padding: 4px 12px;
+            border-radius: 4px;
+        }
+        QPushButton:hover {
+            background: #252540;
+        }
+        QPushButton:pressed {
+            background: #0f0f1a;
+        }
+        QPushButton:disabled {
+            color: #606070;
+        }
+        QComboBox,
+        QSpinBox,
+        QDoubleSpinBox,
+        QLineEdit,
+        QTextEdit,
+        QPlainTextEdit {
+            background: #252540;
+            color: #e0e0e0;
+            border: 1px solid #3a3a50;
+        }
+        QStatusBar {
+            background: #1a1a2e;
+            color: #9090a0;
+        }
+        """
+    return """
+    QMainWindow {
+        background: #f6f7f9;
+    }
+    #AppRoot {
+        background: #f6f7f9;
+    }
+    #Sidebar {
+        background: #17202a;
+        border: none;
+    }
+    #Brand {
+        color: #ffffff;
+        font-size: 20px;
+        font-weight: 700;
+    }
+    #NavList {
+        background: transparent;
+        border: none;
+        color: #d7dde6;
+        font-size: 14px;
+        outline: 0;
+    }
+    #NavList::item {
+        height: 40px;
+        padding-left: 10px;
+        border-radius: 6px;
+    }
+    #NavList::item:selected {
+        background: #2d8cff;
+        color: #ffffff;
+    }
+    #PageTitle {
+        color: #1f2933;
+        font-size: 24px;
+        font-weight: 700;
+    }
+    QLabel#SectionTitle {
+        color: #1f2933;
+        font-weight: 700;
+    }
+    QLabel#PageHint {
+        color: #617083;
+        font-size: 14px;
+    }
+    QFrame#Card {
+        background: #ffffff;
+        border: 1px solid #dde3ea;
+        border-radius: 8px;
+    }
+    QLabel#CardTitle {
+        color: #617083;
+        font-size: 13px;
+    }
+    QLabel#CardValue {
+        color: #1f2933;
+        font-size: 24px;
+        font-weight: 700;
+    }
+    QTableWidget {
+        background: #ffffff;
+        alternate-background-color: #f8fafc;
+        border: 1px solid #dde3ea;
+        gridline-color: #e5e7eb;
+        selection-background-color: #dbeafe;
+        selection-color: #111827;
+    }
+    QHeaderView::section {
+        background: #edf2f7;
+        color: #1f2933;
+        border: none;
+        border-right: 1px solid #dde3ea;
+        border-bottom: 1px solid #d5dde7;
+        padding: 6px;
+        font-weight: 700;
+    }
+    QComboBox,
+    QSpinBox,
+    QDoubleSpinBox,
+    QLineEdit,
+    QTextEdit,
+    QPlainTextEdit {
+        background: #ffffff;
+        color: #1f2933;
+        border: 1px solid #dde3ea;
+    }
+    QStatusBar {
+        background: #f6f7f9;
+        color: #617083;
+    }
+    """
+
+
+DEFAULT_APP_STYLE = _app_style()
 
 
 def configure_responsive_table(

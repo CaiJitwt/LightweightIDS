@@ -5,9 +5,9 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QGraphicsOpacityEffect, QLabel, QWidget
+from PySide6.QtWidgets import QApplication, QGraphicsOpacityEffect, QLabel, QWidget
 
-from ui.styles import DEFAULT_APP_STYLE
+from ui import styles as _styles_module
 
 
 @dataclass
@@ -38,7 +38,8 @@ class ThemeManager:
         layer.hide()
 
     def apply_default(self) -> None:
-        self.target.setStyleSheet(DEFAULT_APP_STYLE + self._background_style())
+        style = _styles_module._app_style() + _styles_module._global_text_style() + self._background_style()
+        self.target.setStyleSheet(style)
         self.refresh_background_layer()
 
     def apply_state(self, state: ThemeState) -> None:

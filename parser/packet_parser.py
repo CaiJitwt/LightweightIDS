@@ -12,11 +12,12 @@ class PacketParser:
             from scapy.layers.dns import DNS, DNSQR
             from scapy.layers.inet import ICMP, IP, TCP, UDP
             from scapy.layers.inet6 import IPv6
-            from scapy.layers.l2 import ARP
+            from scapy.layers.l2 import ARP, Ether
             from scapy.packet import Raw
         except ImportError as exc:
             raise RuntimeError("Scapy is missing. Please install the dependencies from requirements.txt.") from exc
 
+        packet = self._decode_raw_ethernet_frame(packet, Raw, Ether)
         timestamp = self._format_timestamp(getattr(packet, "time", None))
         src_ip: Optional[str] = None
         dst_ip: Optional[str] = None
@@ -135,6 +136,31 @@ class PacketParser:
             return bool(packet.haslayer(layer))  # type: ignore[attr-defined]
         except Exception:
             return False
+
+    def _decode_raw_ethernet_frame(self, packet: object, raw_layer: object, ether_layer: object) -> object:
+        if self._layer_names(packet) != ["Raw"]:
+            return packet
+
+        try:
+            frame = bytes(packet[raw_layer].load)  # type: ignore[index]
+        except Exception:
+            return packet
+
+        if len(frame) < 14 or int.from_bytes(frame[12:14], "big") < 0x0600:
+            return packet
+
+        try:
+            decoded = ether_layer(frame)  # type: ignore[operator]
+        except Exception:
+            return packet
+
+        if self._layer_names(decoded) in (["Ether"], ["Ether", "Raw"]):
+            return packet
+
+        original_time = getattr(packet, "time", None)
+        if original_time is not None:
+            decoded.time = original_time  # type: ignore[attr-defined]
+        return decoded
 
     def _has_icmpv6(self, packet: object) -> bool:
         for layer_name in self._layer_names(packet):

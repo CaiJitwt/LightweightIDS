@@ -34,13 +34,15 @@ def run(argv: list[str]) -> int:
         raise SystemExit(1) from exc
 
     from ui.main_window import MainWindow
-    from ui.styles import GLOBAL_APP_STYLE
+    from ui.styles import _is_dark_mode, apply_label_colors
 
     app = QApplication(argv)
     app.setApplicationName(APP_NAME)
-    app.setStyleSheet(GLOBAL_APP_STYLE)
+    app.setStyle("Fusion")
 
     window = MainWindow(database=database, config=config)
     window.show()
+    if _is_dark_mode():
+        apply_label_colors(window)
 
     return app.exec()
