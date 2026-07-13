@@ -33,8 +33,12 @@ def run(argv: list[str]) -> int:
         print("  python -m pip install -r requirements.txt")
         raise SystemExit(1) from exc
 
+    from storage.repositories import SettingsRepository
+    from ui.i18n import locale_manager
     from ui.main_window import MainWindow
     from ui.styles import _is_dark_mode, apply_label_colors
+
+    locale_manager().initialize(SettingsRepository(database))
 
     app = QApplication(argv)
     app.setApplicationName(APP_NAME)

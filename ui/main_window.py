@@ -17,9 +17,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.constants import APP_NAME, PAGE_TITLES
+from app.constants import APP_NAME, PAGE_TITLES, get_page_title
 from models import AlertRecord
 from storage.database import Database
+from ui.i18n import locale_manager
 from ui.theme_manager import ThemeManager
 from ui.alert_page import AlertPage
 from ui.assets_page import AssetsPage
@@ -68,8 +69,11 @@ class MainWindow(QMainWindow):
         self.nav_list.currentRowChanged.connect(self._switch_page)
         self.nav_list.setCurrentRow(0)
 
+        self._lm = locale_manager()
+        self._lm.locale_changed.connect(self._on_locale_changed)
+
         status_bar = QStatusBar()
-        status_bar.showMessage(f"System ready. Database: {self.database.path}")
+        status_bar.showMessage(self._lm.tr("app.status.ready", path=str(self.database.path)))
         self.setStatusBar(status_bar)
 
     def _build_pages(self) -> None:
@@ -100,7 +104,7 @@ class MainWindow(QMainWindow):
 
         for key in self.page_keys:
             page = self.page_by_key[key]
-            item = QListWidgetItem(self.page_titles[key])
+            item = QListWidgetItem(get_page_title(key))
             item.setData(Qt.UserRole, key)
             self.nav_list.addItem(item)
             self.stack.addWidget(page)
@@ -150,7 +154,7 @@ class MainWindow(QMainWindow):
         if index < 0:
             return
         key = self.nav_list.item(index).data(Qt.UserRole)
-        self.title_label.setText(self.page_titles[key])
+        self.title_label.setText(get_page_title(key))
         self.stack.setCurrentIndex(index)
 
     def navigate_to(self, page_key: str, context: object | None = None) -> None:
@@ -168,6 +172,21 @@ class MainWindow(QMainWindow):
     def _create_host_investigation(self, host_ip: str, summary: str, alerts: list[AlertRecord]) -> None:
         self.navigate_to("investigations")
         self.investigations_page.create_for_host(host_ip, summary, alerts)
+
+    def _on_locale_changed(self, _locale: str) -> None:
+        self._retranslate_ui()
+        for page in self.page_by_key.values():
+            if hasattr(page, "retranslate_ui"):
+                page.retranslate_ui()
+
+    def _retranslate_ui(self) -> None:
+        self.setWindowTitle(APP_NAME)
+        for i, key in enumerate(self.page_keys):
+            self.nav_list.item(i).setText(get_page_title(key))
+        current = self.nav_list.currentRow()
+        if current >= 0:
+            key = self.nav_list.item(current).data(Qt.UserRole)
+            self.title_label.setText(get_page_title(key))
 
     def _apply_style(self) -> None:
         self.theme_manager.apply_default()

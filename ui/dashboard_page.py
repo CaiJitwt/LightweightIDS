@@ -28,6 +28,7 @@ from models import AlertRecord, BaselineRecord
 from storage.database import Database
 from storage.analyst_repositories import AssetRepository
 from storage.repositories import AlertRepository, BaselineRepository, PacketRepository
+from ui.i18n import locale_manager
 from ui.widgets.chart_widget import ChartWidget
 from ui.widgets.statistic_card import StatisticCard
 from ui.styles import apply_importance_style, apply_score_style, apply_semantic_style, configure_responsive_table
@@ -48,7 +49,11 @@ class DashboardPage(QWidget):
         self.host_risk_scorer = HostRiskScorer(self.attack_chain_analyzer)
         self.alert_trend_analyzer = AlertTrendAnalyzer()
         self._refreshing = False
+        self._retranslating = False
         self._last_snapshot: tuple[int, int] | None = None
+
+        self._lm = locale_manager()
+        self._lm.locale_changed.connect(self.retranslate_ui)
 
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
@@ -62,12 +67,12 @@ class DashboardPage(QWidget):
         outer_layout.addWidget(self.scroll_area)
 
         toolbar = QHBoxLayout()
-        self.refresh_button = QPushButton("Refresh statistics")
-        self.reset_button = QPushButton("Reset statistics")
-        self.auto_refresh_checkbox = QCheckBox("Auto-refresh")
+        self.refresh_button = QPushButton(self._lm.tr("page.dashboard.refresh_statistics"))
+        self.reset_button = QPushButton(self._lm.tr("page.dashboard.reset_statistics"))
+        self.auto_refresh_checkbox = QCheckBox(self._lm.tr("page.dashboard.auto_refresh"))
         self.auto_refresh_checkbox.setChecked(True)
-        self.auto_refresh_checkbox.setToolTip("Refresh dashboard statistics every 5 seconds while this page is visible.")
-        self.refresh_status_label = QLabel("Last refreshed: Never")
+        self.auto_refresh_checkbox.setToolTip(self._lm.tr("page.dashboard.auto_refresh_tooltip"))
+        self.refresh_status_label = QLabel(self._lm.tr("page.dashboard.last_refreshed_never"))
         self.refresh_status_label.setObjectName("PageHint")
         toolbar.addWidget(self.refresh_button)
         toolbar.addWidget(self.reset_button)
@@ -77,10 +82,10 @@ class DashboardPage(QWidget):
 
         cards = QGridLayout()
         cards.setSpacing(12)
-        self.packet_card = StatisticCard("Processed packets", "0", tone="blue")
-        self.alert_card = StatisticCard("Total alerts", "0", tone="violet")
-        self.high_card = StatisticCard("High-risk alerts", "0", tone="red")
-        self.status_card = StatisticCard("Detection status", "Waiting", tone="green")
+        self.packet_card = StatisticCard(self._lm.tr("page.dashboard.card.processed_packets"), "0", tone="blue")
+        self.alert_card = StatisticCard(self._lm.tr("page.dashboard.card.total_alerts"), "0", tone="violet")
+        self.high_card = StatisticCard(self._lm.tr("page.dashboard.card.high_risk_alerts"), "0", tone="red")
+        self.status_card = StatisticCard(self._lm.tr("page.dashboard.card.detection_status"), self._lm.tr("common.waiting"), tone="green")
         cards.addWidget(self.packet_card, 0, 0)
         cards.addWidget(self.alert_card, 0, 1)
         cards.addWidget(self.high_card, 0, 2)
@@ -90,12 +95,12 @@ class DashboardPage(QWidget):
 
         charts = QGridLayout()
         charts.setSpacing(12)
-        self.protocol_chart = ChartWidget("Protocol distribution")
-        self.severity_chart = ChartWidget("Alert severity")
-        self.top_src_chart = ChartWidget("Top source IPs")
-        self.top_port_chart = ChartWidget("Top destination ports")
-        self.attack_chain_chart = ChartWidget("Attack chain stages")
-        self.anomaly_score_chart = ChartWidget("Anomaly score trend")
+        self.protocol_chart = ChartWidget(self._lm.tr("page.dashboard.chart.protocol_distribution"))
+        self.severity_chart = ChartWidget(self._lm.tr("page.dashboard.chart.alert_severity"))
+        self.top_src_chart = ChartWidget(self._lm.tr("page.dashboard.chart.top_src_ips"))
+        self.top_port_chart = ChartWidget(self._lm.tr("page.dashboard.chart.top_dst_ports"))
+        self.attack_chain_chart = ChartWidget(self._lm.tr("page.dashboard.chart.attack_chain_stages"))
+        self.anomaly_score_chart = ChartWidget(self._lm.tr("page.dashboard.chart.anomaly_score_trend"))
         charts.addWidget(self.protocol_chart, 0, 0)
         charts.addWidget(self.severity_chart, 0, 1)
         charts.addWidget(self.top_src_chart, 1, 0)
@@ -107,33 +112,57 @@ class DashboardPage(QWidget):
         for row in range(3):
             charts.setRowStretch(row, 1)
 
-        self.trend_title = QLabel("Alert trend")
+        self.trend_title = QLabel(self._lm.tr("page.dashboard.alert_trend"))
         self.trend_title.setObjectName("SectionTitle")
         self.trend_table = QTableWidget(0, 4)
-        self.trend_table.setHorizontalHeaderLabels(["Bucket", "Alerts", "Spike", "Threshold"])
+        self.trend_table.setHorizontalHeaderLabels([
+            self._lm.tr("table.bucket"),
+            self._lm.tr("table.alerts"),
+            self._lm.tr("table.spike_indicator"),
+            self._lm.tr("table.threshold"),
+        ])
         configure_responsive_table(self.trend_table, stretch_columns=(0,), resize_to_contents_columns=(1, 2, 3))
         self.trend_table.setMinimumHeight(110)
 
-        self.timeline_title = QLabel("Attack chain timeline")
+        self.timeline_title = QLabel(self._lm.tr("page.dashboard.attack_chain_timeline"))
         self.timeline_title.setObjectName("SectionTitle")
         self.attack_timeline = QTableWidget(0, 4)
-        self.attack_timeline.setHorizontalHeaderLabels(["Source", "Timeline", "Risk", "Alerts"])
+        self.attack_timeline.setHorizontalHeaderLabels([
+            self._lm.tr("common.source"),
+            self._lm.tr("table.summary"),
+            self._lm.tr("common.risk"),
+            self._lm.tr("table.alerts"),
+        ])
         configure_responsive_table(self.attack_timeline, stretch_columns=(1,), resize_to_contents_columns=(2, 3))
         self.attack_timeline.setMinimumHeight(110)
 
-        self.host_risk_title = QLabel("High-risk hosts")
+        self.host_risk_title = QLabel(self._lm.tr("page.dashboard.high_risk_hosts"))
         self.host_risk_title.setObjectName("SectionTitle")
         self.host_risk_table = QTableWidget(0, 7)
-        self.host_risk_table.setHorizontalHeaderLabels(["Host", "Score", "Severity", "Chain", "Baseline", "Asset", "Reasons"])
+        self.host_risk_table.setHorizontalHeaderLabels([
+            self._lm.tr("table.host"),
+            self._lm.tr("common.score"),
+            self._lm.tr("common.severity"),
+            "Chain",
+            "Baseline",
+            "Asset",
+            self._lm.tr("table.reasons"),
+        ])
         configure_responsive_table(self.host_risk_table, stretch_columns=(0, 6), resize_to_contents_columns=(1, 2, 3, 4, 5))
         self.host_risk_table.setMinimumHeight(110)
 
-        self.baseline_title = QLabel("Baseline summary")
+        self.baseline_title = QLabel(self._lm.tr("page.dashboard.baseline_summary"))
         self.baseline_title.setObjectName("SectionTitle")
         self.baseline_table = QTableWidget(0, 7)
-        self.baseline_table.setHorizontalHeaderLabels(
-            ["Source", "Packets", "Connections", "Destinations", "Ports", "Bytes", "External ratio"]
-        )
+        self.baseline_table.setHorizontalHeaderLabels([
+            self._lm.tr("common.source"),
+            self._lm.tr("table.packets"),
+            self._lm.tr("table.connections"),
+            self._lm.tr("table.destinations"),
+            self._lm.tr("table.ports"),
+            self._lm.tr("table.bytes"),
+            self._lm.tr("table.external_ratio"),
+        ])
         configure_responsive_table(self.baseline_table, stretch_columns=(0,), resize_to_contents_columns=(1, 2, 3, 4, 5, 6))
         self.baseline_table.setMinimumHeight(110)
 
@@ -157,6 +186,89 @@ class DashboardPage(QWidget):
         self.auto_refresh_timer.setInterval(self.AUTO_REFRESH_INTERVAL_MS)
         self.auto_refresh_timer.timeout.connect(self._auto_refresh)
         self.refresh()
+
+    def retranslate_ui(self) -> None:
+        """Re-apply all translatable strings after a locale change."""
+        self._retranslating = True
+        try:
+            # -- toolbar --
+            self.refresh_button.setText(self._lm.tr("page.dashboard.refresh_statistics"))
+            self.reset_button.setText(self._lm.tr("page.dashboard.reset_statistics"))
+            self.auto_refresh_checkbox.setText(self._lm.tr("page.dashboard.auto_refresh"))
+            self.auto_refresh_checkbox.setToolTip(self._lm.tr("page.dashboard.auto_refresh_tooltip"))
+
+            # -- statistic cards (title labels are layout children) --
+            card_keys = [
+                (self.packet_card, "page.dashboard.card.processed_packets"),
+                (self.alert_card, "page.dashboard.card.total_alerts"),
+                (self.high_card, "page.dashboard.card.high_risk_alerts"),
+                (self.status_card, "page.dashboard.card.detection_status"),
+            ]
+            for card, key in card_keys:
+                title_label = card.layout().itemAt(0).widget()
+                if isinstance(title_label, QLabel):
+                    title_label.setText(self._lm.tr(key))
+
+            # -- chart widget titles --
+            chart_title_pairs = [
+                (self.protocol_chart, "page.dashboard.chart.protocol_distribution"),
+                (self.severity_chart, "page.dashboard.chart.alert_severity"),
+                (self.top_src_chart, "page.dashboard.chart.top_src_ips"),
+                (self.top_port_chart, "page.dashboard.chart.top_dst_ports"),
+                (self.attack_chain_chart, "page.dashboard.chart.attack_chain_stages"),
+                (self.anomaly_score_chart, "page.dashboard.chart.anomaly_score_trend"),
+            ]
+            chart_headers = [
+                self._lm.tr("table.item"),
+                self._lm.tr("table.value"),
+                self._lm.tr("table.percent"),
+            ]
+            for chart, key in chart_title_pairs:
+                chart.title_label.setText(self._lm.tr(key))
+                chart.table.setHorizontalHeaderLabels(chart_headers)
+
+            # -- section titles --
+            self.trend_title.setText(self._lm.tr("page.dashboard.alert_trend"))
+            self.timeline_title.setText(self._lm.tr("page.dashboard.attack_chain_timeline"))
+            self.host_risk_title.setText(self._lm.tr("page.dashboard.high_risk_hosts"))
+            self.baseline_title.setText(self._lm.tr("page.dashboard.baseline_summary"))
+
+            # -- table headers --
+            self.trend_table.setHorizontalHeaderLabels([
+                self._lm.tr("table.bucket"),
+                self._lm.tr("table.alerts"),
+                self._lm.tr("table.spike_indicator"),
+                self._lm.tr("table.threshold"),
+            ])
+            self.attack_timeline.setHorizontalHeaderLabels([
+                self._lm.tr("common.source"),
+                self._lm.tr("table.summary"),
+                self._lm.tr("common.risk"),
+                self._lm.tr("table.alerts"),
+            ])
+            self.host_risk_table.setHorizontalHeaderLabels([
+                self._lm.tr("table.host"),
+                self._lm.tr("common.score"),
+                self._lm.tr("common.severity"),
+                "Chain",
+                "Baseline",
+                "Asset",
+                self._lm.tr("table.reasons"),
+            ])
+            self.baseline_table.setHorizontalHeaderLabels([
+                self._lm.tr("common.source"),
+                self._lm.tr("table.packets"),
+                self._lm.tr("table.connections"),
+                self._lm.tr("table.destinations"),
+                self._lm.tr("table.ports"),
+                self._lm.tr("table.bytes"),
+                self._lm.tr("table.external_ratio"),
+            ])
+
+            # -- refresh dynamic data (labels, tooltips, table content) --
+            self.refresh()
+        finally:
+            self._retranslating = False
 
     def _activate_host(self, row: int, _column: int) -> None:
         item = self.host_risk_table.item(row, 0)
@@ -182,22 +294,28 @@ class DashboardPage(QWidget):
         try:
             self.refresh(force=False)
         except Exception as exc:
-            self.refresh_status_label.setText(f"Auto-refresh failed: {exc}")
+            self.refresh_status_label.setText(
+                self._lm.tr("page.dashboard.auto_refresh_failed", exc=exc)
+            )
 
     def handle_refresh_clicked(self) -> None:
         self.refresh_button.setEnabled(False)
         try:
             self.refresh()
         except Exception as exc:
-            QMessageBox.warning(self, "Refresh failed", f"Dashboard statistics could not be refreshed.\n\n{exc}")
+            QMessageBox.warning(
+                self,
+                self._lm.tr("page.dashboard.refresh_failed"),
+                self._lm.tr("page.dashboard.refresh_failed_msg", exc=exc),
+            )
         finally:
             self.refresh_button.setEnabled(True)
 
     def handle_reset_clicked(self) -> None:
         answer = QMessageBox.question(
             self,
-            "Reset statistics",
-            "Clear all packets, alerts, baselines, trends, and risk statistics? Rule settings and custom rules will be kept.",
+            self._lm.tr("page.dashboard.reset_title"),
+            self._lm.tr("page.dashboard.reset_msg"),
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
@@ -208,9 +326,17 @@ class DashboardPage(QWidget):
         try:
             self._reset_runtime_data()
             self.refresh()
-            QMessageBox.information(self, "Statistics reset", "Runtime statistics and alerts have been cleared.")
+            QMessageBox.information(
+                self,
+                self._lm.tr("page.dashboard.reset_done"),
+                self._lm.tr("page.dashboard.reset_done_msg"),
+            )
         except Exception as exc:
-            QMessageBox.warning(self, "Reset failed", f"Dashboard statistics could not be reset.\n\n{exc}")
+            QMessageBox.warning(
+                self,
+                self._lm.tr("page.dashboard.reset_failed"),
+                self._lm.tr("page.dashboard.reset_failed_msg", exc=exc),
+            )
         finally:
             self.reset_button.setEnabled(True)
 
@@ -237,7 +363,10 @@ class DashboardPage(QWidget):
         snapshot = (packet_count, alert_count)
         if not force and snapshot == self._last_snapshot:
             self.refresh_status_label.setText(
-                f"Last checked: {datetime.now().strftime('%H:%M:%S')} (no changes)"
+                self._lm.tr(
+                    "page.dashboard.last_checked_no_change",
+                    time=datetime.now().strftime("%H:%M:%S"),
+                )
             )
             return
         severity_distribution = self.alert_repository.count_by_severity()
@@ -246,7 +375,9 @@ class DashboardPage(QWidget):
         self.packet_card.set_value(packet_count)
         self.alert_card.set_value(alert_count)
         self.high_card.set_value(high_count)
-        self.status_card.set_value("Detecting" if packet_count else "Waiting")
+        self.status_card.set_value(
+            self._lm.tr("common.detecting") if packet_count else self._lm.tr("common.waiting")
+        )
 
         alerts = self.alert_repository.list_all(limit=1000)
         chains = self.attack_chain_analyzer.analyze(alerts)
@@ -261,7 +392,12 @@ class DashboardPage(QWidget):
         baseline_records = self._refresh_baseline_summary()
         self._render_host_risk(alerts, chains, baseline_records)
         self._last_snapshot = snapshot
-        self.refresh_status_label.setText(f"Last refreshed: {datetime.now().strftime('%H:%M:%S')}")
+        self.refresh_status_label.setText(
+            self._lm.tr(
+                "page.dashboard.last_refreshed",
+                time=datetime.now().strftime("%H:%M:%S"),
+            )
+        )
 
     def _render_alert_trend(self) -> None:
         points = self.alert_trend_analyzer.analyze(self.alert_repository.count_by_time_bucket(bucket="hour", limit=24))
@@ -275,10 +411,19 @@ class DashboardPage(QWidget):
         self.trend_table.resizeRowsToContents()
 
     def _set_trend_row(self, row: int, point: AlertTrendPoint) -> None:
-        values = [point.bucket, str(point.count), "Spike" if point.is_spike else "", f"{point.threshold:.1f}"]
+        values = [
+            point.bucket,
+            str(point.count),
+            self._lm.tr("common.spike") if point.is_spike else "",
+            f"{point.threshold:.1f}",
+        ]
         for column, value in enumerate(values):
             item = QTableWidgetItem(value)
-            item.setToolTip("Alert count is above historical mean plus two standard deviations." if point.is_spike else value)
+            item.setToolTip(
+                self._lm.tr("page.dashboard.trend_spike_tooltip")
+                if point.is_spike
+                else value
+            )
             if point.is_spike:
                 item.setBackground(QColor("#fee2e2"))
             self.trend_table.setItem(row, column, item)

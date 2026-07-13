@@ -5,6 +5,7 @@ from collections.abc import Callable
 from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableWidget, QTableWidgetItem
 
 from models import PacketRecord
+from ui.i18n import LocaleManager, locale_manager
 from ui.styles import configure_responsive_table
 
 
@@ -12,15 +13,17 @@ class PacketTable(QTableWidget):
     MAX_VISIBLE_ROWS = 2_000
     MAX_BUFFERED_PACKETS = 20_000
 
-    def __init__(self) -> None:
+    def __init__(self, _lm: LocaleManager | None = None) -> None:
         super().__init__(0, 8)
+        self._lm = _lm or locale_manager()
         self.max_visible_rows = self.MAX_VISIBLE_ROWS
         self.auto_scroll = True
         self._packets: list[PacketRecord] = []
         self._packet_filter: Callable[[PacketRecord], bool] | None = None
-        self.setHorizontalHeaderLabels(
-            ["Time", "Source IP", "Destination IP", "Protocol", "Source Port", "Destination Port", "Length", "Summary"]
-        )
+
+        self.retranslate_ui()
+        self._lm.locale_changed.connect(self.retranslate_ui)
+
         configure_responsive_table(self, stretch_columns=(7,), resize_to_contents_columns=(3, 4, 5, 6))
         self.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
         self.verticalHeader().setDefaultSectionSize(24)
@@ -34,6 +37,21 @@ class PacketTable(QTableWidget):
         self.setColumnWidth(4, 100)
         self.setColumnWidth(5, 120)
         self.setColumnWidth(6, 70)
+
+    def retranslate_ui(self) -> None:
+        """Refresh all user-visible text from the locale manager."""
+        self.setHorizontalHeaderLabels(
+            [
+                self._lm.tr("widget.packet_table.time"),
+                self._lm.tr("widget.packet_table.source_ip"),
+                self._lm.tr("widget.packet_table.destination_ip"),
+                self._lm.tr("widget.packet_table.protocol"),
+                self._lm.tr("widget.packet_table.source_port"),
+                self._lm.tr("widget.packet_table.destination_port"),
+                self._lm.tr("widget.packet_table.length"),
+                self._lm.tr("widget.packet_table.summary"),
+            ]
+        )
 
     def add_packets(self, packets: list[PacketRecord]) -> int:
         if not packets:

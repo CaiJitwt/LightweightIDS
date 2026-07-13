@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 from detection.analysis.host_profile import HostProfileService
 from models import HostSummary
 from storage.database import Database
+from ui.i18n import locale_manager
 from ui.styles import (
     apply_importance_style,
     apply_score_style,
@@ -32,15 +33,16 @@ class HostExplorerPage(QWidget):
 
     def __init__(self, database: Database) -> None:
         super().__init__()
+        self._lm = locale_manager()
         self.service = HostProfileService(database)
         self.hosts: list[HostSummary] = []
         self.current_host_ip = ""
         layout = QVBoxLayout(self)
         toolbar = QHBoxLayout()
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search IP, asset name or role")
-        self.refresh_button = QPushButton("Refresh")
-        self.investigate_button = QPushButton("Create investigation")
+        self.search_input.setPlaceholderText(self._lm.tr("page.hosts.search_placeholder"))
+        self.refresh_button = QPushButton(self._lm.tr("page.hosts.refresh"))
+        self.investigate_button = QPushButton(self._lm.tr("page.hosts.create_investigation"))
         toolbar.addWidget(self.search_input, 1)
         toolbar.addWidget(self.refresh_button)
         toolbar.addWidget(self.investigate_button)
@@ -49,7 +51,14 @@ class HostExplorerPage(QWidget):
         splitter = QSplitter(Qt.Horizontal)
         self.host_table = QTableWidget(0, 8)
         self.host_table.setHorizontalHeaderLabels(
-            ["Host", "Name", "Role", "Risk", "Importance", "Packets", "Alerts", "Last seen"]
+            [self._lm.tr("table.host"),
+             self._lm.tr("table.name"),
+             self._lm.tr("table.role"),
+             self._lm.tr("table.risk"),
+             self._lm.tr("table.importance"),
+             self._lm.tr("table.packets"),
+             self._lm.tr("table.alerts"),
+             self._lm.tr("table.last_seen")]
         )
         configure_responsive_table(
             self.host_table,
@@ -66,19 +75,29 @@ class HostExplorerPage(QWidget):
         self.overview_view.setReadOnly(True)
         self.connections_table = QTableWidget(0, 6)
         self.connections_table.setHorizontalHeaderLabels(
-            ["Peer", "Direction", "Protocol", "Port", "Packets", "Last seen"]
+            [self._lm.tr("table.peer"),
+             self._lm.tr("table.direction"),
+             self._lm.tr("table.protocol"),
+             self._lm.tr("common.port"),
+             self._lm.tr("table.packets"),
+             self._lm.tr("table.last_seen")]
         )
         configure_responsive_table(self.connections_table, stretch_columns=(0,), resize_to_contents_columns=(1, 2, 3, 4, 5))
         self.alert_table = AlertTable()
         self.timeline_table = QTableWidget(0, 6)
         self.timeline_table.setHorizontalHeaderLabels(
-            ["Time", "Type", "Direction", "Peer", "Severity", "Summary"]
+            [self._lm.tr("table.time"),
+             self._lm.tr("table.type"),
+             self._lm.tr("table.direction"),
+             self._lm.tr("table.peer"),
+             self._lm.tr("table.severity"),
+             self._lm.tr("table.summary")]
         )
         configure_responsive_table(self.timeline_table, stretch_columns=(3, 5), resize_to_contents_columns=(1, 2, 4))
-        self.tabs.addTab(self.overview_view, "Overview")
-        self.tabs.addTab(self.connections_table, "Connections")
-        self.tabs.addTab(self.alert_table, "Alerts")
-        self.tabs.addTab(self.timeline_table, "Timeline")
+        self.tabs.addTab(self.overview_view, self._lm.tr("page.hosts.overview_tab"))
+        self.tabs.addTab(self.connections_table, self._lm.tr("page.hosts.connections_tab"))
+        self.tabs.addTab(self.alert_table, self._lm.tr("page.hosts.alerts_tab"))
+        self.tabs.addTab(self.timeline_table, self._lm.tr("page.hosts.timeline_tab"))
         detail_layout.addWidget(self.tabs)
         splitter.addWidget(self.host_table)
         splitter.addWidget(detail)
@@ -90,7 +109,48 @@ class HostExplorerPage(QWidget):
         self.refresh_button.clicked.connect(self.refresh)
         self.investigate_button.clicked.connect(self.request_investigation)
         self.host_table.itemSelectionChanged.connect(self.render_selected_host)
+        self._lm.locale_changed.connect(self.retranslate_ui)
         self.refresh()
+
+    def retranslate_ui(self) -> None:
+        """Update all user-visible text for the current locale."""
+        self.search_input.setPlaceholderText(self._lm.tr("page.hosts.search_placeholder"))
+        self.refresh_button.setText(self._lm.tr("page.hosts.refresh"))
+        self.investigate_button.setText(self._lm.tr("page.hosts.create_investigation"))
+
+        self.host_table.setHorizontalHeaderLabels([
+            self._lm.tr("table.host"),
+            self._lm.tr("table.name"),
+            self._lm.tr("table.role"),
+            self._lm.tr("table.risk"),
+            self._lm.tr("table.importance"),
+            self._lm.tr("table.packets"),
+            self._lm.tr("table.alerts"),
+            self._lm.tr("table.last_seen"),
+        ])
+        self.connections_table.setHorizontalHeaderLabels([
+            self._lm.tr("table.peer"),
+            self._lm.tr("table.direction"),
+            self._lm.tr("table.protocol"),
+            self._lm.tr("common.port"),
+            self._lm.tr("table.packets"),
+            self._lm.tr("table.last_seen"),
+        ])
+        self.timeline_table.setHorizontalHeaderLabels([
+            self._lm.tr("table.time"),
+            self._lm.tr("table.type"),
+            self._lm.tr("table.direction"),
+            self._lm.tr("table.peer"),
+            self._lm.tr("table.severity"),
+            self._lm.tr("table.summary"),
+        ])
+
+        self.tabs.setTabText(0, self._lm.tr("page.hosts.overview_tab"))
+        self.tabs.setTabText(1, self._lm.tr("page.hosts.connections_tab"))
+        self.tabs.setTabText(2, self._lm.tr("page.hosts.alerts_tab"))
+        self.tabs.setTabText(3, self._lm.tr("page.hosts.timeline_tab"))
+
+        self.render_selected_host()
 
     def showEvent(self, event: object) -> None:
         self.refresh()
@@ -146,20 +206,25 @@ class HostExplorerPage(QWidget):
         self.current_host_ip = host.ip
         protocols = self.service.protocol_distribution(host.ip)
         ports = self.service.port_distribution(host.ip)
-        reasons = "\n".join(f"- {reason}" for reason in host.risk_reasons) or "- No notable source-host risk signals"
-        self.overview_view.setPlainText(
-            f"Host: {host.display_name or host.ip}\n"
-            f"IP address: {host.ip}\n"
-            f"Role: {host.role}\n"
-            f"Asset importance: {host.importance}\n"
-            f"Risk score: {host.risk_score}\n"
-            f"Packets: {host.packet_count} ({host.incoming_packets} inbound, {host.outgoing_packets} outbound)\n"
-            f"Alerts: {host.alert_count} ({host.critical_count} critical)\n"
-            f"Last seen: {host.last_seen or 'Never'}\n\n"
-            f"Protocols: {self._format_mapping(protocols)}\n"
-            f"Top destination ports: {', '.join(f'{port}={count}' for port, count in ports) or 'None'}\n\n"
-            f"Risk reasons:\n{reasons}"
+        reasons = "\n".join(f"- {reason}" for reason in host.risk_reasons) or self._lm.tr("page.hosts.no_risk_signals")
+        template = self._lm.tr("page.hosts.overview_template")
+        text = template.format(
+            display_name=host.display_name or host.ip,
+            ip=host.ip,
+            role=host.role,
+            importance=host.importance,
+            risk_score=host.risk_score,
+            packet_count=host.packet_count,
+            incoming=host.incoming_packets,
+            outgoing=host.outgoing_packets,
+            alert_count=host.alert_count,
+            critical_count=host.critical_count,
+            last_seen=host.last_seen or self._lm.tr("common.never"),
+            protocols=self._format_mapping(protocols),
+            ports=", ".join(f"{port}={count}" for port, count in ports) or self._lm.tr("common.none_data"),
+            reasons=reasons,
         )
+        self.overview_view.setPlainText(text)
         connections = self.service.connections(host.ip)
         self.connections_table.setRowCount(len(connections))
         for row, connection in enumerate(connections):
@@ -197,7 +262,7 @@ class HostExplorerPage(QWidget):
         host = self._selected_host()
         if host is None:
             return
-        summary = "; ".join(host.risk_reasons) or f"Review observed activity for {host.ip}."
+        summary = "; ".join(host.risk_reasons) or self._lm.tr("page.hosts.investigation_summary", ip=host.ip)
         self.investigation_requested.emit(host.ip, summary, self.service.alerts_for_host(host.ip, limit=100))
 
     def _selected_host(self) -> HostSummary | None:
@@ -216,4 +281,4 @@ class HostExplorerPage(QWidget):
         return False
 
     def _format_mapping(self, values: dict[str, int]) -> str:
-        return ", ".join(f"{key}={value}" for key, value in values.items()) or "None"
+        return ", ".join(f"{key}={value}" for key, value in values.items()) or self._lm.tr("common.none_data")

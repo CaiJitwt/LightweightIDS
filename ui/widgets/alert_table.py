@@ -4,13 +4,25 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableWidget, QTableWidgetItem
 
 from models import AlertRecord
-from ui.styles import apply_semantic_style, apply_severity_style, configure_responsive_table, severity_style
+from ui.i18n import locale_manager
+from ui.styles import apply_semantic_style, apply_severity_style, configure_responsive_table, severity_style, severity_tooltip
 
 
 class AlertTable(QTableWidget):
     def __init__(self) -> None:
         super().__init__(0, 8)
-        self.setHorizontalHeaderLabels(["Time", "Severity", "Type", "Rule", "Source IP", "Destination IP", "Description", "Status"])
+        self._lm = locale_manager()
+        self._header_keys = [
+            "widget.alert_table.time",
+            "widget.alert_table.severity",
+            "widget.alert_table.type",
+            "widget.alert_table.rule",
+            "widget.alert_table.source_ip",
+            "widget.alert_table.destination_ip",
+            "widget.alert_table.description",
+            "widget.alert_table.status",
+        ]
+        self._apply_headers()
         configure_responsive_table(self, stretch_columns=(2, 3, 6), resize_to_contents_columns=(1, 7))
         self.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
         self.verticalHeader().setDefaultSectionSize(24)
@@ -24,6 +36,24 @@ class AlertTable(QTableWidget):
         self.setColumnWidth(4, 120)
         self.setColumnWidth(5, 130)
         self.setColumnWidth(7, 96)
+
+        self._lm.locale_changed.connect(self.retranslate_ui)
+
+    # ------------------------------------------------------------------
+    # i18n
+    # ------------------------------------------------------------------
+
+    def _apply_headers(self) -> None:
+        """Set horizontal header labels from the current locale."""
+        self.setHorizontalHeaderLabels([self._lm.tr(key) for key in self._header_keys])
+
+    def retranslate_ui(self) -> None:
+        """Re-apply translated table headers when the locale changes."""
+        self._apply_headers()
+
+    # ------------------------------------------------------------------
+    # Data
+    # ------------------------------------------------------------------
 
     def set_alerts(self, alerts: list[AlertRecord]) -> None:
         sorting_enabled = self.isSortingEnabled()
@@ -49,7 +79,7 @@ class AlertTable(QTableWidget):
                     if column == 1:
                         apply_severity_style(item, alert.severity)
                         item.setTextAlignment(Qt.AlignCenter)
-                        item.setToolTip(f"{severity_style(alert.severity).tooltip}\n{alert.description}")
+                        item.setToolTip(f"{severity_tooltip(alert.severity)}\n{alert.description}")
                     elif column == 7:
                         apply_semantic_style(item, alert.status)
                         item.setTextAlignment(Qt.AlignCenter)
@@ -59,6 +89,10 @@ class AlertTable(QTableWidget):
         finally:
             self.setUpdatesEnabled(True)
             self.setSortingEnabled(sorting_enabled)
+
+    # ------------------------------------------------------------------
+    # Selection helpers
+    # ------------------------------------------------------------------
 
     def selected_alert_id(self) -> int | None:
         row = self.currentRow()

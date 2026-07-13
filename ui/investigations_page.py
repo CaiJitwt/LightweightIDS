@@ -26,7 +26,13 @@ from models import AlertRecord, InvestigationRecord
 from report.report_generator import ReportGenerator
 from storage.analyst_repositories import InvestigationRepository
 from storage.database import Database
+from ui.i18n import locale_manager, tr
 from ui.styles import apply_semantic_style, apply_severity_style, configure_responsive_table
+
+# Map stored DB values to i18n keys so combo boxes can display translated text
+# while setCurrentText can still locate the correct item from a stored value.
+_STATUS_KEY = {"Open": "status.open", "Monitoring": "status.monitoring", "Closed": "status.closed"}
+_PRIORITY_KEY = {"LOW": "severity.LOW", "MEDIUM": "severity.MEDIUM", "HIGH": "severity.HIGH", "CRITICAL": "severity.CRITICAL"}
 
 
 class InvestigationDialog(QDialog):
@@ -40,29 +46,37 @@ class InvestigationDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.original = record
-        self.setWindowTitle("Edit investigation" if record else "New investigation")
+        self.setWindowTitle(tr("page.investigations.dialog.edit_title") if record else tr("page.investigations.dialog.new_title"))
         self.setMinimumWidth(500)
         layout = QVBoxLayout(self)
         form = QFormLayout()
-        self.title_input = QLineEdit(record.title if record else (f"Investigate {host_ip}" if host_ip else ""))
+        self.title_input = QLineEdit(record.title if record else (tr("page.investigations.title_template", rule_name=host_ip) if host_ip else ""))
         self.status_combo = QComboBox()
-        self.status_combo.addItems(["Open", "Monitoring", "Closed"])
-        self.status_combo.setCurrentText(record.status if record else "Open")
+        self.status_combo.addItems([tr("status.open"), tr("status.monitoring"), tr("status.closed")])
+        if record:
+            key = _STATUS_KEY.get(record.status)
+            self.status_combo.setCurrentText(tr(key) if key else record.status)
+        else:
+            self.status_combo.setCurrentText(tr("status.open"))
         self.priority_combo = QComboBox()
-        self.priority_combo.addItems(["LOW", "MEDIUM", "HIGH", "CRITICAL"])
-        self.priority_combo.setCurrentText(record.priority if record else "MEDIUM")
+        self.priority_combo.addItems([tr("severity.LOW"), tr("severity.MEDIUM"), tr("severity.HIGH"), tr("severity.CRITICAL")])
+        if record:
+            key = _PRIORITY_KEY.get(record.priority)
+            self.priority_combo.setCurrentText(tr(key) if key else record.priority)
+        else:
+            self.priority_combo.setCurrentText(tr("severity.MEDIUM"))
         self.host_input = QLineEdit((record.host_ip or "") if record else host_ip)
-        self.host_input.setPlaceholderText("Optional host IP")
+        self.host_input.setPlaceholderText(tr("page.investigations.dialog.host_placeholder"))
         self.summary_input = QTextEdit(record.summary if record else summary)
         self.notes_input = QTextEdit(record.notes if record else "")
         self.summary_input.setMinimumHeight(80)
         self.notes_input.setMinimumHeight(100)
-        form.addRow("Title", self.title_input)
-        form.addRow("Status", self.status_combo)
-        form.addRow("Priority", self.priority_combo)
-        form.addRow("Host IP", self.host_input)
-        form.addRow("Summary", self.summary_input)
-        form.addRow("Notes", self.notes_input)
+        form.addRow(tr("page.investigations.dialog.title_label"), self.title_input)
+        form.addRow(tr("page.investigations.dialog.status_label"), self.status_combo)
+        form.addRow(tr("page.investigations.dialog.priority_label"), self.priority_combo)
+        form.addRow(tr("page.investigations.dialog.host_label"), self.host_input)
+        form.addRow(tr("page.investigations.dialog.summary_label"), self.summary_input)
+        form.addRow(tr("page.investigations.dialog.notes_label"), self.notes_input)
         layout.addLayout(form)
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
@@ -86,7 +100,7 @@ class InvestigationDialog(QDialog):
         try:
             self.record()
         except ValueError as exc:
-            QMessageBox.warning(self, "Invalid investigation", str(exc))
+            QMessageBox.warning(self, tr("page.investigations.dialog.invalid_title"), str(exc))
             return
         super().accept()
 
@@ -94,20 +108,26 @@ class InvestigationDialog(QDialog):
 class InvestigationsPage(QWidget):
     def __init__(self, database: Database) -> None:
         super().__init__()
+        self._lm = locale_manager()
+        self._retranslating = False
         self.repository = InvestigationRepository(database)
         self.report_generator = ReportGenerator()
         self.investigations: list[InvestigationRecord] = []
         layout = QVBoxLayout(self)
         toolbar = QHBoxLayout()
-        self.new_button = QPushButton("New")
-        self.edit_button = QPushButton("Edit")
-        self.delete_button = QPushButton("Delete")
+        self.new_button = QPushButton(self._lm.tr("page.investigations.new"))
+        self.edit_button = QPushButton(self._lm.tr("page.investigations.edit"))
+        self.delete_button = QPushButton(self._lm.tr("page.investigations.delete"))
         self.status_combo = QComboBox()
-        self.status_combo.addItems(["Open", "Monitoring", "Closed"])
-        self.apply_status_button = QPushButton("Apply status")
-        self.remove_evidence_button = QPushButton("Remove evidence")
-        self.export_button = QPushButton("Export HTML")
-        self.refresh_button = QPushButton("Refresh")
+        self.status_combo.addItems([
+            self._lm.tr("status.open"),
+            self._lm.tr("status.monitoring"),
+            self._lm.tr("status.closed"),
+        ])
+        self.apply_status_button = QPushButton(self._lm.tr("page.investigations.apply_status"))
+        self.remove_evidence_button = QPushButton(self._lm.tr("page.investigations.remove_evidence"))
+        self.export_button = QPushButton(self._lm.tr("page.investigations.export_html"))
+        self.refresh_button = QPushButton(self._lm.tr("page.investigations.refresh"))
         for widget in (
             self.new_button,
             self.edit_button,
@@ -124,7 +144,9 @@ class InvestigationsPage(QWidget):
 
         splitter = QSplitter(Qt.Horizontal)
         self.case_table = QTableWidget(0, 6)
-        self.case_table.setHorizontalHeaderLabels(["ID", "Priority", "Status", "Title", "Host", "Updated"])
+        self.case_table.setHorizontalHeaderLabels(
+            [self._lm.tr(key) for key in ["table.id", "table.priority", "table.status", "table.title", "table.host", "table.updated"]]
+        )
         configure_responsive_table(self.case_table, stretch_columns=(3,), resize_to_contents_columns=(0, 1, 2, 4, 5))
         self.case_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.case_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -134,7 +156,7 @@ class InvestigationsPage(QWidget):
         self.detail_view.setReadOnly(True)
         self.evidence_table = QTableWidget(0, 7)
         self.evidence_table.setHorizontalHeaderLabels(
-            ["Time", "Severity", "Rule", "Source", "Destination", "Description", "Evidence"]
+            [self._lm.tr(key) for key in ["table.time", "table.severity", "table.rule", "table.source_ip", "table.destination_ip", "table.description", "table.evidence"]]
         )
         configure_responsive_table(self.evidence_table, stretch_columns=(2, 5, 6), resize_to_contents_columns=(1, 3, 4))
         self.evidence_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -156,7 +178,44 @@ class InvestigationsPage(QWidget):
         self.refresh_button.clicked.connect(self.refresh)
         self.case_table.itemSelectionChanged.connect(self.render_selected)
         self.case_table.itemDoubleClicked.connect(lambda _item: self.edit_investigation())
+        self._lm.locale_changed.connect(self.retranslate_ui)
         self.refresh()
+
+    def retranslate_ui(self) -> None:
+        self._retranslating = True
+
+        # Toolbar buttons
+        self.new_button.setText(self._lm.tr("page.investigations.new"))
+        self.edit_button.setText(self._lm.tr("page.investigations.edit"))
+        self.delete_button.setText(self._lm.tr("page.investigations.delete"))
+        self.apply_status_button.setText(self._lm.tr("page.investigations.apply_status"))
+        self.remove_evidence_button.setText(self._lm.tr("page.investigations.remove_evidence"))
+        self.export_button.setText(self._lm.tr("page.investigations.export_html"))
+        self.refresh_button.setText(self._lm.tr("page.investigations.refresh"))
+
+        # Status combo — preserve selected index
+        current_idx = self.status_combo.currentIndex()
+        self.status_combo.clear()
+        self.status_combo.addItems([
+            self._lm.tr("status.open"),
+            self._lm.tr("status.monitoring"),
+            self._lm.tr("status.closed"),
+        ])
+        if 0 <= current_idx < self.status_combo.count():
+            self.status_combo.setCurrentIndex(current_idx)
+
+        # Table headers
+        self.case_table.setHorizontalHeaderLabels(
+            [self._lm.tr(key) for key in ["table.id", "table.priority", "table.status", "table.title", "table.host", "table.updated"]]
+        )
+        self.evidence_table.setHorizontalHeaderLabels(
+            [self._lm.tr(key) for key in ["table.time", "table.severity", "table.rule", "table.source_ip", "table.destination_ip", "table.description", "table.evidence"]]
+        )
+
+        # Re-render detail view with translated template
+        self.render_selected()
+
+        self._retranslating = False
 
     def showEvent(self, event: object) -> None:
         self.refresh()
@@ -202,7 +261,7 @@ class InvestigationsPage(QWidget):
     def edit_investigation(self) -> None:
         record = self._selected_investigation()
         if record is None:
-            QMessageBox.information(self, "No investigation selected", "Please select an investigation first.")
+            QMessageBox.information(self, self._lm.tr("page.investigations.no_selection"), self._lm.tr("page.investigations.please_select"))
             return
         dialog = InvestigationDialog(record, parent=self)
         if dialog.exec() == QDialog.Accepted:
@@ -215,8 +274,8 @@ class InvestigationsPage(QWidget):
             return
         answer = QMessageBox.question(
             self,
-            "Delete investigation",
-            "Delete this investigation and its evidence snapshots?",
+            self._lm.tr("page.investigations.delete_title"),
+            self._lm.tr("page.investigations.delete_msg"),
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
@@ -234,19 +293,24 @@ class InvestigationsPage(QWidget):
 
     def add_alert(self, alert: AlertRecord) -> None:
         active = self.repository.list_all(active_only=True)
-        options = ["Create new investigation..."] + [f"#{record.id} {record.title}" for record in active]
-        choice, accepted = QInputDialog.getItem(self, "Add to investigation", "Investigation", options, 0, False)
+        options = [tr("page.investigations.add_create_new")] + [f"#{record.id} {record.title}" for record in active]
+        choice, accepted = QInputDialog.getItem(
+            self,
+            tr("page.investigations.add_dialog_title"),
+            tr("page.investigations.add_dialog_label"),
+            options, 0, False,
+        )
         if not accepted:
             return
         if choice == options[0]:
             host_ip = alert.src_ip or alert.dst_ip or ""
             dialog = InvestigationDialog(
                 host_ip=host_ip,
-                summary=f"Review {alert.rule_name} alert at {alert.timestamp}.",
+                summary=tr("page.investigations.summary_template", rule_name=alert.rule_name, timestamp=alert.timestamp),
                 parent=self,
             )
-            dialog.title_input.setText(f"Investigate {alert.rule_name}")
-            dialog.priority_combo.setCurrentText(alert.severity)
+            dialog.title_input.setText(tr("page.investigations.title_template", rule_name=alert.rule_name))
+            dialog.priority_combo.setCurrentText(tr(f"severity.{alert.severity}"))
             if dialog.exec() != QDialog.Accepted:
                 return
             investigation_id = self.repository.add(dialog.record())
@@ -257,7 +321,7 @@ class InvestigationsPage(QWidget):
 
     def create_for_host(self, host_ip: str, summary: str, alerts: list[AlertRecord]) -> None:
         dialog = InvestigationDialog(host_ip=host_ip, summary=summary, parent=self)
-        dialog.priority_combo.setCurrentText("HIGH" if alerts else "MEDIUM")
+        dialog.priority_combo.setCurrentText(tr("severity.HIGH") if alerts else tr("severity.MEDIUM"))
         if dialog.exec() != QDialog.Accepted:
             return
         investigation_id = self.repository.add(dialog.record())
@@ -269,11 +333,20 @@ class InvestigationsPage(QWidget):
         record = self._selected_investigation()
         if record is None or record.id is None:
             return
-        self.status_combo.setCurrentText(record.status)
+        status_key = _STATUS_KEY.get(record.status)
+        self.status_combo.setCurrentText(self._lm.tr(status_key) if status_key else record.status)
         self.detail_view.setPlainText(
-            f"Title: {record.title}\nPriority: {record.priority}\nStatus: {record.status}\n"
-            f"Host: {record.host_ip or ''}\nCreated: {record.created_at}\nUpdated: {record.updated_at}\n\n"
-            f"Summary:\n{record.summary}\n\nNotes:\n{record.notes}"
+            self._lm.tr(
+                "page.investigations.detail_template",
+                title=record.title,
+                priority=record.priority,
+                status=record.status,
+                host=record.host_ip or "",
+                created=record.created_at,
+                updated=record.updated_at,
+                summary=record.summary,
+                notes=record.notes,
+            )
         )
         evidence = self.repository.list_evidence(record.id)
         self.evidence_table.setRowCount(len(evidence))
@@ -305,18 +378,18 @@ class InvestigationsPage(QWidget):
     def export_html(self) -> None:
         record = self._selected_investigation()
         if record is None or record.id is None:
-            QMessageBox.information(self, "No investigation selected", "Please select an investigation first.")
+            QMessageBox.information(self, self._lm.tr("page.investigations.no_selection"), self._lm.tr("page.investigations.please_select"))
             return
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "Export investigation HTML",
+            self._lm.tr("page.investigations.export_dialog"),
             f"investigation_{record.id}.html",
             "HTML files (*.html);;All files (*)",
         )
         if not path:
             return
         self.report_generator.generate_investigation_html(record, self.repository.list_evidence(record.id), Path(path))
-        QMessageBox.information(self, "Export complete", f"Investigation exported to: {path}")
+        QMessageBox.information(self, self._lm.tr("page.investigations.export_complete"), self._lm.tr("page.investigations.export_done", path=path))
 
     def _selected_investigation(self) -> InvestigationRecord | None:
         row = self.case_table.currentRow()
