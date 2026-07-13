@@ -10,45 +10,56 @@ from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QSizePolicy, QTabl
 class SeverityStyle:
     background: str
     foreground: str
-    tooltip: str
 
 
-SEVERITY_STYLES = {
-    "CRITICAL": SeverityStyle("#7f1d1d", "#ffffff", "Critical severity alert"),
-    "HIGH": SeverityStyle("#fee2e2", "#991b1b", "High severity alert"),
-    "MEDIUM": SeverityStyle("#fef3c7", "#92400e", "Medium severity alert"),
-    "LOW": SeverityStyle("#dbeafe", "#1e40af", "Low severity alert"),
-    "INFO": SeverityStyle("#e5e7eb", "#374151", "Informational alert"),
+SEVERITY_STYLES: dict[str, SeverityStyle] = {
+    "CRITICAL": SeverityStyle("#7f1d1d", "#ffffff"),
+    "HIGH": SeverityStyle("#fee2e2", "#991b1b"),
+    "MEDIUM": SeverityStyle("#fef3c7", "#92400e"),
+    "LOW": SeverityStyle("#dbeafe", "#1e40af"),
+    "INFO": SeverityStyle("#e5e7eb", "#374151"),
 }
 
 
-SEMANTIC_STYLES = {
-    "CONFIRMED": SeverityStyle("#dcfce7", "#166534", "Confirmed by an analyst"),
-    "UNCONFIRMED": SeverityStyle("#e0f2fe", "#075985", "Awaiting analyst review"),
-    "IGNORED": SeverityStyle("#f1f5f9", "#475569", "Marked as ignored"),
-    "OPEN": SeverityStyle("#dcfce7", "#166534", "Open investigation"),
-    "MONITORING": SeverityStyle("#e0f2fe", "#075985", "Investigation under monitoring"),
-    "CLOSED": SeverityStyle("#f1f5f9", "#475569", "Closed investigation"),
-    "ENFORCED": SeverityStyle("#dcfce7", "#166534", "Traffic block is enforced"),
-    "PENDING": SeverityStyle("#fef3c7", "#92400e", "Waiting for enforcement"),
-    "FAILED": SeverityStyle("#fee2e2", "#991b1b", "Enforcement failed"),
-    "REMOVED": SeverityStyle("#f1f5f9", "#475569", "Traffic block was removed"),
-    "WORKSTATION": SeverityStyle("#e0f2fe", "#075985", "Workstation asset"),
-    "SERVER": SeverityStyle("#ede9fe", "#5b21b6", "Server asset"),
-    "DATABASE": SeverityStyle("#fae8ff", "#86198f", "Database asset"),
-    "GATEWAY": SeverityStyle("#d1fae5", "#065f46", "Gateway asset"),
-    "DOMAIN CONTROLLER": SeverityStyle("#fee2e2", "#991b1b", "Domain controller asset"),
-    "OTHER": SeverityStyle("#f1f5f9", "#475569", "Other asset role"),
-    "INBOUND": SeverityStyle("#e0f2fe", "#075985", "Inbound traffic"),
-    "OUTBOUND": SeverityStyle("#dcfce7", "#166534", "Outbound traffic"),
-    "HTTP": SeverityStyle("#dcfce7", "#166534", "Plaintext HTTP traffic"),
-    "HTTPS": SeverityStyle("#ccfbf1", "#115e59", "HTTPS traffic; payload remains encrypted"),
-    "TLS": SeverityStyle("#ccfbf1", "#115e59", "TLS metadata traffic"),
-    "DNS": SeverityStyle("#ede9fe", "#5b21b6", "DNS traffic"),
-    "TCP": SeverityStyle("#dbeafe", "#1e40af", "TCP traffic"),
-    "UDP": SeverityStyle("#fef3c7", "#92400e", "UDP traffic"),
-    "ICMP": SeverityStyle("#ffedd5", "#9a3412", "ICMP traffic"),
+SEMANTIC_STYLES: dict[str, SeverityStyle] = {
+    "CONFIRMED": SeverityStyle("#dcfce7", "#166534"),
+    "UNCONFIRMED": SeverityStyle("#e0f2fe", "#075985"),
+    "IGNORED": SeverityStyle("#f1f5f9", "#475569"),
+    "OPEN": SeverityStyle("#dcfce7", "#166534"),
+    "MONITORING": SeverityStyle("#e0f2fe", "#075985"),
+    "CLOSED": SeverityStyle("#f1f5f9", "#475569"),
+    "ENFORCED": SeverityStyle("#dcfce7", "#166534"),
+    "PENDING": SeverityStyle("#fef3c7", "#92400e"),
+    "FAILED": SeverityStyle("#fee2e2", "#991b1b"),
+    "REMOVED": SeverityStyle("#f1f5f9", "#475569"),
+    "WORKSTATION": SeverityStyle("#e0f2fe", "#075985"),
+    "SERVER": SeverityStyle("#ede9fe", "#5b21b6"),
+    "DATABASE": SeverityStyle("#fae8ff", "#86198f"),
+    "GATEWAY": SeverityStyle("#d1fae5", "#065f46"),
+    "DOMAIN CONTROLLER": SeverityStyle("#fee2e2", "#991b1b"),
+    "OTHER": SeverityStyle("#f1f5f9", "#475569"),
+    "INBOUND": SeverityStyle("#e0f2fe", "#075985"),
+    "OUTBOUND": SeverityStyle("#dcfce7", "#166534"),
+    "HTTP": SeverityStyle("#dcfce7", "#166534"),
+    "HTTPS": SeverityStyle("#ccfbf1", "#115e59"),
+    "TLS": SeverityStyle("#ccfbf1", "#115e59"),
+    "DNS": SeverityStyle("#ede9fe", "#5b21b6"),
+    "TCP": SeverityStyle("#dbeafe", "#1e40af"),
+    "UDP": SeverityStyle("#fef3c7", "#92400e"),
+    "ICMP": SeverityStyle("#ffedd5", "#9a3412"),
 }
+
+
+def severity_tooltip(severity: str) -> str:
+    """Return a localized tooltip for the given severity level."""
+    from ui.i18n import tr
+    return tr(f"severity.{severity.upper()}.tooltip")
+
+
+def semantic_tooltip(key: str) -> str:
+    """Return a localized tooltip for the given semantic key."""
+    from ui.i18n import tr
+    return tr(f"semantic.{key.strip().upper()}.tooltip")
 
 
 CARD_TONES = {
@@ -188,20 +199,21 @@ def configure_responsive_table(
         header.setSectionResizeMode(column, QHeaderView.Stretch)
 
 
-def apply_severity_style(item: QTableWidgetItem, severity: str) -> None:
+def apply_severity_style(item: QTableWidgetItem, severity: str, tooltip: str | None = None) -> None:
     style = severity_style(severity)
     item.setBackground(QColor(style.background))
     item.setForeground(QColor(style.foreground))
-    item.setToolTip(style.tooltip)
+    item.setToolTip(tooltip if tooltip is not None else severity_tooltip(severity))
 
 
 def apply_semantic_style(item: QTableWidgetItem, value: str, tooltip: str | None = None) -> bool:
-    style = SEMANTIC_STYLES.get(value.strip().upper())
+    normalized = value.strip().upper()
+    style = SEMANTIC_STYLES.get(normalized)
     if style is None:
         return False
     item.setBackground(QColor(style.background))
     item.setForeground(QColor(style.foreground))
-    item.setToolTip(tooltip or style.tooltip)
+    item.setToolTip(tooltip if tooltip is not None else semantic_tooltip(normalized))
     return True
 
 
@@ -214,29 +226,38 @@ def apply_category_style(item: QTableWidgetItem, value: str) -> bool:
 
 
 def apply_score_style(item: QTableWidgetItem, score: float, *, label: str = "Risk score") -> None:
+    from ui.i18n import tr
     if score >= 80:
-        style = SeverityStyle("#fee2e2", "#991b1b", "High risk")
+        style = SeverityStyle("#fee2e2", "#991b1b")
+        level_key = "score.HIGH"
     elif score >= 50:
-        style = SeverityStyle("#ffedd5", "#9a3412", "Elevated risk")
+        style = SeverityStyle("#ffedd5", "#9a3412")
+        level_key = "score.ELEVATED"
     elif score >= 25:
-        style = SeverityStyle("#fef3c7", "#92400e", "Moderate risk")
+        style = SeverityStyle("#fef3c7", "#92400e")
+        level_key = "score.MODERATE"
     else:
-        style = SeverityStyle("#dcfce7", "#166534", "Low risk")
+        style = SeverityStyle("#dcfce7", "#166534")
+        level_key = "score.LOW"
     item.setBackground(QColor(style.background))
     item.setForeground(QColor(style.foreground))
-    item.setToolTip(f"{label}: {score:g}. {style.tooltip}.")
+    item.setToolTip(tr("score.format", score=score, tooltip=tr(level_key)))
 
 
 def apply_importance_style(item: QTableWidgetItem, importance: int) -> None:
+    from ui.i18n import tr
     if importance >= 80:
-        style = SeverityStyle("#fee2e2", "#991b1b", "High-value asset")
+        style = SeverityStyle("#fee2e2", "#991b1b")
+        level_key = "importance.HIGH"
     elif importance >= 50:
-        style = SeverityStyle("#fef3c7", "#92400e", "Standard-priority asset")
+        style = SeverityStyle("#fef3c7", "#92400e")
+        level_key = "importance.STANDARD"
     else:
-        style = SeverityStyle("#e0f2fe", "#075985", "Lower-priority asset")
+        style = SeverityStyle("#e0f2fe", "#075985")
+        level_key = "importance.LOW"
     item.setBackground(QColor(style.background))
     item.setForeground(QColor(style.foreground))
-    item.setToolTip(f"Asset importance: {importance}. {style.tooltip}.")
+    item.setToolTip(tr("importance.format", importance=importance, tooltip=tr(level_key)))
 
 
 def statistic_card_style(tone: str) -> str:

@@ -38,6 +38,7 @@ from storage.repositories import (
     SettingsRepository,
     TrafficRepository,
 )
+from ui.i18n import locale_manager
 from ui.widgets.packet_table import PacketTable
 
 
@@ -306,6 +307,8 @@ class PacketPage(QWidget):
 
     def __init__(self, database: Database) -> None:
         super().__init__()
+        self._lm = locale_manager()
+        self._retranslating = False
         self.database = database
         self.rule_repository = RuleRepository(database)
         self.custom_rule_repository = CustomRuleRepository(database)
@@ -334,16 +337,14 @@ class PacketPage(QWidget):
         self.interface_combo = QComboBox()
         self.interface_combo.setMinimumWidth(260)
         self.interface_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.refresh_interfaces_button = QPushButton("Refresh interfaces")
-        self.import_button = QPushButton("Import pcap")
-        self.demo_button = QPushButton("Load demo data")
-        self.import_decrypted_button = QPushButton("Import decrypted HTTP log")
-        self.import_decrypted_button.setToolTip(
-            "Import authorized decrypted HTTP request logs for payload checks. Raw HTTPS pcaps are analyzed as TLS metadata only."
-        )
-        self.start_capture_button = QPushButton("Start capture")
-        self.stop_capture_button = QPushButton("Stop capture")
-        self.clear_button = QPushButton("Clear table")
+        self.refresh_interfaces_button = QPushButton(self._lm.tr("page.packets.refresh_interfaces"))
+        self.import_button = QPushButton(self._lm.tr("page.packets.import_pcap"))
+        self.demo_button = QPushButton(self._lm.tr("page.packets.load_demo"))
+        self.import_decrypted_button = QPushButton(self._lm.tr("page.packets.import_decrypted_http"))
+        self.import_decrypted_button.setToolTip(self._lm.tr("page.packets.decrypted_tooltip"))
+        self.start_capture_button = QPushButton(self._lm.tr("page.packets.start_capture"))
+        self.stop_capture_button = QPushButton(self._lm.tr("page.packets.stop_capture"))
+        self.clear_button = QPushButton(self._lm.tr("page.packets.clear_table"))
         self.stop_capture_button.setEnabled(False)
 
         toolbar.addWidget(self.interface_combo, 1)
@@ -356,34 +357,42 @@ class PacketPage(QWidget):
         toolbar.addWidget(self.clear_button)
         toolbar.addStretch()
 
+        self._CAPTURE_FILTER_I18N = {
+            "All traffic": "page.packets.filter_all_traffic",
+            "Web + DNS": "page.packets.filter_web_dns",
+            "Internal TCP/UDP": "page.packets.filter_internal_tcp_udp",
+            "Custom": "page.packets.filter_custom",
+        }
+
         capture_options = QHBoxLayout()
         self.capture_filter_combo = QComboBox()
-        self.capture_filter_combo.addItems(self.CAPTURE_FILTER_PRESETS.keys())
+        for english_key in self.CAPTURE_FILTER_PRESETS:
+            i18n_key = self._CAPTURE_FILTER_I18N.get(english_key, english_key)
+            self.capture_filter_combo.addItem(self._lm.tr(i18n_key), english_key)
         self.capture_filter_input = QLineEdit(self.CAPTURE_FILTER_PRESETS["All traffic"])
-        self.capture_filter_input.setPlaceholderText("tcp.port == 443 or ip.addr == 192.168.1.10")
+        self.capture_filter_input.setPlaceholderText(self._lm.tr("page.packets.filter_placeholder"))
         self.capture_filter_input.setReadOnly(True)
-        self.capture_filter_input.setToolTip(
-            "Accepts common Wireshark display filters and BPF syntax. "
-            "Examples: tcp.port == 443, ip.src == 10.0.0.5, tcp and port 80."
-        )
+        self.capture_filter_input.setToolTip(self._lm.tr("page.packets.bpf_tooltip"))
         self.filter_result_label = QLabel()
         self.filter_result_label.setObjectName("PageHint")
         self.visible_rows_box = QSpinBox()
         self.visible_rows_box.setRange(100, 20_000)
         self.visible_rows_box.setSingleStep(100)
         self.visible_rows_box.setValue(PacketTable.MAX_VISIBLE_ROWS)
-        self.visible_rows_box.setSuffix(" visible rows")
-        self.auto_scroll_check = QCheckBox("Auto-scroll")
+        self.visible_rows_box.setSuffix(" " + self._lm.tr("page.packets.visible_rows_suffix"))
+        self.auto_scroll_check = QCheckBox(self._lm.tr("page.packets.auto_scroll"))
         self.auto_scroll_check.setChecked(True)
-        self.auto_scroll_check.setToolTip("Keep the packet table pinned to the newest packet while capture or import is running.")
-        capture_options.addWidget(QLabel("Capture filter"))
+        self.auto_scroll_check.setToolTip(self._lm.tr("page.packets.auto_scroll_tooltip"))
+        self.capture_filter_label = QLabel(self._lm.tr("page.packets.capture_filter"))
+        self.table_window_label = QLabel(self._lm.tr("page.packets.table_window"))
+        capture_options.addWidget(self.capture_filter_label)
         capture_options.addWidget(self.capture_filter_combo)
         capture_options.addWidget(self.capture_filter_input, 1)
-        capture_options.addWidget(QLabel("Table window"))
+        capture_options.addWidget(self.table_window_label)
         capture_options.addWidget(self.visible_rows_box)
         capture_options.addWidget(self.auto_scroll_check)
 
-        self.status_label = QLabel("Import a local pcap file for offline analysis, or choose a network interface for live capture.")
+        self.status_label = QLabel(self._lm.tr("page.packets.status_initial"))
         self.status_label.setObjectName("PageHint")
         self.status_label.setWordWrap(True)
         self.packet_table = PacketTable()
@@ -410,15 +419,47 @@ class PacketPage(QWidget):
         self.refresh_interfaces()
         self.update_capture_filter_mode(self.capture_filter_combo.currentText())
 
+        self._lm.locale_changed.connect(self.retranslate_ui)
+
+    def retranslate_ui(self) -> None:
+        self._retranslating = True
+
+        self.refresh_interfaces_button.setText(self._lm.tr("page.packets.refresh_interfaces"))
+        self.import_button.setText(self._lm.tr("page.packets.import_pcap"))
+        self.demo_button.setText(self._lm.tr("page.packets.load_demo"))
+        self.import_decrypted_button.setText(self._lm.tr("page.packets.import_decrypted_http"))
+        self.start_capture_button.setText(self._lm.tr("page.packets.start_capture"))
+        self.stop_capture_button.setText(self._lm.tr("page.packets.stop_capture"))
+        self.clear_button.setText(self._lm.tr("page.packets.clear_table"))
+
+        self.import_decrypted_button.setToolTip(self._lm.tr("page.packets.decrypted_tooltip"))
+        self.capture_filter_input.setToolTip(self._lm.tr("page.packets.bpf_tooltip"))
+        self.auto_scroll_check.setToolTip(self._lm.tr("page.packets.auto_scroll_tooltip"))
+
+        self.auto_scroll_check.setText(self._lm.tr("page.packets.auto_scroll"))
+        self.capture_filter_label.setText(self._lm.tr("page.packets.capture_filter"))
+        self.table_window_label.setText(self._lm.tr("page.packets.table_window"))
+        self.visible_rows_box.setSuffix(" " + self._lm.tr("page.packets.visible_rows_suffix"))
+
+        for i in range(self.capture_filter_combo.count()):
+            english_key = self.capture_filter_combo.itemData(i)
+            if english_key and english_key in self._CAPTURE_FILTER_I18N:
+                self.capture_filter_combo.setItemText(i, self._lm.tr(self._CAPTURE_FILTER_I18N[english_key]))
+
+        if self.interface_combo.count() > 0:
+            self.interface_combo.setItemText(0, self._lm.tr("page.packets.default_interface"))
+
+        self._retranslating = False
+
     def refresh_interfaces(self) -> None:
         self.interface_combo.clear()
-        self.interface_combo.addItem("Default interface", None)
+        self.interface_combo.addItem(self._lm.tr("page.packets.default_interface"), None)
         try:
             for interface in self.interface_manager.list_interfaces():
                 self.interface_combo.addItem(interface, interface)
-            self.status_label.setText("Interface list refreshed. Live capture on Windows may require Npcap and administrator privileges.")
+            self.status_label.setText(self._lm.tr("page.packets.status_interfaces_ok"))
         except Exception as exc:
-            self.status_label.setText(f"Failed to load network interfaces: {exc}")
+            self.status_label.setText(self._lm.tr("page.packets.status_interfaces_failed", exc=exc))
 
     def select_pcap_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -456,7 +497,7 @@ class PacketPage(QWidget):
         self.saved_alert_count = 0
         self.packet_table.clear_packets()
         self._set_busy(True)
-        self.status_label.setText(f"Importing and detecting: {Path(path).name}")
+        self.status_label.setText(self._lm.tr("page.packets.status_importing", filename=Path(path).name))
         save_packets = self.settings_repository.get_bool("auto_save_packets", True)
         alert_cooldown = max(0, self.settings_repository.get_int("alert_cooldown_seconds", 10))
 
@@ -493,7 +534,7 @@ class PacketPage(QWidget):
         self.saved_alert_count = 0
         self.packet_table.clear_packets()
         self._set_busy(True)
-        self.status_label.setText(f"Importing authorized decrypted HTTP log: {Path(path).name}")
+        self.status_label.setText(self._lm.tr("page.packets.status_importing_decrypted", filename=Path(path).name))
         save_packets = self.settings_repository.get_bool("auto_save_packets", True)
         alert_cooldown = max(0, self.settings_repository.get_int("alert_cooldown_seconds", 10))
 
@@ -531,12 +572,9 @@ class PacketPage(QWidget):
         self.active_capture_filter = capture_filter or ""
         self.packet_table.clear_packets()
         self._update_filter_status()
-        detection_label = "enabled" if detection_enabled else "disabled"
-        storage_label = "enabled" if save_packets else "disabled"
-        self.status_label.setText(
-            f"Live capture started. Filter: {filter_label}. Detection: {detection_label}. "
-            f"Packet storage: {storage_label}."
-        )
+        detection_label = self._lm.tr("common.enabled") if detection_enabled else self._lm.tr("common.disabled")
+        storage_label = self._lm.tr("common.enabled") if save_packets else self._lm.tr("common.disabled")
+        self.status_label.setText(self._lm.tr("page.packets.status_live_started", filter=filter_label, detection=detection_label, storage=storage_label))
         self.start_capture_button.setEnabled(False)
         self.stop_capture_button.setEnabled(True)
         self.import_button.setEnabled(False)
@@ -562,7 +600,7 @@ class PacketPage(QWidget):
 
     def stop_live_capture(self) -> None:
         if self.live_worker and self.live_worker.isRunning():
-            self.status_label.setText("Stopping live capture...")
+            self.status_label.setText(self._lm.tr("page.packets.status_stopping"))
             self.live_worker.stop_capture()
 
     def handle_processed_batch(
@@ -578,20 +616,18 @@ class PacketPage(QWidget):
         self.saved_packet_count += saved_packets
         self.saved_alert_count += saved_alerts
         self.status_label.setText(
-            f"Processed {self.loaded_count} packets, saved {self.saved_packet_count} packet records, "
-            f"and generated {self.saved_alert_count} alerts."
+            self._lm.tr("page.packets.status_processed", packets=self.loaded_count, saved_packets=self.saved_packet_count, alerts=self.saved_alert_count)
         )
 
     def handle_import_failed(self, message: str) -> None:
         self._set_busy(False)
-        self.status_label.setText("Traffic import failed.")
-        QMessageBox.critical(self, "Import failed", message)
+        self.status_label.setText(self._lm.tr("page.packets.status_import_failed"))
+        QMessageBox.critical(self, self._lm.tr("page.packets.dialog.import_failed_title"), message)
 
     def handle_import_finished(self, packet_total: int, alert_total: int, skipped_total: int) -> None:
         self._set_busy(False)
         self.status_label.setText(
-            f"Import complete: parsed {packet_total} packets, generated {alert_total} alerts, "
-            f"and skipped {skipped_total} unreadable records."
+            self._lm.tr("page.packets.status_import_complete", packets=packet_total, alerts=alert_total, skipped=skipped_total)
         )
 
     def handle_capture_progress(self, packet_total: int, skipped_total: int, packets_per_second: float) -> None:
@@ -606,11 +642,11 @@ class PacketPage(QWidget):
 
     def handle_capture_failed(self, message: str) -> None:
         self.capture_failed_flag = True
-        self.status_label.setText("Live capture failed.")
+        self.status_label.setText(self._lm.tr("page.packets.status_live_failed"))
         QMessageBox.critical(
             self,
-            "Live capture failed",
-            f"{message}\n\nOn Windows, confirm that Npcap is installed and try running with administrator privileges.",
+            self._lm.tr("page.packets.dialog.live_capture_failed_title"),
+            self._lm.tr("page.packets.dialog.npcap_hint", message=message),
         )
 
     def handle_capture_stopped(self) -> None:
@@ -622,8 +658,7 @@ class PacketPage(QWidget):
         self.refresh_interfaces_button.setEnabled(True)
         if not self.capture_failed_flag:
             self.status_label.setText(
-                f"Live capture stopped: processed {self.loaded_count} packets, saved {self.saved_alert_count} alerts, "
-                f"and skipped {self.capture_skipped_count} packets."
+                self._lm.tr("page.packets.status_live_stopped", packets=self.loaded_count, alerts=self.saved_alert_count, skipped=self.capture_skipped_count)
             )
 
     def clear_packets(self) -> None:
@@ -634,7 +669,7 @@ class PacketPage(QWidget):
         self.saved_alert_count = 0
         self.capture_skipped_count = 0
         self.capture_rate = 0.0
-        self.status_label.setText("Table cleared. You can import a pcap file or start live capture again.")
+        self.status_label.setText(self._lm.tr("page.packets.status_cleared"))
 
     def _set_busy(self, busy: bool) -> None:
         self.import_button.setEnabled(not busy)

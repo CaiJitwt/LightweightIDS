@@ -22,6 +22,7 @@ from report.report_generator import ReportGenerator
 from protection import BlocklistService
 from storage.database import Database
 from storage.repositories import AlertRepository, PacketRepository
+from ui.i18n import locale_manager
 from ui.styles import configure_responsive_table
 from ui.widgets.alert_table import AlertTable
 from ui.widgets.evidence_packet_table import EvidencePacketTable
@@ -40,29 +41,18 @@ class AlertPage(QWidget):
         self.attack_chain_analyzer = AttackChainAnalyzer()
         self.blocklist_service = BlocklistService(database)
         self.current_alerts: list[AlertRecord] = []
+        self._lm = locale_manager()
+        self._retranslating = False
+        self._rule_ids = [
+            "PORT_SCAN", "SYN_FLOOD", "ICMP_FLOOD", "SENSITIVE_PORT",
+            "BLACKLIST_IP", "BRUTE_FORCE", "DNS_ANOMALY", "HTTP_SUSPICIOUS",
+            "SQL_INJECTION", "XSS", "MALICIOUS_COMMAND", "ABNORMAL_OUTBOUND",
+            "LATERAL_MOVEMENT", "HOST_SCAN", "TLS_FINGERPRINT", "ML_ANOMALY",
+            "WEB_ATTACK", "ML_FLOW_ANOMALY", "SIGNATURE_MATCH",
+            "BASELINE_DEVIATION", "BANDWIDTH_SPIKE", "SESSION_DURATION_ANOMALY",
+        ]
         self.rule_display_names = {
-            "PORT_SCAN": "Port scan detection",
-            "SYN_FLOOD": "SYN flood detection",
-            "ICMP_FLOOD": "ICMP flood detection",
-            "SENSITIVE_PORT": "Sensitive port access",
-            "BLACKLIST_IP": "Blacklisted IP match",
-            "BRUTE_FORCE": "Brute-force connection detection",
-            "DNS_ANOMALY": "DNS anomaly detection",
-            "HTTP_SUSPICIOUS": "Suspicious HTTP request",
-            "SQL_INJECTION": "SQL injection detection",
-            "XSS": "XSS detection",
-            "MALICIOUS_COMMAND": "Malicious command detection",
-            "ABNORMAL_OUTBOUND": "Abnormal outbound traffic",
-            "LATERAL_MOVEMENT": "Lateral movement",
-            "HOST_SCAN": "Host scan",
-            "TLS_FINGERPRINT": "TLS fingerprint risk",
-            "ML_ANOMALY": "ML anomaly score",
-            "WEB_ATTACK": "Web attack (advanced)",
-            "ML_FLOW_ANOMALY": "ML flow anomaly",
-            "SIGNATURE_MATCH": "External signature match",
-            "BASELINE_DEVIATION": "Baseline deviation",
-            "BANDWIDTH_SPIKE": "Bandwidth spike",
-            "SESSION_DURATION_ANOMALY": "Session duration anomaly",
+            rid: self._lm.tr(f"rule.{rid}.name") for rid in self._rule_ids
         }
 
         layout = QVBoxLayout(self)
@@ -70,16 +60,22 @@ class AlertPage(QWidget):
         toolbar = QHBoxLayout()
 
         self.severity_filter = QComboBox()
-        self.severity_filter.addItems(["All severities", "LOW", "MEDIUM", "HIGH", "CRITICAL"])
+        self.severity_filter.addItems([
+            self._lm.tr("severity.all"),
+            self._lm.tr("severity.LOW"),
+            self._lm.tr("severity.MEDIUM"),
+            self._lm.tr("severity.HIGH"),
+            self._lm.tr("severity.CRITICAL"),
+        ])
         self.keyword_input = QLineEdit()
-        self.keyword_input.setPlaceholderText("Search rule, IP, description or evidence")
-        self.refresh_button = QPushButton("Refresh")
-        self.detail_button = QPushButton("Details")
-        self.confirm_button = QPushButton("Confirm")
-        self.ignore_button = QPushButton("Ignore")
-        self.delete_button = QPushButton("Delete")
-        self.investigate_button = QPushButton("Add to investigation")
-        self.export_button = QPushButton("Export CSV")
+        self.keyword_input.setPlaceholderText(self._lm.tr("page.alerts.search_placeholder"))
+        self.refresh_button = QPushButton(self._lm.tr("page.alerts.refresh"))
+        self.detail_button = QPushButton(self._lm.tr("page.alerts.details"))
+        self.confirm_button = QPushButton(self._lm.tr("page.alerts.confirm"))
+        self.ignore_button = QPushButton(self._lm.tr("page.alerts.ignore"))
+        self.delete_button = QPushButton(self._lm.tr("page.alerts.delete"))
+        self.investigate_button = QPushButton(self._lm.tr("page.alerts.investigate"))
+        self.export_button = QPushButton(self._lm.tr("page.alerts.export_csv"))
         self.result_label = QLabel()
         self.result_label.setObjectName("PageHint")
 
@@ -94,20 +90,25 @@ class AlertPage(QWidget):
         toolbar.addWidget(self.export_button)
 
         self.table = AlertTable()
-        self.detail_title = QLabel("Selected alert details")
+        self.detail_title = QLabel(self._lm.tr("page.alerts.detail_section"))
         self.detail_title.setObjectName("SectionTitle")
         self.detail_view = QTextEdit()
         self.detail_view.setReadOnly(True)
-        self.detail_view.setPlaceholderText("Select an alert to inspect alert evidence and the matching packet record.")
+        self.detail_view.setPlaceholderText(self._lm.tr("page.alerts.detail_placeholder"))
         self.detail_view.setMinimumHeight(130)
-        self.related_title = QLabel("Related packets (0)")
+        self.related_title = QLabel(self._lm.tr("page.alerts.related_packets", count=0))
         self.related_title.setObjectName("SectionTitle")
         self.related_packets_table = EvidencePacketTable()
         self.related_packets_table.setMinimumHeight(150)
-        self.chain_title = QLabel("Attack chain view")
+        self.chain_title = QLabel(self._lm.tr("page.alerts.attack_chain"))
         self.chain_title.setObjectName("SectionTitle")
         self.chain_table = QTableWidget(0, 4)
-        self.chain_table.setHorizontalHeaderLabels(["Source IP", "Risk", "Stages", "Alerts"])
+        self.chain_table.setHorizontalHeaderLabels([
+            self._lm.tr("table.source_ip"),
+            self._lm.tr("table.risk"),
+            self._lm.tr("table.stages"),
+            self._lm.tr("table.alerts"),
+        ])
         configure_responsive_table(self.chain_table, stretch_columns=(2,), resize_to_contents_columns=(1, 3))
         self.chain_table.setMinimumHeight(100)
 
@@ -138,12 +139,84 @@ class AlertPage(QWidget):
         self.related_packets_table.block_requested.connect(self.add_blocklist_entry)
         self.related_packets_table.packet_activated.connect(self.show_packet_detail)
 
+        self._lm.locale_changed.connect(self.retranslate_ui)
         self.refresh()
+
+    # ------------------------------------------------------------------
+    # i18n
+    # ------------------------------------------------------------------
+
+    def retranslate_ui(self) -> None:
+        self._retranslating = True
+        self._rebuild_rule_display_names()
+
+        # ── toolbar buttons ───────────────────────────────────────
+        self.refresh_button.setText(self._lm.tr("page.alerts.refresh"))
+        self.detail_button.setText(self._lm.tr("page.alerts.details"))
+        self.confirm_button.setText(self._lm.tr("page.alerts.confirm"))
+        self.ignore_button.setText(self._lm.tr("page.alerts.ignore"))
+        self.delete_button.setText(self._lm.tr("page.alerts.delete"))
+        self.investigate_button.setText(self._lm.tr("page.alerts.investigate"))
+        self.export_button.setText(self._lm.tr("page.alerts.export_csv"))
+
+        # ── severity combo ────────────────────────────────────────
+        self.severity_filter.blockSignals(True)
+        saved_severity = self.severity_filter.currentText()
+        self.severity_filter.clear()
+        self.severity_filter.addItems([
+            self._lm.tr("severity.all"),
+            self._lm.tr("severity.LOW"),
+            self._lm.tr("severity.MEDIUM"),
+            self._lm.tr("severity.HIGH"),
+            self._lm.tr("severity.CRITICAL"),
+        ])
+        # Restore selection if the saved text matches one of the new items
+        idx = self.severity_filter.findText(saved_severity)
+        if idx >= 0:
+            self.severity_filter.setCurrentIndex(idx)
+        else:
+            self.severity_filter.setCurrentIndex(0)
+        self.severity_filter.blockSignals(False)
+
+        # ── search placeholder ────────────────────────────────────
+        self.keyword_input.setPlaceholderText(self._lm.tr("page.alerts.search_placeholder"))
+
+        # ── section titles ────────────────────────────────────────
+        self.detail_title.setText(self._lm.tr("page.alerts.detail_section"))
+        self.chain_title.setText(self._lm.tr("page.alerts.attack_chain"))
+
+        # ── detail placeholder ────────────────────────────────────
+        self.detail_view.setPlaceholderText(self._lm.tr("page.alerts.detail_placeholder"))
+
+        # ── chain table headers ───────────────────────────────────
+        self.chain_table.setHorizontalHeaderLabels([
+            self._lm.tr("table.source_ip"),
+            self._lm.tr("table.risk"),
+            self._lm.tr("table.stages"),
+            self._lm.tr("table.alerts"),
+        ])
+
+        # ── alert table headers ───────────────────────────────────
+        self.table.retranslate_ui()
+
+        self._retranslating = False
+
+        # Refresh to update dynamic content (result label, related packets label, detail text, chain data)
+        self.refresh()
+
+    def _rebuild_rule_display_names(self) -> None:
+        self.rule_display_names = {
+            rid: self._lm.tr(f"rule.{rid}.name") for rid in self._rule_ids
+        }
+
+    # ------------------------------------------------------------------
+    # Actions
+    # ------------------------------------------------------------------
 
     def add_selected_to_investigation(self) -> None:
         alert = self._selected_alert()
         if alert is None:
-            QMessageBox.information(self, "No alert selected", "Please select an alert first.")
+            QMessageBox.information(self, self._lm.tr("page.alerts.no_alert_selected"), self._lm.tr("page.alerts.please_select"))
             return
         self.investigation_requested.emit(alert)
 
@@ -152,9 +225,11 @@ class AlertPage(QWidget):
         super().showEvent(event)  # type: ignore[arg-type]
 
     def refresh(self) -> None:
+        if self._retranslating:
+            return
         selected_alert_id = self.table.selected_alert_id()
         severity_text = self.severity_filter.currentText()
-        severity = None if severity_text == "All severities" else severity_text
+        severity = None if severity_text == self._lm.tr("severity.all") else severity_text
         keyword = self.keyword_input.text().strip()
         self.current_alerts = self.alert_repository.list_all(
             severity=severity,
@@ -166,7 +241,7 @@ class AlertPage(QWidget):
         if selected_alert_id is not None:
             self.table.select_alert_id(selected_alert_id)
         self.result_label.setText(
-            f"Showing {len(self.current_alerts)} matching alerts, newest first (limit {self.RESULT_LIMIT})."
+            self._lm.tr("page.alerts.result_label", count=len(self.current_alerts), limit=self.RESULT_LIMIT)
         )
         self.render_selected_alert_detail()
         self._render_attack_chains()
@@ -188,50 +263,54 @@ class AlertPage(QWidget):
     def show_selected_detail(self) -> None:
         alert = self._selected_alert()
         if alert is None:
-            QMessageBox.information(self, "No alert selected", "Please select an alert first.")
+            QMessageBox.information(self, self._lm.tr("page.alerts.no_alert_selected"), self._lm.tr("page.alerts.please_select"))
             return
 
-        QMessageBox.information(self, "Alert details", self._alert_detail_text(alert))
+        QMessageBox.information(self, self._lm.tr("page.alerts.alert_details_title"), self._alert_detail_text(alert))
 
     def render_selected_alert_detail(self) -> None:
         alert = self._selected_alert()
         if alert is None:
             self.detail_view.clear()
-            self.related_title.setText("Related packets (0)")
+            self.related_title.setText(self._lm.tr("page.alerts.related_packets", count=0))
             self.related_packets_table.set_packets([])
             return
         packets = self.packet_repository.list_related_to_alert(alert)
         self.detail_view.setPlainText(self._alert_detail_text(alert, packets))
-        self.related_title.setText(f"Related packets ({len(packets)})")
+        self.related_title.setText(self._lm.tr("page.alerts.related_packets", count=len(packets)))
         self.related_packets_table.set_packets(packets)
 
     def _alert_detail_text(self, alert: AlertRecord, packets: list[PacketRecord] | None = None) -> str:
         packets = packets if packets is not None else self.packet_repository.list_related_to_alert(alert)
         packet = packets[-1] if packets else None
-        packet_detail = self._packet_detail_text(packet) if packet else "Matching packet record: not found in stored packets."
-        return (
-            "Alert\n"
-            f"Time: {alert.timestamp}\n"
-            f"Severity: {alert.severity}\n"
-            f"Type: {alert.alert_type}\n"
-            f"Rule: {alert.rule_name} ({alert.rule_id})\n"
-            f"Source: {alert.src_ip or ''}:{alert.src_port or ''}\n"
-            f"Destination: {alert.dst_ip or ''}:{alert.dst_port or ''}\n"
-            f"Protocol: {alert.protocol or ''}\n"
-            f"Status: {alert.status}\n\n"
-            f"Description: {alert.description}\n\n"
-            f"Evidence: {alert.evidence}\n\n"
-            f"Related packets: {len(packets)}\n\n"
-            f"{packet_detail}"
+        packet_detail = (
+            self._packet_detail_text(packet)
+            if packet
+            else self._lm.tr("page.alerts.matching_packet_not_found")
+        )
+        return self._lm.tr(
+            "page.alerts.alert_detail_template",
+            timestamp=str(alert.timestamp),
+            severity=alert.severity or "",
+            alert_type=alert.alert_type or "",
+            rule_name=alert.rule_name or "",
+            rule_id=alert.rule_id or "",
+            src=f"{alert.src_ip or ''}:{alert.src_port or ''}",
+            dst=f"{alert.dst_ip or ''}:{alert.dst_port or ''}",
+            protocol=alert.protocol or "",
+            status=alert.status or "",
+            description=alert.description or "",
+            evidence=alert.evidence or "",
+            packet_count=str(len(packets)),
+            packet_detail=packet_detail,
         )
 
     def add_blocklist_entry(self, field: str, value: str, protocol: str) -> None:
         kind = "IP" if field.endswith("IP") else "PORT"
         answer = QMessageBox.question(
             self,
-            "Enforce block",
-            f"Add {field}={value} to the enforced blocklist?\n\n"
-            "On Windows this creates firewall rules and may require administrator privileges.",
+            self._lm.tr("page.alerts.enforce_block_title"),
+            self._lm.tr("page.alerts.enforce_block_msg", field=field, value=value),
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
@@ -245,35 +324,35 @@ class AlertPage(QWidget):
                 protocol=protocol,
             )
         except ValueError as exc:
-            QMessageBox.warning(self, "Invalid blocklist value", str(exc))
+            QMessageBox.warning(self, self._lm.tr("page.alerts.invalid_block_value"), str(exc))
             return
         message = f"Blocklist entry #{entry.id}: {result.status}."
         if result.message:
             message += f"\n\n{result.message}"
         if result.success:
-            QMessageBox.information(self, "Block active", message)
+            QMessageBox.information(self, self._lm.tr("blocklist.block_active"), message)
         else:
-            QMessageBox.warning(self, "Block not enforced", message)
+            QMessageBox.warning(self, self._lm.tr("blocklist.block_not_enforced"), message)
 
     def show_packet_detail(self, packet: object) -> None:
         if isinstance(packet, PacketRecord):
-            QMessageBox.information(self, "Packet details", self._packet_detail_text(packet))
+            QMessageBox.information(self, self._lm.tr("page.alerts.packet_details_title"), self._packet_detail_text(packet))
 
     def _packet_detail_text(self, packet: PacketRecord) -> str:
-        return (
-            "Matching packet record\n"
-            f"Packet ID: {packet.id or ''}\n"
-            f"Time: {packet.timestamp}\n"
-            f"Source: {packet.src_ip or ''}:{packet.src_port or ''}\n"
-            f"Destination: {packet.dst_ip or ''}:{packet.dst_port or ''}\n"
-            f"Protocol: {packet.protocol}\n"
-            f"Length: {packet.length}\n"
-            f"TCP flags: {packet.tcp_flags or ''}\n"
-            f"DNS query: {packet.dns_query or ''}\n"
-            f"HTTP method: {packet.http_method or ''}\n"
-            f"HTTP host: {packet.http_host or ''}\n"
-            f"HTTP path: {packet.http_path or ''}\n\n"
-            f"Raw summary:\n{packet.raw_summary}"
+        return self._lm.tr(
+            "page.alerts.packet_detail_template",
+            packet_id=str(packet.id or ""),
+            timestamp=str(packet.timestamp),
+            src=f"{packet.src_ip or ''}:{packet.src_port or ''}",
+            dst=f"{packet.dst_ip or ''}:{packet.dst_port or ''}",
+            protocol=str(packet.protocol),
+            length=str(packet.length),
+            tcp_flags=str(packet.tcp_flags or ""),
+            dns_query=str(packet.dns_query or ""),
+            http_method=str(packet.http_method or ""),
+            http_host=str(packet.http_host or ""),
+            http_path=str(packet.http_path or ""),
+            raw_summary=str(packet.raw_summary),
         )
 
     def _matching_packet(self, alert: AlertRecord) -> PacketRecord | None:
@@ -286,24 +365,24 @@ class AlertPage(QWidget):
     def update_selected_status(self, status: str) -> None:
         alert_id = self.table.selected_alert_id()
         if alert_id is None:
-            QMessageBox.information(self, "No alert selected", "Please select an alert first.")
+            QMessageBox.information(self, self._lm.tr("page.alerts.no_alert_selected"), self._lm.tr("page.alerts.please_select"))
             return
 
         if not self.alert_repository.update_status(alert_id, status):
-            QMessageBox.warning(self, "Update failed", "The selected alert could not be updated. Please refresh and try again.")
+            QMessageBox.warning(self, self._lm.tr("page.alerts.update_failed"), self._lm.tr("page.alerts.update_failed_msg"))
             return
         self.refresh()
 
     def delete_selected_alert(self) -> None:
         alert = self._selected_alert()
         if alert is None or alert.id is None:
-            QMessageBox.information(self, "No alert selected", "Please select an alert first.")
+            QMessageBox.information(self, self._lm.tr("page.alerts.no_alert_selected"), self._lm.tr("page.alerts.please_select"))
             return
 
         answer = QMessageBox.question(
             self,
-            "Delete alert",
-            "Delete the selected alert? This cannot be undone.",
+            self._lm.tr("page.alerts.delete_title"),
+            self._lm.tr("page.alerts.delete_msg"),
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
@@ -311,14 +390,14 @@ class AlertPage(QWidget):
             return
 
         if not self.alert_repository.delete(alert.id):
-            QMessageBox.warning(self, "Delete failed", "The selected alert could not be deleted. Please refresh and try again.")
+            QMessageBox.warning(self, self._lm.tr("page.alerts.delete_failed"), self._lm.tr("page.alerts.delete_failed_msg"))
             return
         self.refresh()
 
     def export_csv(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "Export alerts CSV",
+            self._lm.tr("page.alerts.export_dialog"),
             "alerts.csv",
             "CSV files (*.csv);;All files (*)",
         )
@@ -326,7 +405,7 @@ class AlertPage(QWidget):
             return
 
         self.report_generator.export_alerts_csv(self.current_alerts, path)
-        QMessageBox.information(self, "Export complete", f"Alerts CSV exported to: {path}")
+        QMessageBox.information(self, self._lm.tr("page.alerts.export_complete"), self._lm.tr("page.alerts.export_csv_done", path=path))
 
     def _selected_alert(self) -> AlertRecord | None:
         alert_id = self.table.selected_alert_id()
@@ -360,30 +439,11 @@ class AlertPage(QWidget):
         )
 
     def _fallback_description(self, alert: AlertRecord) -> str:
-        descriptions = {
-            "SENSITIVE_PORT_ACCESS": "Detected access to a sensitive service port.",
-            "BLACKLIST_IP": "Packet matched a blacklisted IP address.",
-            "PORT_SCAN": "Source IP accessed many ports on the same target.",
-            "SYN_FLOOD": "Detected many TCP SYN packets in a short time window.",
-            "ICMP_FLOOD": "Detected many ICMP packets in a short time window.",
-            "BRUTE_FORCE": "Detected many service connection attempts in a short time window.",
-            "DNS_QUERY_FREQUENCY": "Detected high-frequency DNS queries.",
-            "DNS_TUNNELING_SUSPECTED": "Detected an unusually long DNS query.",
-            "DGA_DOMAIN_SUSPECTED": "Detected a random-looking high-entropy domain.",
-            "HTTP_SUSPICIOUS": "Detected suspicious HTTP request indicators.",
-            "SQL_INJECTION": "Detected suspicious SQL injection indicators.",
-            "XSS": "Detected suspicious cross-site scripting indicators.",
-            "MALICIOUS_COMMAND": "Detected suspicious command execution indicators.",
-            "WEB_ATTACK": "Detected advanced web attack indicators (XXE, SSTI, deserialization, webshell).",
-            "BASELINE_DEVIATION": "Host activity exceeded historical baseline thresholds.",
-            "BANDWIDTH_SPIKE": "Host bandwidth usage sharply exceeded historical baseline.",
-            "SESSION_DURATION_ANOMALY": "Session duration significantly exceeds host average.",
-            "ML_ANOMALY": "Machine learning model flagged anomalous host behavior.",
-            "WEBSHELL_INDICATOR": "Detected webshell-related signature in packet.",
-            "TROJAN_C2_BEACON_KEYWORD": "Detected Trojan C2 beacon keyword in packet summary.",
-            "SUSPICIOUS_USER_AGENT": "Detected suspicious automated scanner user-agent.",
-        }
-        return descriptions.get(alert.alert_type, "Alert matched the detection rule.")
+        desc_key = f"alert.desc.{alert.alert_type}"
+        translated = self._lm.tr(desc_key)
+        if translated != desc_key:
+            return translated
+        return self._lm.tr("alert.desc.default")
 
     def _contains_non_ascii(self, value: str) -> bool:
         return any(ord(char) > 127 for char in value)

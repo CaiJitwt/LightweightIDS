@@ -24,6 +24,7 @@ from protection import BlocklistService
 from storage.blocklist_repository import BlocklistEntryRepository
 from storage.database import Database
 from storage.repositories import AlertRepository, BlacklistRepository, CustomRuleRepository, PacketRepository, RuleRepository
+from ui.i18n import locale_manager
 from ui.styles import apply_semantic_style, apply_severity_style, configure_responsive_table
 
 
@@ -35,6 +36,8 @@ class RulePage(QWidget):
     def __init__(self, database: Database) -> None:
         super().__init__()
         self.database = database
+        self._lm = locale_manager()
+        self._retranslating = False
         self.alert_repository = AlertRepository(database)
         self.packet_repository = PacketRepository(database)
         self.rule_repository = RuleRepository(database)
@@ -51,15 +54,15 @@ class RulePage(QWidget):
         layout.setSpacing(12)
 
         button_bar = QHBoxLayout()
-        self.refresh_button = QPushButton("Refresh")
-        self.save_button = QPushButton("Save")
-        self.restore_button = QPushButton("Restore defaults")
-        self.add_custom_button = QPushButton("Add custom rule")
-        self.delete_custom_button = QPushButton("Delete selected rule")
-        self.save_blacklist_button = QPushButton("Save blacklist")
-        self.add_enforced_block_button = QPushButton("Add enforced block")
-        self.remove_enforced_block_button = QPushButton("Remove enforced block")
-        self.retry_enforcement_button = QPushButton("Retry enforcement")
+        self.refresh_button = QPushButton(self._lm.tr("page.rules.refresh"))
+        self.save_button = QPushButton(self._lm.tr("page.rules.save_rules"))
+        self.restore_button = QPushButton(self._lm.tr("page.rules.restore_defaults"))
+        self.add_custom_button = QPushButton(self._lm.tr("page.rules.add_custom"))
+        self.delete_custom_button = QPushButton(self._lm.tr("page.rules.delete_custom"))
+        self.save_blacklist_button = QPushButton(self._lm.tr("page.rules.save_blacklist"))
+        self.add_enforced_block_button = QPushButton(self._lm.tr("page.rules.add_block"))
+        self.remove_enforced_block_button = QPushButton(self._lm.tr("page.rules.remove_block"))
+        self.retry_enforcement_button = QPushButton(self._lm.tr("page.rules.retry_enforcement"))
         for button in [
             self.refresh_button,
             self.save_button,
@@ -75,30 +78,42 @@ class RulePage(QWidget):
         self.table = QTableWidget(0, 12)
         self.table.setHorizontalHeaderLabels(
             [
-                "ID",
-                "Name",
-                "Category",
-                "Severity",
-                "Enabled",
-                "Threshold",
-                "Window (s)",
-                "Description",
-                "Feedback",
-                "Alerts",
-                "Confirmed",
-                "Ignored",
+                self._lm.tr("table.id"),
+                self._lm.tr("table.name"),
+                self._lm.tr("table.category"),
+                self._lm.tr("table.severity"),
+                self._lm.tr("table.enabled"),
+                self._lm.tr("table.threshold"),
+                self._lm.tr("table.time_window"),
+                self._lm.tr("table.description"),
+                self._lm.tr("table.feedback"),
+                self._lm.tr("table.alerts"),
+                self._lm.tr("table.confirmed"),
+                self._lm.tr("table.ignored"),
             ]
         )
         self._configure_table(self.table, stretch_columns=(1, 7, 8), resize_to_contents_columns=(3, 4, 5, 6, 9, 10, 11))
 
         self.custom_table = QTableWidget(0, 11)
         self.custom_table.setHorizontalHeaderLabels(
-            ["ID", "Name", "Severity", "Enabled", "Protocol", "Source IP", "Destination IP", "Source Port", "Destination Port", "Keyword", "Description"]
+            [
+                self._lm.tr("table.id"),
+                self._lm.tr("table.name"),
+                self._lm.tr("table.severity"),
+                self._lm.tr("table.enabled"),
+                self._lm.tr("table.protocol"),
+                self._lm.tr("table.source_ip"),
+                self._lm.tr("table.destination_ip"),
+                self._lm.tr("table.source_port"),
+                self._lm.tr("table.destination_port"),
+                "Keyword",
+                self._lm.tr("table.description"),
+            ]
         )
         self._configure_table(self.custom_table, stretch_columns=(1, 5, 6, 9, 10), resize_to_contents_columns=(0, 2, 3, 4, 7, 8))
 
         self.blacklist_editor = QTextEdit()
-        self.blacklist_editor.setPlaceholderText("One IP address per line. Empty lines are ignored.")
+        self.blacklist_editor.setPlaceholderText(self._lm.tr("page.rules.blacklist_placeholder"))
         self.blacklist_editor.setMaximumHeight(100)
         blocklist_button_bar = QHBoxLayout()
         for button in [
@@ -111,7 +126,16 @@ class RulePage(QWidget):
         blocklist_button_bar.addStretch()
         self.enforced_blocklist_table = QTableWidget(0, 8)
         self.enforced_blocklist_table.setHorizontalHeaderLabels(
-            ["ID", "Kind", "Value", "Field", "Protocol", "Status", "Error", "Updated"]
+            [
+                self._lm.tr("table.id"),
+                self._lm.tr("table.kind"),
+                self._lm.tr("table.value"),
+                self._lm.tr("table.field"),
+                self._lm.tr("table.protocol"),
+                self._lm.tr("table.status"),
+                self._lm.tr("table.error"),
+                self._lm.tr("table.updated"),
+            ]
         )
         self._configure_table(
             self.enforced_blocklist_table,
@@ -119,21 +143,21 @@ class RulePage(QWidget):
             resize_to_contents_columns=(0, 1, 3, 4, 5, 7),
         )
 
-        builtin_label = QLabel("Built-in detection rules")
-        custom_label = QLabel("Custom rules: empty fields mean no restriction. Use drop-downs for protocol and severity.")
-        blacklist_label = QLabel("Detection-only IP watchlist")
-        enforced_label = QLabel("Enforced IP and port blocklist")
-        for label in [builtin_label, custom_label, blacklist_label, enforced_label]:
+        self._builtin_label = QLabel(self._lm.tr("page.rules.builtin_label"))
+        self._custom_label = QLabel(self._lm.tr("page.rules.custom_label"))
+        self._blacklist_label = QLabel(self._lm.tr("page.rules.watchlist_label"))
+        self._enforced_label = QLabel(self._lm.tr("page.rules.blocklist_label"))
+        for label in [self._builtin_label, self._custom_label, self._blacklist_label, self._enforced_label]:
             label.setObjectName("SectionTitle")
 
         layout.addLayout(button_bar)
-        layout.addWidget(builtin_label)
+        layout.addWidget(self._builtin_label)
         layout.addWidget(self.table, 2)
-        layout.addWidget(custom_label)
+        layout.addWidget(self._custom_label)
         layout.addWidget(self.custom_table, 3)
-        layout.addWidget(blacklist_label)
+        layout.addWidget(self._blacklist_label)
         layout.addWidget(self.blacklist_editor)
-        layout.addWidget(enforced_label)
+        layout.addWidget(self._enforced_label)
         layout.addLayout(blocklist_button_bar)
         layout.addWidget(self.enforced_blocklist_table, 1)
 
@@ -147,11 +171,103 @@ class RulePage(QWidget):
         self.remove_enforced_block_button.clicked.connect(self.remove_enforced_block)
         self.retry_enforcement_button.clicked.connect(self.retry_enforcement)
 
+        self._lm.locale_changed.connect(self.retranslate_ui)
         self.refresh()
 
     def showEvent(self, event: object) -> None:
         self.refresh()
         super().showEvent(event)  # type: ignore[arg-type]
+
+    # ------------------------------------------------------------------
+    # i18n
+    # ------------------------------------------------------------------
+
+    def retranslate_ui(self) -> None:
+        """Update all user-visible text when the locale changes."""
+        self._retranslating = True
+        try:
+            lm = self._lm
+
+            # Button labels
+            self.refresh_button.setText(lm.tr("page.rules.refresh"))
+            self.save_button.setText(lm.tr("page.rules.save_rules"))
+            self.restore_button.setText(lm.tr("page.rules.restore_defaults"))
+            self.add_custom_button.setText(lm.tr("page.rules.add_custom"))
+            self.delete_custom_button.setText(lm.tr("page.rules.delete_custom"))
+            self.save_blacklist_button.setText(lm.tr("page.rules.save_blacklist"))
+            self.add_enforced_block_button.setText(lm.tr("page.rules.add_block"))
+            self.remove_enforced_block_button.setText(lm.tr("page.rules.remove_block"))
+            self.retry_enforcement_button.setText(lm.tr("page.rules.retry_enforcement"))
+
+            # Table headers -- built-in rules
+            self.table.setHorizontalHeaderLabels(
+                [
+                    lm.tr("table.id"),
+                    lm.tr("table.name"),
+                    lm.tr("table.category"),
+                    lm.tr("table.severity"),
+                    lm.tr("table.enabled"),
+                    lm.tr("table.threshold"),
+                    lm.tr("table.time_window"),
+                    lm.tr("table.description"),
+                    lm.tr("table.feedback"),
+                    lm.tr("table.alerts"),
+                    lm.tr("table.confirmed"),
+                    lm.tr("table.ignored"),
+                ]
+            )
+
+            # Table headers -- custom rules
+            self.custom_table.setHorizontalHeaderLabels(
+                [
+                    lm.tr("table.id"),
+                    lm.tr("table.name"),
+                    lm.tr("table.severity"),
+                    lm.tr("table.enabled"),
+                    lm.tr("table.protocol"),
+                    lm.tr("table.source_ip"),
+                    lm.tr("table.destination_ip"),
+                    lm.tr("table.source_port"),
+                    lm.tr("table.destination_port"),
+                    "Keyword",
+                    lm.tr("table.description"),
+                ]
+            )
+
+            # Table headers -- enforced blocklist
+            self.enforced_blocklist_table.setHorizontalHeaderLabels(
+                [
+                    lm.tr("table.id"),
+                    lm.tr("table.kind"),
+                    lm.tr("table.value"),
+                    lm.tr("table.field"),
+                    lm.tr("table.protocol"),
+                    lm.tr("table.status"),
+                    lm.tr("table.error"),
+                    lm.tr("table.updated"),
+                ]
+            )
+
+            # Section labels
+            self._builtin_label.setText(lm.tr("page.rules.builtin_label"))
+            self._custom_label.setText(lm.tr("page.rules.custom_label"))
+            self._blacklist_label.setText(lm.tr("page.rules.watchlist_label"))
+            self._enforced_label.setText(lm.tr("page.rules.blocklist_label"))
+
+            # Placeholder
+            self.blacklist_editor.setPlaceholderText(lm.tr("page.rules.blacklist_placeholder"))
+
+            # Re-render tables whose cells contain translated strings
+            # (combo-box items, feedback text, enforced-blocklist status/kind)
+            self._render_builtin_rules()
+            self._render_custom_rules()
+            self._render_enforced_blocklist()
+        finally:
+            self._retranslating = False
+
+    # ------------------------------------------------------------------
+    # Data refresh / rendering
+    # ------------------------------------------------------------------
 
     def refresh(self) -> None:
         self.current_rules = self.rule_repository.list_all()
@@ -163,16 +279,19 @@ class RulePage(QWidget):
         self._render_enforced_blocklist()
 
     def _render_enforced_blocklist(self) -> None:
+        lm = self._lm
         entries = self.blocklist_entry_repository.list_all()
         self.enforced_blocklist_table.setRowCount(len(entries))
         for row, entry in enumerate(entries):
+            kind_display = lm.tr(f"blocklist.kind.{entry.kind}") if entry.kind in ("IP", "PORT") else entry.kind
+            status_display = lm.tr(f"status.{entry.enforcement_status.lower()}") if entry.enforcement_status else ""
             values = [
                 str(entry.id or ""),
-                entry.kind,
+                kind_display,
                 entry.value,
                 entry.field,
                 entry.protocol,
-                entry.enforcement_status,
+                status_display,
                 entry.enforcement_error,
                 entry.updated_at,
             ]
@@ -185,6 +304,7 @@ class RulePage(QWidget):
                 self.enforced_blocklist_table.setItem(row, column, item)
 
     def _render_builtin_rules(self) -> None:
+        lm = self._lm
         feedback_by_rule = self.alert_repository.rule_feedback()
         self.table.setRowCount(len(self.current_rules))
         for row_index, rule in enumerate(self.current_rules):
@@ -221,10 +341,17 @@ class RulePage(QWidget):
             ignored = int(feedback.get("ignored", 0))
             confirmed_ratio = float(feedback.get("confirmed_ratio", 0.0))
             ignored_ratio = float(feedback.get("ignored_ratio", 0.0))
-            feedback_text = f"Confirmed {confirmed_ratio:.0%}, ignored {ignored_ratio:.0%}" if total else "No alerts"
-            tooltip = (
-                f"Total alerts: {total}\nConfirmed: {confirmed}\nIgnored: {ignored}\n"
-                f"Unconfirmed: {int(feedback.get('unconfirmed', 0))}"
+            if total:
+                feedback_text = lm.tr("page.rules.feedback_format", confirmed=confirmed_ratio, ignored=ignored_ratio)
+            else:
+                feedback_text = lm.tr("page.rules.feedback_no_alerts")
+            unconfirmed = int(feedback.get("unconfirmed", 0))
+            tooltip = lm.tr(
+                "page.rules.feedback_tooltip",
+                total=total,
+                confirmed=confirmed,
+                ignored=ignored,
+                unconfirmed=unconfirmed,
             )
             self._set_feedback_item(row_index, 8, feedback_text, tooltip, ignored_ratio > 0.5 and total > 0)
             self._set_feedback_item(row_index, 9, str(total), tooltip, ignored_ratio > 0.5 and total > 0)
@@ -247,9 +374,10 @@ class RulePage(QWidget):
     def _set_feedback_item(self, row: int, column: int, value: str, tooltip: str, warn: bool) -> None:
         item = QTableWidgetItem(value)
         item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-        item.setToolTip(
-            f"{tooltip}\nIgnored ratio is above 50%; review thresholds or evidence." if warn else tooltip
-        )
+        if warn:
+            item.setToolTip(f"{tooltip}{self._lm.tr('page.rules.feedback_warning')}")
+        else:
+            item.setToolTip(tooltip)
         if warn:
             item.setBackground(QColor("#fef3c7"))
         self.table.setItem(row, column, item)
@@ -271,14 +399,18 @@ class RulePage(QWidget):
         self.custom_table.resizeRowsToContents()
 
     def _set_custom_row(self, row: int, rule: CustomRuleRecord) -> None:
+        lm = self._lm
         id_item = QTableWidgetItem("" if rule.id is None else str(rule.id))
         id_item.setFlags(id_item.flags() & ~Qt.ItemIsEditable)
         self.custom_table.setItem(row, 0, id_item)
         self._set_text_item(self.custom_table, row, 1, rule.name)
 
         severity_box = QComboBox()
-        severity_box.addItems(SEVERITY_OPTIONS)
-        severity_box.setCurrentText(rule.severity.upper())
+        for sev in SEVERITY_OPTIONS:
+            severity_box.addItem(lm.tr(f"severity.{sev}"), sev)
+        severity_idx = severity_box.findData(rule.severity.upper(), Qt.UserRole)
+        if severity_idx >= 0:
+            severity_box.setCurrentIndex(severity_idx)
         self.custom_table.setCellWidget(row, 2, severity_box)
 
         enabled_box = QCheckBox()
@@ -286,8 +418,13 @@ class RulePage(QWidget):
         self.custom_table.setCellWidget(row, 3, enabled_box)
 
         protocol_box = QComboBox()
-        protocol_box.addItems(PROTOCOL_OPTIONS)
-        protocol_box.setCurrentText(rule.protocol if rule.protocol in PROTOCOL_OPTIONS else "Any")
+        for proto in PROTOCOL_OPTIONS:
+            key = "common.any" if proto == "Any" else f"protocol.{proto}"
+            protocol_box.addItem(lm.tr(key), proto)
+        target = rule.protocol if rule.protocol in PROTOCOL_OPTIONS else "Any"
+        proto_idx = protocol_box.findData(target, Qt.UserRole)
+        if proto_idx >= 0:
+            protocol_box.setCurrentIndex(proto_idx)
         self.custom_table.setCellWidget(row, 4, protocol_box)
 
         self.custom_table.setCellWidget(row, 5, self._ip_box(rule.src_ip, self.source_ip_options, "source"))
@@ -297,30 +434,51 @@ class RulePage(QWidget):
         self._set_text_item(self.custom_table, row, 9, rule.keyword or "")
         self._set_text_item(self.custom_table, row, 10, rule.description)
 
+    # ------------------------------------------------------------------
+    # Actions
+    # ------------------------------------------------------------------
+
     def add_custom_rule_row(self) -> None:
         row = self.custom_table.rowCount()
         self.custom_table.setRowCount(row + 1)
         self._set_custom_row(
             row,
-            CustomRuleRecord(name="New custom rule", severity="LOW", enabled=True, description="Matched custom rule conditions"),
+            CustomRuleRecord(
+                name=self._lm.tr("page.rules.new_custom_name"),
+                severity="LOW",
+                enabled=True,
+                description=self._lm.tr("page.rules.new_custom_desc"),
+            ),
         )
 
     def delete_selected_custom_rule(self) -> None:
         row = self.custom_table.currentRow()
         if row < 0:
-            QMessageBox.information(self, "No rule selected", "Please select a custom rule first.")
+            QMessageBox.information(
+                self,
+                self._lm.tr("page.rules.no_rule_selected"),
+                self._lm.tr("page.rules.please_select_custom"),
+            )
             return
         rule_id = self._item_text(self.custom_table, row, 0)
         if rule_id:
             self.custom_rule_repository.delete(int(rule_id))
         self.custom_table.removeRow(row)
-        QMessageBox.information(self, "Deleted", "The selected custom rule has been deleted.")
+        QMessageBox.information(
+            self,
+            self._lm.tr("page.rules.deleted_title"),
+            self._lm.tr("page.rules.deleted_msg"),
+        )
         self.refresh()
 
     def save_rules(self) -> None:
         self._save_builtin_rules()
         self._save_custom_rules()
-        QMessageBox.information(self, "Saved", "Rule configuration saved. Future imports and live capture will use it.")
+        QMessageBox.information(
+            self,
+            self._lm.tr("page.rules.saved_title"),
+            self._lm.tr("page.rules.saved_msg"),
+        )
         self.refresh()
 
     def _save_builtin_rules(self) -> None:
@@ -351,19 +509,30 @@ class RulePage(QWidget):
             protocol_widget = self.custom_table.cellWidget(row, 4)
             src_port_widget = self.custom_table.cellWidget(row, 7)
             dst_port_widget = self.custom_table.cellWidget(row, 8)
-            protocol = protocol_widget.currentText() if isinstance(protocol_widget, QComboBox) else "Any"
+
+            if isinstance(severity_widget, QComboBox):
+                severity = severity_widget.currentData(Qt.UserRole) or severity_widget.currentText()
+            else:
+                severity = "LOW"
+
+            if isinstance(protocol_widget, QComboBox):
+                protocol = protocol_widget.currentData(Qt.UserRole) or protocol_widget.currentText()
+            else:
+                protocol = "Any"
+            protocol = None if protocol == "Any" else protocol
+
             rule = CustomRuleRecord(
                 id=self._optional_int(self._item_text(self.custom_table, row, 0)),
                 name=name,
-                severity=severity_widget.currentText() if isinstance(severity_widget, QComboBox) else "LOW",
+                severity=severity,
                 enabled=enabled_widget.isChecked() if isinstance(enabled_widget, QCheckBox) else True,
-                protocol=None if protocol == "Any" else protocol,
+                protocol=protocol,
                 src_ip=self._optional_ip(self._combo_text(self.custom_table, row, 5)),
                 dst_ip=self._optional_ip(self._combo_text(self.custom_table, row, 6)),
                 src_port=self._spin_optional_value(src_port_widget),
                 dst_port=self._spin_optional_value(dst_port_widget),
                 keyword=self._optional_text(self._item_text(self.custom_table, row, 9)),
-                description=self._item_text(self.custom_table, row, 10) or "Matched custom rule conditions",
+                description=self._item_text(self.custom_table, row, 10) or self._lm.tr("page.rules.new_custom_desc"),
             )
             if rule.id is None:
                 self.custom_rule_repository.add(rule)
@@ -372,33 +541,66 @@ class RulePage(QWidget):
 
     def restore_defaults(self) -> None:
         self.rule_repository.reset_defaults()
-        QMessageBox.information(self, "Restored", "Default rules have been restored.")
+        QMessageBox.information(
+            self,
+            self._lm.tr("page.rules.restored_title"),
+            self._lm.tr("page.rules.restored_msg"),
+        )
         self.refresh()
 
     def save_blacklist(self) -> None:
         self.blacklist_repository.save_all(self.blacklist_editor.toPlainText().splitlines())
-        QMessageBox.information(self, "Saved", "Blacklisted IP addresses saved.")
+        QMessageBox.information(
+            self,
+            self._lm.tr("page.rules.saved_title"),
+            self._lm.tr("page.rules.blacklist_saved_msg"),
+        )
         self.refresh()
 
     def add_enforced_block(self) -> None:
-        labels = ["Source IP", "Destination IP", "Source Port", "Destination Port"]
-        label, accepted = QInputDialog.getItem(self, "Add enforced block", "Field", labels, 0, False)
+        lm = self._lm
+        field_options = [
+            (lm.tr("blocklist.field.SRC_IP"), "SRC_IP"),
+            (lm.tr("blocklist.field.DST_IP"), "DST_IP"),
+            (lm.tr("blocklist.field.SRC_PORT"), "SRC_PORT"),
+            (lm.tr("blocklist.field.DST_PORT"), "DST_PORT"),
+        ]
+        field_labels = [f[0] for f in field_options]
+        field_map = {f[0]: f[1] for f in field_options}
+        label, accepted = QInputDialog.getItem(
+            self,
+            lm.tr("page.rules.add_block_title"),
+            lm.tr("page.rules.add_block_field_label"),
+            field_labels,
+            0,
+            False,
+        )
         if not accepted:
             return
-        field = {
-            "Source IP": "SRC_IP",
-            "Destination IP": "DST_IP",
-            "Source Port": "SRC_PORT",
-            "Destination Port": "DST_PORT",
-        }[label]
-        value, accepted = QInputDialog.getText(self, "Add enforced block", "IP address or port")
+        field = field_map[label]
+        value, accepted = QInputDialog.getText(
+            self,
+            lm.tr("page.rules.add_block_title"),
+            lm.tr("page.rules.add_block_value_label"),
+        )
         if not accepted or not value.strip():
             return
         protocol = "ANY"
         if field.endswith("PORT"):
-            protocol, accepted = QInputDialog.getItem(self, "Port protocol", "Protocol", ["ANY", "TCP", "UDP"], 0, False)
+            proto_keys = ["ANY", "TCP", "UDP"]
+            proto_labels = [lm.tr(f"protocol.{p}") for p in proto_keys]
+            proto_map = dict(zip(proto_labels, proto_keys))
+            proto_label, accepted = QInputDialog.getItem(
+                self,
+                lm.tr("page.rules.add_block_protocol_label"),
+                lm.tr("table.protocol"),
+                proto_labels,
+                0,
+                False,
+            )
             if not accepted:
                 return
+            protocol = proto_map[proto_label]
         try:
             _entry, result = self.blocklist_service.add_and_enforce(
                 kind="IP" if field.endswith("IP") else "PORT",
@@ -407,7 +609,7 @@ class RulePage(QWidget):
                 protocol=protocol,
             )
         except ValueError as exc:
-            QMessageBox.warning(self, "Invalid blocklist value", str(exc))
+            QMessageBox.warning(self, lm.tr("page.rules.invalid_block_value"), str(exc))
             return
         self._show_enforcement_result(result.status, result.message, result.success)
         self.refresh()
@@ -415,7 +617,11 @@ class RulePage(QWidget):
     def remove_enforced_block(self) -> None:
         entry_id = self._selected_enforced_block_id()
         if entry_id is None:
-            QMessageBox.information(self, "No block selected", "Please select an enforced block first.")
+            QMessageBox.information(
+                self,
+                self._lm.tr("page.rules.no_block_selected"),
+                self._lm.tr("page.rules.please_select_block"),
+            )
             return
         result = self.blocklist_service.remove(entry_id)
         self._show_enforcement_result(result.status, result.message, result.success)
@@ -424,7 +630,11 @@ class RulePage(QWidget):
     def retry_enforcement(self) -> None:
         entry_id = self._selected_enforced_block_id()
         if entry_id is None:
-            QMessageBox.information(self, "No block selected", "Please select an enforced block first.")
+            QMessageBox.information(
+                self,
+                self._lm.tr("page.rules.no_block_selected"),
+                self._lm.tr("page.rules.please_select_block"),
+            )
             return
         result = self.blocklist_service.retry(entry_id)
         self._show_enforcement_result(result.status, result.message, result.success)
@@ -437,13 +647,17 @@ class RulePage(QWidget):
         return int(value) if value is not None else None
 
     def _show_enforcement_result(self, status: str, message: str, success: bool) -> None:
-        text = f"Enforcement status: {status}."
+        text = self._lm.tr("blocklist.enforcement_status", status=status)
         if message:
             text += f"\n\n{message}"
         if success:
-            QMessageBox.information(self, "Enforcement updated", text)
+            QMessageBox.information(self, self._lm.tr("blocklist.enforcement_updated"), text)
         else:
-            QMessageBox.warning(self, "Enforcement unavailable", text)
+            QMessageBox.warning(self, self._lm.tr("blocklist.enforcement_unavailable"), text)
+
+    # ------------------------------------------------------------------
+    # Table helpers
+    # ------------------------------------------------------------------
 
     def _configure_table(
         self,
@@ -491,15 +705,27 @@ class RulePage(QWidget):
         box = QComboBox()
         box.setEditable(True)
         box.setInsertPolicy(QComboBox.NoInsert)
-        box.addItems(options)
-        box.setCurrentText(value or "Any")
-        box.setToolTip(f"Choose a recent {role} IP, select Any, or type a custom IP.")
+        for opt in options:
+            if opt == "Any":
+                box.addItem(self._lm.tr("common.any"), "Any")
+            else:
+                box.addItem(opt)
+        current = value or "Any"
+        idx = box.findData(current, Qt.UserRole)
+        if idx < 0:
+            idx = box.findText(current)
+        if idx >= 0:
+            box.setCurrentIndex(idx)
+        else:
+            box.setCurrentText(current)
+        role_tr = self._lm.tr(f"common.{role}")
+        box.setToolTip(self._lm.tr("page.rules.ip_combo_tooltip", role=role_tr))
         return box
 
     def _port_box(self, value: int | None) -> QSpinBox:
         box = QSpinBox()
         box.setRange(0, 65535)
-        box.setSpecialValueText("Any")
+        box.setSpecialValueText(self._lm.tr("page.rules.port_any"))
         box.setValue(value or 0)
         return box
 
@@ -511,6 +737,9 @@ class RulePage(QWidget):
     def _combo_text(self, table: QTableWidget, row: int, column: int) -> str:
         widget = table.cellWidget(row, column)
         if isinstance(widget, QComboBox):
+            data = widget.currentData(Qt.UserRole)
+            if data is not None:
+                return str(data).strip()
             return widget.currentText().strip()
         return self._item_text(table, row, column)
 

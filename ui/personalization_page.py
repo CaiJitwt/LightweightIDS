@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui.i18n import locale_manager
 from ui.theme_manager import ThemeManager
 from ui.personalization_store import PersonalizationStore, PetState
 from ui.widgets.overlay_pet_widget import OverlayPetWidget
@@ -31,6 +32,8 @@ class PersonalizationPage(QWidget):
         store: PersonalizationStore,
     ) -> None:
         super().__init__()
+        self._lm = locale_manager()
+        self._retranslating = False
         self.theme_manager = theme_manager
         self.overlay_pet = overlay_pet
         self.store = store
@@ -42,20 +45,20 @@ class PersonalizationPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setSpacing(14)
 
-        hint = QLabel("Customize the workspace background and optional overlay pet.")
+        hint = QLabel(self._lm.tr("page.personalization.hint"))
         hint.setObjectName("PageHint")
         hint.setWordWrap(True)
 
-        wallpaper_title = QLabel("Wallpaper")
+        wallpaper_title = QLabel(self._lm.tr("page.personalization.wallpaper_title"))
         wallpaper_title.setObjectName("SectionTitle")
         wallpaper_form = QFormLayout()
         wallpaper_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
 
         self.background_color_input = QLineEdit(self.theme_manager.state.background_color)
-        self.background_color_input.setPlaceholderText("#f6f7f9")
+        self.background_color_input.setPlaceholderText(self._lm.tr("page.personalization.default_color"))
         self.background_image_input = QLineEdit(self.theme_manager.state.background_image)
         self.background_image_input.setReadOnly(True)
-        self.background_image_input.setPlaceholderText("No image selected")
+        self.background_image_input.setPlaceholderText(self._lm.tr("page.personalization.no_image"))
         self.background_image_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.wallpaper_position_combo = QComboBox()
         self.wallpaper_position_combo.addItems(["center", "top-left", "top-right", "bottom-left", "bottom-right"])
@@ -70,13 +73,13 @@ class PersonalizationPage(QWidget):
         self.wallpaper_opacity_label = QLabel(f"{wallpaper_opacity}%")
 
         color_row = QHBoxLayout()
-        self.apply_color_button = QPushButton("Apply color")
+        self.apply_color_button = QPushButton(self._lm.tr("page.personalization.apply_color"))
         color_row.addWidget(self.background_color_input, 1)
         color_row.addWidget(self.apply_color_button)
 
         image_row = QHBoxLayout()
-        self.browse_background_button = QPushButton("Choose image")
-        self.clear_background_button = QPushButton("Clear")
+        self.browse_background_button = QPushButton(self._lm.tr("page.personalization.choose_image"))
+        self.clear_background_button = QPushButton(self._lm.tr("page.personalization.clear"))
         image_row.addWidget(self.background_image_input, 1)
         image_row.addWidget(self.browse_background_button)
         image_row.addWidget(self.clear_background_button)
@@ -85,21 +88,33 @@ class PersonalizationPage(QWidget):
         wallpaper_opacity_row.addWidget(self.wallpaper_opacity_slider, 1)
         wallpaper_opacity_row.addWidget(self.wallpaper_opacity_label)
 
-        wallpaper_form.addRow("Background color", color_row)
-        wallpaper_form.addRow("Background image", image_row)
-        wallpaper_form.addRow("Image position", self.wallpaper_position_combo)
-        wallpaper_form.addRow("Image size", self.wallpaper_size_combo)
-        wallpaper_form.addRow("Image opacity", wallpaper_opacity_row)
+        self._wallpaper_form_labels = [
+            self._lm.tr("page.personalization.background_color"),
+            self._lm.tr("page.personalization.background_image"),
+            self._lm.tr("page.personalization.image_position"),
+            self._lm.tr("page.personalization.image_size"),
+            self._lm.tr("page.personalization.image_opacity"),
+        ]
+        wallpaper_form.addRow(self._wallpaper_form_labels[0], color_row)
+        wallpaper_form.addRow(self._wallpaper_form_labels[1], image_row)
+        wallpaper_form.addRow(self._wallpaper_form_labels[2], self.wallpaper_position_combo)
+        wallpaper_form.addRow(self._wallpaper_form_labels[3], self.wallpaper_size_combo)
+        wallpaper_form.addRow(self._wallpaper_form_labels[4], wallpaper_opacity_row)
+        self._wallpaper_labels: list[QLabel] = []
+        for i in range(wallpaper_form.rowCount()):
+            label_item = wallpaper_form.itemAt(i, QFormLayout.LabelRole)
+            if label_item and label_item.widget():
+                self._wallpaper_labels.append(label_item.widget())
 
-        pet_title = QLabel("Overlay pet")
+        pet_title = QLabel(self._lm.tr("page.personalization.pet_title"))
         pet_title.setObjectName("SectionTitle")
         pet_form = QFormLayout()
         pet_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
 
         self.pet_image_input = QLineEdit(self.overlay_pet.image_path)
         self.pet_image_input.setReadOnly(True)
-        self.pet_image_input.setPlaceholderText("No transparent PNG selected")
-        self.pet_visible_box = QCheckBox("Show overlay pet")
+        self.pet_image_input.setPlaceholderText(self._lm.tr("page.personalization.no_pet"))
+        self.pet_visible_box = QCheckBox(self._lm.tr("page.personalization.show_pet"))
         self.pet_visible_box.setEnabled(bool(self.overlay_pet.image_path))
         self.pet_visible_box.setChecked(self.overlay_pet.pet_visible)
         self.pet_position_combo = QComboBox()
@@ -116,8 +131,8 @@ class PersonalizationPage(QWidget):
         self.pet_opacity_label = QLabel(f"{pet_opacity}%")
 
         pet_image_row = QHBoxLayout()
-        self.browse_pet_button = QPushButton("Choose image")
-        self.clear_pet_button = QPushButton("Clear")
+        self.browse_pet_button = QPushButton(self._lm.tr("page.personalization.choose_image"))
+        self.clear_pet_button = QPushButton(self._lm.tr("page.personalization.clear"))
         pet_image_row.addWidget(self.pet_image_input, 1)
         pet_image_row.addWidget(self.browse_pet_button)
         pet_image_row.addWidget(self.clear_pet_button)
@@ -126,13 +141,25 @@ class PersonalizationPage(QWidget):
         opacity_row.addWidget(self.pet_opacity_slider, 1)
         opacity_row.addWidget(self.pet_opacity_label)
 
-        pet_form.addRow("Pet image", pet_image_row)
-        pet_form.addRow("Visibility", self.pet_visible_box)
-        pet_form.addRow("Position", self.pet_position_combo)
-        pet_form.addRow("Size", self.pet_size_box)
-        pet_form.addRow("Opacity", opacity_row)
+        self._pet_form_labels = [
+            self._lm.tr("page.personalization.pet_image"),
+            self._lm.tr("page.personalization.pet_visibility"),
+            self._lm.tr("page.personalization.pet_position"),
+            self._lm.tr("page.personalization.pet_size"),
+            self._lm.tr("page.personalization.pet_opacity"),
+        ]
+        pet_form.addRow(self._pet_form_labels[0], pet_image_row)
+        pet_form.addRow(self._pet_form_labels[1], self.pet_visible_box)
+        pet_form.addRow(self._pet_form_labels[2], self.pet_position_combo)
+        pet_form.addRow(self._pet_form_labels[3], self.pet_size_box)
+        pet_form.addRow(self._pet_form_labels[4], opacity_row)
+        self._pet_labels: list[QLabel] = []
+        for i in range(pet_form.rowCount()):
+            label_item = pet_form.itemAt(i, QFormLayout.LabelRole)
+            if label_item and label_item.widget():
+                self._pet_labels.append(label_item.widget())
 
-        self.save_status_label = QLabel("Preferences are saved automatically.")
+        self.save_status_label = QLabel(self._lm.tr("page.personalization.auto_save"))
         self.save_status_label.setObjectName("PageHint")
 
         layout.addWidget(hint)
@@ -156,6 +183,45 @@ class PersonalizationPage(QWidget):
         self.pet_position_combo.currentTextChanged.connect(self.change_pet_position)
         self.pet_size_box.valueChanged.connect(self.change_pet_size)
         self.pet_opacity_slider.valueChanged.connect(self.update_pet_opacity)
+
+        self._lm.locale_changed.connect(self.retranslate_ui)
+
+    def retranslate_ui(self) -> None:
+        self._retranslating = True
+
+        self.apply_color_button.setText(self._lm.tr("page.personalization.apply_color"))
+        self.browse_background_button.setText(self._lm.tr("page.personalization.choose_image"))
+        self.clear_background_button.setText(self._lm.tr("page.personalization.clear"))
+        self.background_image_input.setPlaceholderText(self._lm.tr("page.personalization.no_image"))
+
+        self.browse_pet_button.setText(self._lm.tr("page.personalization.choose_image"))
+        self.clear_pet_button.setText(self._lm.tr("page.personalization.clear"))
+        self.pet_image_input.setPlaceholderText(self._lm.tr("page.personalization.no_pet"))
+        self.pet_visible_box.setText(self._lm.tr("page.personalization.show_pet"))
+
+        labels = [
+            self._lm.tr("page.personalization.background_color"),
+            self._lm.tr("page.personalization.background_image"),
+            self._lm.tr("page.personalization.image_position"),
+            self._lm.tr("page.personalization.image_size"),
+            self._lm.tr("page.personalization.image_opacity"),
+        ]
+        for label_widget, text in zip(self._wallpaper_labels, labels):
+            label_widget.setText(text)
+
+        pet_labels = [
+            self._lm.tr("page.personalization.pet_image"),
+            self._lm.tr("page.personalization.pet_visibility"),
+            self._lm.tr("page.personalization.pet_position"),
+            self._lm.tr("page.personalization.pet_size"),
+            self._lm.tr("page.personalization.pet_opacity"),
+        ]
+        for label_widget, text in zip(self._pet_labels, pet_labels):
+            label_widget.setText(text)
+
+        self.save_status_label.setText(self._lm.tr("page.personalization.auto_save"))
+
+        self._retranslating = False
 
     def apply_background_color(self) -> None:
         previous = self.theme_manager.state.background_image
