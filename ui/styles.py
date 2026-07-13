@@ -63,7 +63,6 @@ CARD_TONES = {
 
 GLOBAL_APP_STYLE = """
 QWidget {
-    background-color: #f5f5f5;
     color: #202020;
 }
 QLabel,
@@ -81,13 +80,9 @@ QDoubleSpinBox,
 QTableView,
 QTreeView,
 QListView {
-    background-color: #ffffff;
     color: #202020;
-    selection-background-color: #3478f6;
-    selection-color: #ffffff;
 }
 QPushButton {
-    background-color: #e6e6e6;
     color: #202020;
 }
 """
