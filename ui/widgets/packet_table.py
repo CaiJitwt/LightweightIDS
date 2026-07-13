@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableWidget, QTableWidgetItem
 
 from models import PacketRecord
@@ -8,11 +10,14 @@ from ui.styles import configure_responsive_table
 
 class PacketTable(QTableWidget):
     MAX_VISIBLE_ROWS = 2_000
+    MAX_BUFFERED_PACKETS = 20_000
 
     def __init__(self) -> None:
         super().__init__(0, 8)
         self.max_visible_rows = self.MAX_VISIBLE_ROWS
         self.auto_scroll = True
+        self._packets: list[PacketRecord] = []
+        self._packet_filter: Callable[[PacketRecord], bool] | None = None
         self.setHorizontalHeaderLabels(
             ["Time", "Source IP", "Destination IP", "Protocol", "Source Port", "Destination Port", "Length", "Summary"]
         )
@@ -30,7 +35,20 @@ class PacketTable(QTableWidget):
         self.setColumnWidth(5, 120)
         self.setColumnWidth(6, 70)
 
-    def add_packets(self, packets: list[PacketRecord]) -> None:
+    def add_packets(self, packets: list[PacketRecord]) -> int:
+        if not packets:
+            return self.rowCount()
+
+        self._packets.extend(packets)
+        overflow = len(self._packets) - self.MAX_BUFFERED_PACKETS
+        if overflow > 0:
+            del self._packets[:overflow]
+
+        visible_packets = [packet for packet in packets if self._matches_filter(packet)]
+        self._append_packet_rows(visible_packets)
+        return self.rowCount()
+
+    def _append_packet_rows(self, packets: list[PacketRecord]) -> None:
         if not packets:
             return
 
@@ -65,11 +83,20 @@ class PacketTable(QTableWidget):
                 self.scrollToBottom()
 
     def clear_packets(self) -> None:
+        self._packets.clear()
         self.setRowCount(0)
 
     def set_max_visible_rows(self, value: int) -> None:
         self.max_visible_rows = max(100, int(value))
-        self._trim_old_rows()
+        self._rebuild_visible_rows()
+
+    def set_packet_filter(self, packet_filter: Callable[[PacketRecord], bool] | None) -> int:
+        self._packet_filter = packet_filter
+        self._rebuild_visible_rows()
+        return self.rowCount()
+
+    def buffered_packet_count(self) -> int:
+        return len(self._packets)
 
     def set_auto_scroll(self, enabled: bool) -> None:
         self.auto_scroll = enabled
@@ -82,3 +109,12 @@ class PacketTable(QTableWidget):
             return
         for _ in range(overflow):
             self.removeRow(0)
+
+    def _matches_filter(self, packet: PacketRecord) -> bool:
+        return self._packet_filter is None or self._packet_filter(packet)
+
+    def _rebuild_visible_rows(self) -> None:
+        matching_packets = [packet for packet in self._packets if self._matches_filter(packet)]
+        visible_packets = matching_packets[-self.max_visible_rows :]
+        self.setRowCount(0)
+        self._append_packet_rows(visible_packets)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from time import monotonic
 from pathlib import Path
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QThread, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -23,6 +23,7 @@ from app.constants import PROJECT_ROOT
 from capture.decrypted_http_loader import DecryptedHttpLoader
 from capture.interface_manager import InterfaceManager
 from capture.live_capture import LiveCapture
+from capture.packet_filter import PacketFilter, PacketFilterError
 from capture.pcap_loader import PcapLoader
 from detection.engine import DetectionEngine
 from models import AlertRecord, CustomRuleRecord, PacketRecord, RuleRecord
@@ -288,8 +289,18 @@ class LiveCaptureWorker(QThread):
 class PacketPage(QWidget):
     CAPTURE_FILTER_PRESETS = {
         "All traffic": "",
-        "Web + DNS": "tcp port 80 or tcp port 443 or udp port 53 or tcp port 53",
-        "Internal TCP/UDP": "ip and (tcp or udp) and (net 10.0.0.0/8 or net 172.16.0.0/12 or net 192.168.0.0/16)",
+        "TCP": "tcp",
+        "UDP": "udp",
+        "DNS": "dns",
+        "HTTP": "http",
+        "HTTPS / TLS": "https or tls",
+        "ICMP": "icmp or icmpv6",
+        "ARP": "arp",
+        "Web + DNS": "http or https or tls or dns",
+        "Internal TCP/UDP": (
+            "(tcp or udp) and (ip.addr == 10.0.0.0/8 or ip.addr == 172.16.0.0/12 "
+            "or ip.addr == 192.168.0.0/16)"
+        ),
         "Custom": "",
     }
 
@@ -308,6 +319,14 @@ class PacketPage(QWidget):
         self.capture_skipped_count = 0
         self.capture_rate = 0.0
         self.capture_failed_flag = False
+        self.packet_filter = PacketFilter.compile("")
+        self.active_capture_filter = ""
+        self.custom_filter_text = ""
+        self._filter_mode = "All traffic"
+        self.filter_error_message = ""
+        self.filter_timer = QTimer(self)
+        self.filter_timer.setSingleShot(True)
+        self.filter_timer.setInterval(250)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
@@ -341,9 +360,14 @@ class PacketPage(QWidget):
         self.capture_filter_combo = QComboBox()
         self.capture_filter_combo.addItems(self.CAPTURE_FILTER_PRESETS.keys())
         self.capture_filter_input = QLineEdit(self.CAPTURE_FILTER_PRESETS["All traffic"])
-        self.capture_filter_input.setPlaceholderText("Optional BPF capture filter")
+        self.capture_filter_input.setPlaceholderText("tcp.port == 443 or ip.addr == 192.168.1.10")
         self.capture_filter_input.setReadOnly(True)
-        self.capture_filter_input.setToolTip("Use a BPF filter to reduce live-capture volume before packets reach the parser.")
+        self.capture_filter_input.setToolTip(
+            "Accepts common Wireshark display filters and BPF syntax. "
+            "Examples: tcp.port == 443, ip.src == 10.0.0.5, tcp and port 80."
+        )
+        self.filter_result_label = QLabel()
+        self.filter_result_label.setObjectName("PageHint")
         self.visible_rows_box = QSpinBox()
         self.visible_rows_box.setRange(100, 20_000)
         self.visible_rows_box.setSingleStep(100)
@@ -366,6 +390,7 @@ class PacketPage(QWidget):
 
         layout.addLayout(toolbar, 0)
         layout.addLayout(capture_options, 0)
+        layout.addWidget(self.filter_result_label)
         layout.addWidget(self.status_label)
         layout.addWidget(self.packet_table, 1)
 
@@ -374,7 +399,10 @@ class PacketPage(QWidget):
         self.import_decrypted_button.clicked.connect(self.select_decrypted_http_log)
         self.refresh_interfaces_button.clicked.connect(self.refresh_interfaces)
         self.capture_filter_combo.currentTextChanged.connect(self.update_capture_filter_mode)
-        self.visible_rows_box.valueChanged.connect(self.packet_table.set_max_visible_rows)
+        self.capture_filter_input.textChanged.connect(self.schedule_packet_filter)
+        self.capture_filter_input.returnPressed.connect(self.apply_packet_filter)
+        self.filter_timer.timeout.connect(self.apply_packet_filter)
+        self.visible_rows_box.valueChanged.connect(self.update_visible_row_limit)
         self.auto_scroll_check.toggled.connect(self.packet_table.set_auto_scroll)
         self.start_capture_button.clicked.connect(self.start_live_capture)
         self.stop_capture_button.clicked.connect(self.stop_live_capture)
@@ -485,8 +513,11 @@ class PacketPage(QWidget):
     def start_live_capture(self) -> None:
         if self.live_worker and self.live_worker.isRunning():
             return
+        self.filter_timer.stop()
+        if not self.apply_packet_filter():
+            return
         interface = self.interface_combo.currentData()
-        capture_filter = self.capture_filter_input.text().strip() or None
+        capture_filter = self.packet_filter.capture_filter or None
         filter_label = capture_filter or "none"
         save_packets = self.settings_repository.get_bool("auto_save_packets", True)
         detection_enabled = self.settings_repository.get_bool("enable_realtime_detection", True)
@@ -497,6 +528,9 @@ class PacketPage(QWidget):
         self.capture_skipped_count = 0
         self.capture_rate = 0.0
         self.capture_failed_flag = False
+        self.active_capture_filter = capture_filter or ""
+        self.packet_table.clear_packets()
+        self._update_filter_status()
         detection_label = "enabled" if detection_enabled else "disabled"
         storage_label = "enabled" if save_packets else "disabled"
         self.status_label.setText(
@@ -509,8 +543,6 @@ class PacketPage(QWidget):
         self.demo_button.setEnabled(False)
         self.import_decrypted_button.setEnabled(False)
         self.refresh_interfaces_button.setEnabled(False)
-        self.capture_filter_combo.setEnabled(False)
-        self.capture_filter_input.setEnabled(False)
 
         self.live_worker = LiveCaptureWorker(
             interface=interface,
@@ -542,6 +574,7 @@ class PacketPage(QWidget):
     ) -> None:
         self.loaded_count += len(packets)
         self.packet_table.add_packets(packets)
+        self._update_filter_status()
         self.saved_packet_count += saved_packets
         self.saved_alert_count += saved_alerts
         self.status_label.setText(
@@ -587,8 +620,6 @@ class PacketPage(QWidget):
         self.demo_button.setEnabled(True)
         self.import_decrypted_button.setEnabled(True)
         self.refresh_interfaces_button.setEnabled(True)
-        self.capture_filter_combo.setEnabled(True)
-        self.capture_filter_input.setEnabled(True)
         if not self.capture_failed_flag:
             self.status_label.setText(
                 f"Live capture stopped: processed {self.loaded_count} packets, saved {self.saved_alert_count} alerts, "
@@ -597,6 +628,7 @@ class PacketPage(QWidget):
 
     def clear_packets(self) -> None:
         self.packet_table.clear_packets()
+        self._update_filter_status()
         self.loaded_count = 0
         self.saved_packet_count = 0
         self.saved_alert_count = 0
@@ -611,15 +643,60 @@ class PacketPage(QWidget):
         self.clear_button.setEnabled(not busy)
         self.start_capture_button.setEnabled(not busy)
         self.refresh_interfaces_button.setEnabled(not busy)
-        self.capture_filter_combo.setEnabled(not busy)
-        self.capture_filter_input.setEnabled(not busy)
 
     def update_capture_filter_mode(self, mode: str) -> None:
+        if self._filter_mode == "Custom":
+            self.custom_filter_text = self.capture_filter_input.text()
+        self._filter_mode = mode
+        self.filter_timer.stop()
         preset = self.CAPTURE_FILTER_PRESETS.get(mode, "")
         self.capture_filter_input.setReadOnly(mode != "Custom")
-        if mode != "Custom":
-            self.capture_filter_input.setText(preset)
-        self.capture_filter_input.setPlaceholderText("Type a BPF capture filter" if mode == "Custom" else "No capture filter")
+        self.capture_filter_input.setText(self.custom_filter_text if mode == "Custom" else preset)
+        self.capture_filter_input.setPlaceholderText(
+            "tcp.port == 443 or ip.addr == 192.168.1.10" if mode == "Custom" else "All traffic"
+        )
+        self.apply_packet_filter()
+
+    def schedule_packet_filter(self, _: str = "") -> None:
+        if self.capture_filter_combo.currentText() == "Custom":
+            self.filter_timer.start()
+
+    def apply_packet_filter(self) -> bool:
+        expression = self.capture_filter_input.text().strip()
+        try:
+            compiled = PacketFilter.compile(expression)
+        except PacketFilterError as exc:
+            self.filter_error_message = str(exc)
+            self.filter_result_label.setText(f"Invalid filter: {self.filter_error_message}")
+            self.capture_filter_input.setToolTip(str(exc))
+            return False
+
+        self.filter_error_message = ""
+        self.packet_filter = compiled
+        self.packet_table.set_packet_filter(compiled.matches if compiled.expression else None)
+        capture_bpf = compiled.capture_filter or "all traffic"
+        self.capture_filter_input.setToolTip(
+            "Accepts common Wireshark display filters and BPF syntax. "
+            f"Capture BPF: {capture_bpf}"
+        )
+        self._update_filter_status()
+        return True
+
+    def update_visible_row_limit(self, value: int) -> None:
+        self.packet_table.set_max_visible_rows(value)
+        self._update_filter_status()
+
+    def _update_filter_status(self) -> None:
+        if self.filter_error_message:
+            self.filter_result_label.setText(f"Invalid filter: {self.filter_error_message}")
+            return
+        visible = self.packet_table.rowCount()
+        buffered = self.packet_table.buffered_packet_count()
+        text = f"Showing {visible:,} of {buffered:,} packets"
+        capture_filter_changed = self.packet_filter.capture_filter != self.active_capture_filter
+        if self.live_worker and self.live_worker.isRunning() and capture_filter_changed:
+            text += " (capture filter applies after restart)"
+        self.filter_result_label.setText(text)
 
     def _default_pcap_dialog_location(self) -> str:
         configured_path = self.settings_repository.get("default_pcap_path", "").strip()
