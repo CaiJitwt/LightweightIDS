@@ -217,6 +217,22 @@ def _app_style() -> str:
             padding: 6px;
             font-weight: 700;
         }
+        QPushButton {
+            background: #1a1a2e;
+            color: #e0e0e0;
+            border: 1px solid #3a3a50;
+            padding: 4px 12px;
+            border-radius: 4px;
+        }
+        QPushButton:hover {
+            background: #252540;
+        }
+        QPushButton:pressed {
+            background: #0f0f1a;
+        }
+        QPushButton:disabled {
+            color: #606070;
+        }
         QComboBox,
         QSpinBox,
         QDoubleSpinBox,
