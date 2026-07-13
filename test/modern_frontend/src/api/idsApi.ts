@@ -1,6 +1,7 @@
 import type {
   AlertRecord,
   AlertStatus,
+  AssetRecord,
   CaptureStartOptions,
   CaptureStatus,
   DashboardSnapshot,
@@ -8,10 +9,13 @@ import type {
   HostRecord,
   IntegrityResult,
   IntegrityStatus,
+  InvestigationRecord,
   PacketRecord,
   PcapImportStatus,
   ProcessRecord,
   SecurityCheck,
+  RuleRecord,
+  RuntimeSettings,
 } from "../types";
 
 const apiBase = import.meta.env.VITE_IDS_API_BASE ?? "";
@@ -73,4 +77,14 @@ export const idsApi = {
   integrityStatus: () => request<IntegrityStatus>("/api/security/integrity/status"),
   createIntegrityBaseline: (paths: string[]) => request<IntegrityResult>("/api/security/integrity/baseline", { method: "POST", body: JSON.stringify({ paths }) }),
   scanIntegrity: () => request<IntegrityResult>("/api/security/integrity/scan", { method: "POST", body: "{}" }),
+  settings: () => request<RuntimeSettings>("/api/settings"),
+  saveSettings: (settings: Partial<RuntimeSettings>) => request<RuntimeSettings>("/api/settings", { method: "POST", body: JSON.stringify(settings) }),
+  rules: () => request<{ records: RuleRecord[] }>("/api/rules"),
+  updateRule: (id: string, update: Partial<Pick<RuleRecord, "enabled" | "threshold" | "timeWindow">>) => request<{ record: RuleRecord }>(`/api/rules/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(update) }),
+  assets: () => request<{ records: AssetRecord[] }>("/api/assets"),
+  saveAsset: (asset: { ip: string; displayName: string; role: string; importance: number; notes: string }) => request<{ record: AssetRecord }>("/api/assets", { method: "POST", body: JSON.stringify(asset) }),
+  deleteAsset: (ip: string) => request<{ deleted: boolean }>(`/api/assets/${encodeURIComponent(ip)}`, { method: "DELETE" }),
+  investigations: () => request<{ records: InvestigationRecord[] }>("/api/investigations"),
+  createInvestigation: (record: { title: string; status: string; priority: string; hostIp: string; summary: string; notes: string }) => request<{ record: InvestigationRecord }>("/api/investigations", { method: "POST", body: JSON.stringify(record) }),
+  deleteInvestigation: (id: number) => request<{ deleted: boolean }>(`/api/investigations/${id}`, { method: "DELETE" }),
 };

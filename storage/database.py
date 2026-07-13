@@ -62,6 +62,7 @@ class Database:
             ("auto_save_packets", "true"),
             ("enable_realtime_detection", "true"),
             ("alert_cooldown_seconds", "10"),
+            ("minimum_alert_severity", "LOW"),
             ("log_level", "INFO"),
         )
         connection.executemany(

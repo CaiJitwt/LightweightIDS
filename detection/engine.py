@@ -86,6 +86,7 @@ class DetectionEngine:
         alert_cooldown_seconds: int = 10,
         asset_importance: dict[str, int] | None = None,
         blocklist_entries: list[BlocklistEntry] | None = None,
+        minimum_severity: str = "LOW",
     ) -> "DetectionEngine":
         rule_map = {
             "PORT_SCAN": PortScanRule,
@@ -132,6 +133,7 @@ class DetectionEngine:
             rules=rules,
             alert_cooldown_seconds=alert_cooldown_seconds,
             asset_importance=asset_importance,
+            minimum_severity=minimum_severity,
         )
 
     def add_rule(self, rule: RuleBase) -> None:

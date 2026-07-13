@@ -173,3 +173,45 @@ export interface HostProfile {
   alerts: AlertRecord[];
   timeline: HostTimelineEvent[];
 }
+
+export type FontScale = "compact" | "default" | "comfortable";
+
+export interface RuntimeSettings {
+  autoSavePackets: boolean;
+  realtimeDetection: boolean;
+  alertCooldownSeconds: number;
+  minimumAlertSeverity: Severity;
+}
+
+export interface RuleRecord {
+  id: string;
+  name: string;
+  category: string;
+  severity: Severity;
+  enabled: boolean;
+  threshold: number;
+  timeWindow: number;
+  description: string;
+}
+
+export interface AssetRecord {
+  ip: string;
+  display_name: string;
+  role: string;
+  importance: number;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InvestigationRecord {
+  id: number;
+  title: string;
+  status: "Open" | "Monitoring" | "Closed";
+  priority: Severity;
+  host_ip: string | null;
+  summary: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}

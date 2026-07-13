@@ -84,6 +84,12 @@ class SettingsPage(QWidget):
                 int(detection_config.get("alert_cooldown_seconds", 10)),
             )
         )
+        self.minimum_severity_combo = QComboBox()
+        self.minimum_severity_combo.addItems(["LOW", "MEDIUM", "HIGH", "CRITICAL"])
+        saved_minimum_severity = self.settings_repository.get("minimum_alert_severity", "LOW").upper()
+        self.minimum_severity_combo.setCurrentText(
+            saved_minimum_severity if saved_minimum_severity in {"LOW", "MEDIUM", "HIGH", "CRITICAL"} else "LOW"
+        )
         self.log_level_combo = QComboBox()
         self.log_level_combo.addItems(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
         configured_log_level = self.settings_repository.get(
@@ -115,6 +121,8 @@ class SettingsPage(QWidget):
         ]
 
         self._add_form_rows()
+        self.minimum_severity_label = QLabel("Minimum alert severity")
+        self._form.addRow(self.minimum_severity_label, self.minimum_severity_combo)
 
         self.status_label = QLabel("")
         self.status_label.setObjectName("PageHint")
@@ -129,6 +137,7 @@ class SettingsPage(QWidget):
         self.auto_save_check.toggled.connect(self.save_runtime_settings)
         self.realtime_check.toggled.connect(self.save_runtime_settings)
         self.cooldown_box.valueChanged.connect(self.save_runtime_settings)
+        self.minimum_severity_combo.currentTextChanged.connect(self.save_runtime_settings)
         self.log_level_combo.currentTextChanged.connect(self.save_runtime_settings)
         self.language_combo.currentIndexChanged.connect(self._on_language_changed)
 
@@ -205,6 +214,7 @@ class SettingsPage(QWidget):
                 "auto_save_packets": "true" if self.auto_save_check.isChecked() else "false",
                 "enable_realtime_detection": "true" if self.realtime_check.isChecked() else "false",
                 "alert_cooldown_seconds": str(self.cooldown_box.value()),
+                "minimum_alert_severity": self.minimum_severity_combo.currentText(),
                 "log_level": log_level,
             }
         )
