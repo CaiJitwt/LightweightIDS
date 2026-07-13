@@ -105,7 +105,7 @@ def _build_dark_palette() -> "QPalette":
 DARK_PALETTE = _build_dark_palette()
 
 
-_SKIP_LABEL_NAMES = {"Brand", "NavList"}
+_SKIP_LABEL_NAMES = {"Brand", "NavList", "SectionTitle"}
 
 def apply_label_colors(root: "QWidget") -> None:
     for widget in root.findChildren(QLabel):
