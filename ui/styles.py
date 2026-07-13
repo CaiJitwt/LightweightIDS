@@ -105,8 +105,12 @@ def _build_dark_palette() -> "QPalette":
 DARK_PALETTE = _build_dark_palette()
 
 
+_SKIP_LABEL_NAMES = {"Brand", "NavList"}
+
 def apply_label_colors(root: "QWidget") -> None:
     for widget in root.findChildren(QLabel):
+        if widget.objectName() in _SKIP_LABEL_NAMES:
+            continue
         if not widget.styleSheet():
             widget.setStyleSheet("color: #1f2933;")
 
