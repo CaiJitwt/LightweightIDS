@@ -17,7 +17,7 @@ from modern_ui.capture_session import CaptureSessionService, default_capture_opt
 from modern_ui.llm_guidance import LlmGuidanceError, LlmGuidanceService
 from modern_ui.pcap_import import PcapImportService
 from storage.database import Database
-from storage.repositories import AlertRepository, PacketRepository
+from storage.repositories import AlertRepository, PacketRepository, SettingsRepository
 
 
 class LocalApiServer(ThreadingHTTPServer):
@@ -27,6 +27,7 @@ class LocalApiServer(ThreadingHTTPServer):
         self.database = database
         self.alerts = AlertRepository(database)
         self.packets = PacketRepository(database)
+        self.settings = SettingsRepository(database)
         self.host_profiles = HostProfileService(database)
         self.alert_trends = AlertTrendAnalyzer()
         self.pcap_import = PcapImportService(database)
@@ -55,6 +56,8 @@ class LocalApiHandler(BaseHTTPRequestHandler):
         try:
             if parsed.path == "/api/health":
                 self._send_json({"ok": True, "service": "Lightweight IDS local API"})
+            elif parsed.path == "/api/settings":
+                self._send_json(_settings_payload(self.server.settings))
             elif parsed.path == "/api/capture/interfaces":
                 self._send_json({"interfaces": self.server.capture_service.list_interfaces()})
             elif parsed.path == "/api/capture/status":
@@ -150,6 +153,9 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/capture/start":
                 options = parse_capture_options(payload, default_capture_options(self.server.database))
                 self._send_json(self.server.capture_service.start(options), HTTPStatus.ACCEPTED)
+            elif parsed.path == "/api/settings":
+                self._update_settings(payload)
+                self._send_json(_settings_payload(self.server.settings))
             elif parsed.path == "/api/capture/pause":
                 self._send_json(self.server.capture_service.pause())
             elif parsed.path == "/api/capture/resume":
@@ -189,6 +195,21 @@ class LocalApiHandler(BaseHTTPRequestHandler):
 
     def log_message(self, _format: str, *_args: object) -> None:
         return
+
+    def _update_settings(self, payload: dict[str, Any]) -> None:
+        values: dict[str, str] = {}
+        if "autoSavePackets" in payload:
+            values["auto_save_packets"] = _bool_setting(payload, "autoSavePackets")
+        if "realtimeDetection" in payload:
+            values["enable_realtime_detection"] = _bool_setting(payload, "realtimeDetection")
+        if "alertCooldownSeconds" in payload:
+            values["alert_cooldown_seconds"] = str(max(0, min(3_600, _setting_integer(payload, "alertCooldownSeconds"))))
+        if "minimumAlertSeverity" in payload:
+            severity = str(payload["minimumAlertSeverity"]).upper()
+            if severity not in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
+                raise ValueError("minimumAlertSeverity must be LOW, MEDIUM, HIGH, or CRITICAL")
+            values["minimum_alert_severity"] = severity
+        self.server.settings.set_many(values)
 
     def _dashboard_payload(self) -> dict[str, Any]:
         recent_alerts = self.server.alerts.list_all(limit=500)
@@ -427,6 +448,29 @@ def _path_list(value: object) -> list[str]:
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise ValueError("paths must be an array of strings")
     return value
+
+
+def _settings_payload(settings: SettingsRepository) -> dict[str, Any]:
+    return {
+        "autoSavePackets": settings.get_bool("auto_save_packets", True),
+        "realtimeDetection": settings.get_bool("enable_realtime_detection", True),
+        "alertCooldownSeconds": settings.get_int("alert_cooldown_seconds", 10),
+        "minimumAlertSeverity": settings.get("minimum_alert_severity", "LOW").upper(),
+    }
+
+
+def _setting_integer(payload: dict[str, Any], key: str) -> int:
+    try:
+        return int(payload[key])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f"{key} must be an integer") from exc
+
+
+def _bool_setting(payload: dict[str, Any], key: str) -> str:
+    value = payload.get(key)
+    if not isinstance(value, bool):
+        raise ValueError(f"{key} must be a boolean")
+    return "true" if value else "false"
 
 
 def main() -> int:

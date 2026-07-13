@@ -58,7 +58,7 @@ function topologyFromHosts(list: HostRecord[]): { nodes: TopologyNode[]; edges: 
     edges.push({
       source: host.ip,
       target: "gw",
-      protocol: host.protocols[0]?.name ?? "TCP",
+      protocol: host.protocols?.[0]?.name ?? "TCP",
       packets: host.packets,
     });
   });
