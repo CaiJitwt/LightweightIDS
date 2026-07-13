@@ -84,7 +84,7 @@ def run_cli(argv: list[str] | None = None) -> int:
         "packet_count": len(packets),
         "alert_count": len(alerts),
         "skipped_count": skipped,
-        "high_or_critical": high_or_critical,
+        "high_or_critical_alerts": high_or_critical,
         "rules_triggered": len(rule_ids_seen),
         "severity_distribution": severity_dist,
         "alert_type_distribution": type_dist,
