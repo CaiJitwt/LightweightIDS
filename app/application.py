@@ -34,9 +34,11 @@ def run(argv: list[str]) -> int:
         raise SystemExit(1) from exc
 
     from ui.main_window import MainWindow
+    from ui.styles import GLOBAL_APP_STYLE
 
     app = QApplication(argv)
     app.setApplicationName(APP_NAME)
+    app.setStyleSheet(GLOBAL_APP_STYLE)
 
     window = MainWindow(database=database, config=config)
     window.show()

@@ -61,6 +61,38 @@ CARD_TONES = {
 }
 
 
+GLOBAL_APP_STYLE = """
+QWidget {
+    background-color: #f5f5f5;
+    color: #202020;
+}
+QLabel,
+QCheckBox,
+QRadioButton,
+QGroupBox {
+    color: #202020;
+}
+QLineEdit,
+QTextEdit,
+QPlainTextEdit,
+QComboBox,
+QSpinBox,
+QDoubleSpinBox,
+QTableView,
+QTreeView,
+QListView {
+    background-color: #ffffff;
+    color: #202020;
+    selection-background-color: #3478f6;
+    selection-color: #ffffff;
+}
+QPushButton {
+    background-color: #e6e6e6;
+    color: #202020;
+}
+"""
+
+
 DEFAULT_APP_STYLE = """
 QMainWindow {
     background: #f6f7f9;
