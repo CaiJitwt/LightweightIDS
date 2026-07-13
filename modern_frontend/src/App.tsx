@@ -2,20 +2,28 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import {
   Activity,
   BellRing,
+  BriefcaseBusiness,
   ChevronLeft,
   ChevronRight,
   Gauge,
+  HeartPulse,
   Laptop,
   Moon,
   Network,
+  Package,
+  Palette,
   RefreshCw,
   Search,
   Settings,
   Shield,
   ShieldCheck,
+  SlidersHorizontal,
   Sun,
+  Timeline,
+  Waypoints,
 } from "lucide-react";
-import type { LlmSettings, ThemePreference } from "./types";
+import type { FontScale, LlmSettings, ThemePreference } from "./types";
+import type { PersonalizationState } from "./pages/PersonalizationPage";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
 const TrafficPage = lazy(() => import("./pages/TrafficPage").then((module) => ({ default: module.TrafficPage })));
@@ -23,16 +31,32 @@ const HostsPage = lazy(() => import("./pages/HostsPage").then((module) => ({ def
 const AlertsPage = lazy(() => import("./pages/AlertsPage").then((module) => ({ default: module.AlertsPage })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => ({ default: module.SettingsPage })));
 const EndpointSecurityPage = lazy(() => import("./pages/EndpointSecurityPage").then((module) => ({ default: module.EndpointSecurityPage })));
+const InvestigationsPage = lazy(() => import("./pages/InvestigationsPage").then((module) => ({ default: module.InvestigationsPage })));
+const AssetsPage = lazy(() => import("./pages/AssetsPage").then((module) => ({ default: module.AssetsPage })));
+const RulesPage = lazy(() => import("./pages/RulesPage").then((module) => ({ default: module.RulesPage })));
+const ReportsPage = lazy(() => import("./pages/ReportsPage").then((module) => ({ default: module.ReportsPage })));
+const PersonalizationPage = lazy(() => import("./pages/PersonalizationPage").then((module) => ({ default: module.PersonalizationPage })));
+const EventTimelinePage = lazy(() => import("./pages/EventTimelinePage").then((module) => ({ default: module.EventTimelinePage })));
+const NetworkTopologyPage = lazy(() => import("./pages/NetworkTopologyPage").then((module) => ({ default: module.NetworkTopologyPage })));
+const SystemHealthPage = lazy(() => import("./pages/SystemHealthPage").then((module) => ({ default: module.SystemHealthPage })));
 
-type PageKey = "dashboard" | "traffic" | "hosts" | "alerts" | "endpoint" | "settings";
+type PageKey = "dashboard" | "traffic" | "hosts" | "alerts" | "investigations" | "assets" | "rules" | "reports" | "timeline" | "topology" | "health" | "endpoint" | "settings" | "personalization";
 
 const navItems = [
   { key: "dashboard" as const, label: "Dashboard", icon: Gauge },
   { key: "traffic" as const, label: "Traffic Monitor", icon: Activity },
   { key: "hosts" as const, label: "Host Explorer", icon: Network },
   { key: "alerts" as const, label: "Alert Center", icon: BellRing, count: 9 },
+  { key: "investigations" as const, label: "Investigations", icon: BriefcaseBusiness },
+  { key: "assets" as const, label: "Assets", icon: Package },
+  { key: "rules" as const, label: "Rule Management", icon: SlidersHorizontal },
+  { key: "reports" as const, label: "Reports", icon: Timeline },
+  { key: "timeline" as const, label: "Event Timeline", icon: Timeline },
+  { key: "topology" as const, label: "Network Topology", icon: Waypoints },
+  { key: "health" as const, label: "System Health", icon: HeartPulse },
   { key: "endpoint" as const, label: "Endpoint Security", icon: ShieldCheck },
   { key: "settings" as const, label: "Settings", icon: Settings },
+  { key: "personalization" as const, label: "Personalization", icon: Palette },
 ];
 
 const pageMeta: Record<PageKey, { title: string; subtitle: string }> = {
@@ -40,30 +64,50 @@ const pageMeta: Record<PageKey, { title: string; subtitle: string }> = {
   traffic: { title: "Traffic monitor", subtitle: "Live packet metadata from the active capture interface" },
   hosts: { title: "Host explorer", subtitle: "Observed assets, connections and composite risk" },
   alerts: { title: "Alert center", subtitle: "Review evidence, related packets and analyst status" },
+  investigations: { title: "Investigations", subtitle: "Preserve analyst evidence and investigation notes" },
+  assets: { title: "Assets", subtitle: "Define high-value systems for risk prioritization" },
+  rules: { title: "Rule management", subtitle: "Tune enabled detection rules and time windows" },
+  reports: { title: "Reports", subtitle: "Export analyst-friendly persisted alert records" },
+  timeline: { title: "Event timeline", subtitle: "Correlate observed events across the analyst workflow" },
+  topology: { title: "Network topology", subtitle: "Explore observed hosts and communication paths" },
+  health: { title: "System health", subtitle: "Review sensor and local service readiness" },
   endpoint: { title: "Endpoint security", subtitle: "Read-only host posture, process inventory and file integrity" },
   settings: { title: "Settings", subtitle: "Appearance and local analyst integrations" },
+  personalization: { title: "Personalization", subtitle: "Workspace wallpaper and overlay companion" },
 };
+
+const defaultPersonalization: PersonalizationState = { accent: "#2677bd", background: "", petImage: "", petPosition: "bottom-right", petSize: 96, petOpacity: 85 };
 
 export default function App() {
   const [page, setPage] = useState<PageKey>("dashboard");
   const [collapsed, setCollapsed] = useState(false);
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
+  const [fontScale, setFontScale] = useState<FontScale>(() => readFontScale());
   const systemDark = useSystemDarkMode();
   const theme = themePreference === "system" ? (systemDark ? "dark" : "light") : themePreference;
   const [llmSettings, setLlmSettings] = useState<LlmSettings>(() => readLlmSettings());
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [selectedHostIp, setSelectedHostIp] = useState<string | undefined>();
+  const [personalization, setPersonalization] = useState<PersonalizationState>(readPersonalization);
 
   useEffect(() => {
     localStorage.setItem("ids-prototype-theme", themePreference);
   }, [themePreference]);
 
   useEffect(() => {
+    localStorage.setItem("ids-prototype-font-scale", fontScale);
+  }, [fontScale]);
+
+  useEffect(() => {
     localStorage.setItem("ids-prototype-llm", JSON.stringify({ baseUrl: llmSettings.baseUrl, model: llmSettings.model }));
     if (llmSettings.apiKey) sessionStorage.setItem("ids-prototype-llm-api-key", llmSettings.apiKey);
     else sessionStorage.removeItem("ids-prototype-llm-api-key");
   }, [llmSettings]);
+
+  useEffect(() => {
+    try { localStorage.setItem("ids-prototype-personalization", JSON.stringify(personalization)); } catch { /* Browser storage can reject large image data. */ }
+  }, [personalization]);
 
   useEffect(() => {
     if (!autoRefresh || page !== "dashboard") return undefined;
@@ -74,7 +118,7 @@ export default function App() {
   const meta = pageMeta[page];
 
   return (
-    <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`} data-theme={theme}>
+    <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`} data-theme={theme} data-font-scale={fontScale} style={{ "--accent": personalization.accent } as React.CSSProperties}>
       <aside className="sidebar">
         <div className="brand-block"><span className="brand-mark"><Shield size={20} /></span><span className="brand-copy"><strong>Lightweight IDS</strong><small>Analyst console</small></span></div>
         <nav className="primary-nav" aria-label="Primary navigation">
@@ -107,18 +151,37 @@ export default function App() {
             {page === "traffic" && <TrafficPage />}
             {page === "hosts" && <HostsPage initialHostIp={selectedHostIp} refreshVersion={refreshVersion} />}
             {page === "alerts" && <AlertsPage llmSettings={llmSettings} refreshVersion={refreshVersion} />}
+            {page === "investigations" && <InvestigationsPage />}
+            {page === "assets" && <AssetsPage />}
+            {page === "rules" && <RulesPage />}
+            {page === "reports" && <ReportsPage />}
+            {page === "timeline" && <EventTimelinePage />}
+            {page === "topology" && <NetworkTopologyPage />}
+            {page === "health" && <SystemHealthPage />}
             {page === "endpoint" && <EndpointSecurityPage />}
-            {page === "settings" && <SettingsPage themePreference={themePreference} onThemePreferenceChange={setThemePreference} llmSettings={llmSettings} onLlmSettingsChange={setLlmSettings} />}
+            {page === "settings" && <SettingsPage themePreference={themePreference} onThemePreferenceChange={setThemePreference} fontScale={fontScale} onFontScaleChange={setFontScale} llmSettings={llmSettings} onLlmSettingsChange={setLlmSettings} />}
+            {page === "personalization" && <PersonalizationPage state={personalization} onChange={setPersonalization} />}
           </Suspense>
         </div>
       </main>
+      {personalization.petImage && <img className={`overlay-pet ${personalization.petPosition}`} src={personalization.petImage} alt="" style={{ width: personalization.petSize, opacity: personalization.petOpacity / 100 }} />}
     </div>
   );
+}
+
+function readPersonalization(): PersonalizationState {
+  try { return { ...defaultPersonalization, ...JSON.parse(localStorage.getItem("ids-prototype-personalization") ?? "{}") }; }
+  catch { return defaultPersonalization; }
 }
 
 function readThemePreference(): ThemePreference {
   const value = localStorage.getItem("ids-prototype-theme");
   return value === "light" || value === "dark" || value === "system" ? value : "system";
+}
+
+function readFontScale(): FontScale {
+  const value = localStorage.getItem("ids-prototype-font-scale");
+  return value === "compact" || value === "comfortable" ? value : "default";
 }
 
 function readLlmSettings(): LlmSettings {

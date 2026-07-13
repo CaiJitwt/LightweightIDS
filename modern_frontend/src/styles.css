@@ -393,3 +393,19 @@ kbd { padding: 2px 5px; border: 1px solid var(--border); border-radius: 3px; bac
   .detail-grid { grid-template-columns: 1fr; }
   .detail-actions { grid-template-columns: 1fr; }
 }
+
+/* Production workspace extensions: shared settings controls and non-blocking companion overlay. */
+.app-shell { --accent: #2677bd; }
+.app-shell[data-font-scale="compact"] .page-content { font-size: 12px; }
+.app-shell[data-font-scale="comfortable"] .page-content { font-size: 15px; }
+.plain-select, .number-stepper input { min-height: 32px; padding: 0 8px; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 5px; font: inherit; }
+.number-stepper { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; }
+.number-stepper input { width: 72px; }
+.switch { position: relative; width: 40px; height: 22px; flex: none; }
+.switch input { position: absolute; opacity: 0; }
+.switch span { position: absolute; inset: 0; border-radius: 12px; background: var(--border-strong); transition: background .16s ease; }
+.switch span::after { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; content: ""; transition: transform .16s ease; }
+.switch input:checked + span { background: var(--accent); }
+.switch input:checked + span::after { transform: translateX(18px); }
+.overlay-pet { position: fixed; z-index: 8; pointer-events: none; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .18)); }
+.overlay-pet.bottom-right { right: 16px; bottom: 16px; }.overlay-pet.bottom-left { left: 16px; bottom: 16px; }.overlay-pet.top-right { top: 16px; right: 16px; }.overlay-pet.top-left { top: 16px; left: 16px; }

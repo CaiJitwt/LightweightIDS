@@ -64,6 +64,6 @@ describe("modern IDS frontend", () => {
     fireEvent.click(within(screen.getByRole("navigation", { name: "Primary navigation" })).getByRole("button", { name: "Settings" }));
     expect(await screen.findByRole("heading", { name: "LLM defense guidance" })).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Stored only for this browser session")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /System/ })).toHaveClass("selected");
+    expect(screen.getByRole("button", { name: /^System$/ })).toHaveClass("selected");
   });
 });
