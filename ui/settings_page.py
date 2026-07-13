@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from detection.llm.client import LlmClient, LlmConfig
 from storage.database import Database
 from storage.repositories import SettingsRepository
 
@@ -98,11 +99,38 @@ class SettingsPage(QWidget):
         form.addRow("Alert cooldown", self.cooldown_box)
         form.addRow("Log level", self.log_level_combo)
 
+        # LLM configuration
+        self.llm_section_label = QLabel("LLM Analysis")
+        self.llm_section_label.setObjectName("SectionTitle")
+
+        self.llm_provider = QComboBox()
+        self.llm_provider.addItems(["ollama", "openai"])
+        self.llm_api_url = QLineEdit()
+        self.llm_api_url.setPlaceholderText("http://localhost:11434")
+        self.llm_model = QLineEdit()
+        self.llm_model.setPlaceholderText("e.g. llama3.2 or gpt-4o-mini")
+        self.llm_enabled = QCheckBox()
+        self.llm_enabled.setChecked(True)
+        self.llm_test_btn = QPushButton("Test connection")
+        self.llm_test_result = QLabel("")
+
+        llm_form = QFormLayout()
+        llm_form.addRow("Provider", self.llm_provider)
+        llm_form.addRow("API URL", self.llm_api_url)
+        llm_form.addRow("Model", self.llm_model)
+        llm_form.addRow("Enabled", self.llm_enabled)
+        llm_form.addRow("", self.llm_test_btn)
+        llm_form.addRow("", self.llm_test_result)
+
+        self._load_llm_settings()
+
         self.status_label = QLabel("")
         self.status_label.setObjectName("PageHint")
         self.status_label.setWordWrap(True)
 
         layout.addLayout(form)
+        layout.addWidget(self.llm_section_label)
+        layout.addLayout(llm_form)
         layout.addWidget(self.status_label)
         layout.addStretch()
 
@@ -112,6 +140,55 @@ class SettingsPage(QWidget):
         self.realtime_check.toggled.connect(self.save_runtime_settings)
         self.cooldown_box.valueChanged.connect(self.save_runtime_settings)
         self.log_level_combo.currentTextChanged.connect(self.save_runtime_settings)
+        self.llm_test_btn.clicked.connect(self._test_llm_connection)
+        self.llm_provider.currentTextChanged.connect(self._save_llm_settings)
+        self.llm_api_url.textChanged.connect(self._save_llm_settings)
+        self.llm_model.textChanged.connect(self._save_llm_settings)
+        self.llm_enabled.toggled.connect(self._save_llm_settings)
+
+    def _load_llm_settings(self) -> None:
+        from detection.llm.client import LlmConfig
+        cfg = LlmConfig()
+        self.llm_provider.setCurrentText(cfg.provider)
+        self.llm_api_url.setText(cfg.api_url)
+        self.llm_model.setText(cfg.model)
+        self.llm_enabled.setChecked(cfg.enabled)
+
+    def _save_llm_settings(self) -> None:
+        from detection.llm.client import LlmConfig
+        cfg = LlmConfig(
+            provider=self.llm_provider.currentText(),
+            api_url=self.llm_api_url.text().strip() or "http://localhost:11434",
+            model=self.llm_model.text().strip(),
+            enabled=self.llm_enabled.isChecked(),
+        )
+        # Store in SQLite settings table for persistence
+        self.settings_repository.set("llm_provider", cfg.provider)
+        self.settings_repository.set("llm_api_url", cfg.api_url)
+        self.settings_repository.set("llm_model", cfg.model)
+        self.settings_repository.set("llm_enabled", "true" if cfg.enabled else "false")
+
+    def _test_llm_connection(self) -> None:
+        self.llm_test_btn.setEnabled(False)
+        self.llm_test_btn.setText("Testing...")
+        self.llm_test_result.setText("")
+
+        cfg = LlmConfig(
+            provider=self.llm_provider.currentText(),
+            api_url=self.llm_api_url.text().strip() or "http://localhost:11434",
+            model=self.llm_model.text().strip(),
+            enabled=True,
+        )
+        client = LlmClient(cfg)
+        result = client.test_connection()
+        if result.get("ok"):
+            self.llm_test_result.setText(f"Connected. Available models: {result.get('available', result.get('model', 'ok'))}")
+        else:
+            available = result.get("available")
+            hint = f" Available: {available}" if available else ""
+            self.llm_test_result.setText(f"Failed: {result.get('error', 'unknown')}.{hint}")
+        self.llm_test_btn.setEnabled(True)
+        self.llm_test_btn.setText("Test connection")
 
     def choose_default_pcap(self) -> None:
         path, _ = QFileDialog.getOpenFileName(

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QTimer, Signal
+from PySide6.QtCore import QThread, QTimer, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from detection.analysis.attack_chain import AttackChainAnalyzer
+from detection.llm import AlertAnalyzer
 from models import AlertRecord, PacketRecord
 from report.report_generator import ReportGenerator
 from protection import BlocklistService
@@ -78,6 +79,7 @@ class AlertPage(QWidget):
         self.confirm_button = QPushButton("Confirm")
         self.ignore_button = QPushButton("Ignore")
         self.delete_button = QPushButton("Delete")
+        self.analyze_button = QPushButton("AI Analysis")
         self.investigate_button = QPushButton("Add to investigation")
         self.export_button = QPushButton("Export CSV")
         self.result_label = QLabel()
@@ -90,6 +92,7 @@ class AlertPage(QWidget):
         toolbar.addWidget(self.confirm_button)
         toolbar.addWidget(self.ignore_button)
         toolbar.addWidget(self.delete_button)
+        toolbar.addWidget(self.analyze_button)
         toolbar.addWidget(self.investigate_button)
         toolbar.addWidget(self.export_button)
 
@@ -132,6 +135,7 @@ class AlertPage(QWidget):
         self.confirm_button.clicked.connect(lambda: self.update_selected_status("confirmed"))
         self.ignore_button.clicked.connect(lambda: self.update_selected_status("ignored"))
         self.delete_button.clicked.connect(self.delete_selected_alert)
+        self.analyze_button.clicked.connect(self.run_llm_analysis)
         self.investigate_button.clicked.connect(self.add_selected_to_investigation)
         self.export_button.clicked.connect(self.export_csv)
         self.table.itemSelectionChanged.connect(self.render_selected_alert_detail)
@@ -328,6 +332,26 @@ class AlertPage(QWidget):
         self.report_generator.export_alerts_csv(self.current_alerts, path)
         QMessageBox.information(self, "Export complete", f"Alerts CSV exported to: {path}")
 
+    def run_llm_analysis(self) -> None:
+        alert = self._selected_alert()
+        if alert is None:
+            QMessageBox.information(self, "No alert selected", "Please select an alert first.")
+            return
+
+        self.analyze_button.setEnabled(False)
+        self.analyze_button.setText("Analyzing...")
+        self.detail_view.setPlainText("Running AI analysis, please wait...")
+
+        self._llm_worker = LlmAnalysisWorker(alert)
+        self._llm_worker.finished.connect(self._on_llm_result)
+        self._llm_worker.start()
+
+    def _on_llm_result(self, text: str) -> None:
+        self.analyze_button.setEnabled(True)
+        self.analyze_button.setText("AI Analysis")
+        self.detail_view.setPlainText(text)
+        self._llm_worker = None
+
     def _selected_alert(self) -> AlertRecord | None:
         alert_id = self.table.selected_alert_id()
         if alert_id is None:
@@ -387,3 +411,19 @@ class AlertPage(QWidget):
 
     def _contains_non_ascii(self, value: str) -> bool:
         return any(ord(char) > 127 for char in value)
+
+
+class LlmAnalysisWorker(QThread):
+    result_ready = Signal(str)
+
+    def __init__(self, alert: AlertRecord) -> None:
+        super().__init__()
+        self.alert = alert
+
+    def run(self) -> None:
+        try:
+            analyzer = AlertAnalyzer()
+            result = analyzer.analyze(self.alert)
+        except Exception as exc:
+            result = f"Analysis failed: {exc}\n\nAn Ollama instance must be running locally (ollama serve), or configure an OpenAI-compatible endpoint in Settings."
+        self.result_ready.emit(result)
