@@ -1,15 +1,24 @@
 # Lightweight IDS Modern Frontend Prototype
 
-This isolated React prototype explores a denser, more modern analyst workflow without replacing or modifying the PySide6 application. All data is local mock data and no backend detection or database logic is executed.
+This React prototype explores a denser, more modern analyst workflow without replacing the PySide6 application. It remains usable with an explicitly labelled offline preview, but uses the local Python API for real persisted dashboard statistics, alerts, related packets, host profiles, live packet capture, endpoint posture checks, file-integrity scans, and process inventory whenever the API is available.
 
 ## Run
 
 ```powershell
+conda run -n Lightweight-IDS python -m modern_ui.local_api
+
+cd test\modern_frontend
 npm install
 npm run dev
 ```
 
 Open `http://127.0.0.1:4173`.
+
+The local API is intentionally bound to `127.0.0.1:8787`. Live capture requires Scapy, Npcap on Windows, and any permissions required by the selected adapter. The browser never captures packets directly.
+
+## LLM guidance
+
+Settings accepts an OpenAI-compatible Base URL, model, and API key. The Base URL and model remain in browser local storage; the key is kept in browser session storage. An alert is sent only when the analyst presses `Generate defense guidance`; normal traffic is not sent automatically. TLS records remain metadata or fingerprint evidence only.
 
 ## Verify
 
@@ -20,4 +29,4 @@ npm run build
 npm run test:e2e
 ```
 
-The prototype covers Dashboard, Traffic Monitor, Host Explorer and Alert Center. Its TypeScript records mirror the current Python packet, alert and host profile shapes so a future read-only Qt WebChannel or local API adapter can replace the mock source.
+The prototype covers Dashboard, Traffic Monitor, Host Explorer, Alert Center, Endpoint Security, and Settings. The Dashboard, Host Explorer, and Alert Center now use the local API rather than mock data when it is running; status labels make the offline preview explicit. Selecting an alert lists its matching stored packets, and selecting a packet shows its full stored metadata. The prototype does not decrypt HTTPS payloads: TLS is shown only as metadata or fingerprint evidence.

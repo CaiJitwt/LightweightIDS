@@ -246,6 +246,29 @@ class PacketRepository:
             ).fetchall()
         return [(int(row["dst_port"]), int(row["total"])) for row in rows]
 
+    def count_by_time_bucket(self, bucket: str = "hour", limit: int = 24) -> list[tuple[str, int]]:
+        """Return persisted packet counts for the lightweight local analyst API."""
+        formats = {
+            "hour": "%Y-%m-%d %H:00",
+            "day": "%Y-%m-%d",
+        }
+        if bucket not in formats:
+            raise ValueError("bucket must be 'hour' or 'day'")
+
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT strftime(?, timestamp) AS bucket, COUNT(*) AS total
+                FROM packets
+                WHERE timestamp IS NOT NULL AND timestamp != ''
+                GROUP BY bucket
+                ORDER BY bucket DESC
+                LIMIT ?
+                """,
+                (formats[bucket], limit),
+            ).fetchall()
+        return [(str(row["bucket"]), int(row["total"])) for row in reversed(rows) if row["bucket"]]
+
     def _from_row(self, row: object) -> PacketRecord:
         return PacketRecord(
             id=row["id"],  # type: ignore[index]
@@ -315,6 +338,19 @@ class AlertRepository:
             rows = connection.execute(sql, tuple(values)).fetchall()
         return [self._from_row(row) for row in rows]
 
+    def get(self, alert_id: int) -> AlertRecord | None:
+        with self.database.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT id, timestamp, rule_id, rule_name, alert_type, severity, src_ip, dst_ip,
+                       src_port, dst_port, protocol, description, evidence, status
+                FROM alerts
+                WHERE id = ?
+                """,
+                (alert_id,),
+            ).fetchone()
+        return None if row is None else self._from_row(row)
+
     def list_for_host(self, host_ip: str, limit: int = 1_000) -> list[AlertRecord]:
         with self.database.connect() as connection:
             rows = connection.execute(
@@ -349,6 +385,11 @@ class AlertRepository:
         with self.database.connect() as connection:
             rows = connection.execute("SELECT severity, COUNT(*) AS total FROM alerts GROUP BY severity ORDER BY total DESC").fetchall()
         return {str(row["severity"]): int(row["total"]) for row in rows}
+
+    def count_by_status(self) -> dict[str, int]:
+        with self.database.connect() as connection:
+            rows = connection.execute("SELECT status, COUNT(*) AS total FROM alerts GROUP BY status").fetchall()
+        return {str(row["status"] or "unconfirmed"): int(row["total"]) for row in rows}
 
     def count_by_type(self) -> dict[str, int]:
         with self.database.connect() as connection:
