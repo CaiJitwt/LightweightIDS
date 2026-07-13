@@ -311,11 +311,18 @@ class PacketPage(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
-        toolbar = QHBoxLayout()
+
+        # 第一行：网卡选择框单独一行
+        interface_row = QHBoxLayout()
         self.interface_combo = QComboBox()
         self.interface_combo.setMinimumWidth(260)
         self.interface_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.refresh_interfaces_button = QPushButton("Refresh interfaces")
+        interface_row.addWidget(self.interface_combo, 1)
+        interface_row.addWidget(self.refresh_interfaces_button)
+
+        # 第二行：所有操作按钮
+        toolbar = QHBoxLayout()
         self.import_button = QPushButton("Import pcap")
         self.demo_button = QPushButton("Load demo data")
         self.import_decrypted_button = QPushButton("Import decrypted HTTP log")
@@ -327,8 +334,6 @@ class PacketPage(QWidget):
         self.clear_button = QPushButton("Clear table")
         self.stop_capture_button.setEnabled(False)
 
-        toolbar.addWidget(self.interface_combo, 1)
-        toolbar.addWidget(self.refresh_interfaces_button)
         toolbar.addWidget(self.import_button)
         toolbar.addWidget(self.demo_button)
         toolbar.addWidget(self.import_decrypted_button)
@@ -364,6 +369,7 @@ class PacketPage(QWidget):
         self.status_label.setWordWrap(True)
         self.packet_table = PacketTable()
 
+        layout.addLayout(interface_row, 0)
         layout.addLayout(toolbar, 0)
         layout.addLayout(capture_options, 0)
         layout.addWidget(self.status_label)
