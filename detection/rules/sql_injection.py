@@ -27,6 +27,8 @@ class SqlInjectionRule(RuleBase):
         "load_file(",
     ]
     REGEX_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+        # Named regex patterns for time-based blind, error-based, stacked queries,
+        # wide-byte encoding, hex encoding, and tautology variants.
         ("union_select", re.compile(r"UNION\s+(ALL\s+)?SELECT", re.IGNORECASE)),
         ("tautology_quote", re.compile(r"'\s*OR\s+'1'\s*=\s*'1|'\s*OR\s+1\s*=\s*1|'\s*OR\s+'a'\s*=\s*'a", re.IGNORECASE)),
         ("numeric_tautology", re.compile(r"\bOR\s+1\s*=\s*1\b|\bAND\s+1\s*=\s*1\b", re.IGNORECASE)),
@@ -45,6 +47,10 @@ class SqlInjectionRule(RuleBase):
         ("hex_encode", re.compile(r"0x[0-9a-fA-F]{6,}", re.IGNORECASE)),
         ("or_tautology", re.compile(r"\bOR\s+1\s*=\s*1\b", re.IGNORECASE)),
         ("quote_tautology", re.compile(r"'\s*OR\s*'[^']*'\s*=\s*'", re.IGNORECASE)),
+        ("char_obfuscation", re.compile(r"\b(CHAR|CHR)\s*\(\s*\d+(\s*,\s*\d+){2,}\s*\)", re.IGNORECASE)),
+        ("conditional_probe", re.compile(r"\bCASE\s+WHEN\b|\bIF\s*\([^)]*(SLEEP|BENCHMARK)\s*\(", re.IGNORECASE)),
+        ("metadata_probe", re.compile(r"\b(pg_catalog|sqlite_master|sysobjects|all_tables)\b", re.IGNORECASE)),
+        ("union_obfuscated", re.compile(r"\bUNION\s*SELECT\b", re.IGNORECASE)),
     ]
 
     def process(self, packet: PacketRecord) -> list[AlertRecord]:

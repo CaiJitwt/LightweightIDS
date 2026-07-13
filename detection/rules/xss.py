@@ -28,6 +28,8 @@ class XssRule(RuleBase):
         "eval(",
     ]
 
+    # Regex patterns for event handlers, SVG/iframe injection, HTML entity
+    # encoding, fromCharCode/atob/btoa, CSS expression, and data URI smuggling.
     REGEX_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         ("script_tag", re.compile(r"<\s*script[^>]*>.*?<\s*/\s*script\s*>", re.IGNORECASE | re.DOTALL)),
         ("script_src", re.compile(r"<\s*script[^>]*src\s*=", re.IGNORECASE)),
@@ -54,6 +56,9 @@ class XssRule(RuleBase):
         ("alert_call", re.compile(r"\balert\s*\([^)]*\)", re.IGNORECASE)),
         ("document_cookie", re.compile(r"\bdocument\s*\.\s*cookie\b", re.IGNORECASE)),
         ("eval_call", re.compile(r"\beval\s*\([^)]*\)", re.IGNORECASE)),
+        ("srcdoc", re.compile(r"\bsrcdoc\s*=", re.IGNORECASE)),
+        ("vbscript_uri", re.compile(r"vbscript\s*:", re.IGNORECASE)),
+        ("meta_refresh", re.compile(r"<\s*meta[^>]*http-equiv\s*=\s*[\"']?refresh", re.IGNORECASE)),
     ]
 
     def process(self, packet: PacketRecord) -> list[AlertRecord]:

@@ -32,11 +32,10 @@ class MaliciousCommandRule(RuleBase):
         "ncat",
     ]
 
-    # Enhanced: 50 regex patterns covering 9 categories beyond simple keywords.
-    # Adds: host recon (netstat, ipconfig, tasklist), reverse shells (python/perl/ruby/php/socat/mkfifo),
-    # encoded execution (IEX, base64, certutil, mshta), privilege escalation (sudo, su, chmod),
-    # persistence (crontab, registry Run, rc.local), lateral movement (psexec, wmiexec, schtasks),
-    # data exfiltration, credential dumping (mimikatz, procdump), and attack tools (nmap, hydra, sqlmap).
+    # Regex patterns for host recon, reverse shells (7 variants), encoded
+    # execution, privilege escalation, persistence, lateral movement tools,
+    # data exfiltration, credential dumping (mimikatz, procdump), and
+    # attack tools (nmap, hydra, sqlmap).
     REGEX_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         # ---- host reconnaissance ----
         ("hostname", re.compile(r"\bhostname\b", re.IGNORECASE)),
@@ -97,6 +96,8 @@ class MaliciousCommandRule(RuleBase):
         ("hydra", re.compile(r"\bhydra\s+-[lL]\s+\S+\s+-[pP]\s+\S+\s+\S+:\d+\b", re.IGNORECASE)),
         ("sqlmap", re.compile(r"\bsqlmap\s+-u\s+http", re.IGNORECASE)),
         ("gobuster", re.compile(r"\bgobuster\s+dir\s+-u\s+http", re.IGNORECASE)),
+        ("shell_separator", re.compile(r"(?:;|&&|\|\||\||`|\$\()\s*(whoami|id|uname|cat|type|cmd|powershell|bash|sh|nc|curl|wget)\b", re.IGNORECASE)),
+        ("ip_parameter_injection", re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\s*(?:;|&&|\|\|)\s*\w+", re.IGNORECASE)),
     ]
 
     def process(self, packet: PacketRecord) -> list[AlertRecord]:

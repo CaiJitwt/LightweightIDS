@@ -13,9 +13,10 @@ class BaselineDeviationRule(RuleBase):
     threshold = 3
     time_window = 60
 
-    def __init__(self, *, min_history: int = 5, **kwargs: object) -> None:
+    def __init__(self, *, min_history: int = 8, minimum_deviations: int = 2, **kwargs: object) -> None:
         super().__init__(**kwargs)  # type: ignore[arg-type]
         self.min_history = min_history
+        self.minimum_deviations = max(1, minimum_deviations)
         self.baseline_manager = BaselineManager(window_seconds=self.time_window)
 
     def process(self, packet: PacketRecord) -> list[AlertRecord]:
@@ -28,7 +29,7 @@ class BaselineDeviationRule(RuleBase):
         assert current is not None and historical is not None
 
         deviations = self._deviations(current, historical)
-        if not deviations:
+        if len(deviations) < self.minimum_deviations:
             return []
 
         return [

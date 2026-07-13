@@ -8,10 +8,40 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
-from models import AlertRecord, PacketRecord
+from models import AlertRecord, InvestigationEvidenceRecord, InvestigationRecord, PacketRecord
 
 
 class ReportGenerator:
+    def generate_investigation_html(
+        self,
+        investigation: InvestigationRecord,
+        evidence: list[InvestigationEvidenceRecord],
+        output_path: str | Path,
+    ) -> None:
+        rows = "".join(
+            "<tr>"
+            f"<td>{escape(item.alert_timestamp)}</td>"
+            f"<td>{escape(item.severity)}</td>"
+            f"<td>{escape(item.rule_name)}</td>"
+            f"<td>{escape(item.src_ip or '')}</td>"
+            f"<td>{escape(item.dst_ip or '')}</td>"
+            f"<td>{escape(item.description)}</td>"
+            f"<td>{escape(item.evidence)}</td>"
+            "</tr>"
+            for item in evidence
+        ) or "<tr><td colspan='7'>No evidence</td></tr>"
+        html = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>{escape(investigation.title)}</title>
+<style>body{{font-family:Arial,sans-serif;margin:32px;color:#1f2933}}table{{border-collapse:collapse;width:100%}}th,td{{border:1px solid #d9e2ec;padding:8px;text-align:left;vertical-align:top}}th{{background:#eef2f7}}</style>
+</head><body><h1>{escape(investigation.title)}</h1>
+<p><strong>Status:</strong> {escape(investigation.status)} &nbsp; <strong>Priority:</strong> {escape(investigation.priority)} &nbsp; <strong>Host:</strong> {escape(investigation.host_ip or '')}</p>
+<h2>Summary</h2><p>{escape(investigation.summary)}</p><h2>Notes</h2><p>{escape(investigation.notes)}</p>
+<h2>Evidence</h2><table><thead><tr><th>Time</th><th>Severity</th><th>Rule</th><th>Source</th><th>Destination</th><th>Description</th><th>Evidence</th></tr></thead><tbody>{rows}</tbody></table>
+</body></html>"""
+        path = Path(output_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(html, encoding="utf-8")
+
     def generate_html_report(
         self,
         alerts: list[AlertRecord],

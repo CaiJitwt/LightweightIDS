@@ -5,11 +5,13 @@ from PySide6.QtWidgets import QFileDialog, QLabel, QMessageBox, QPushButton, QVB
 from report.report_generator import ReportGenerator
 from storage.database import Database
 from storage.repositories import AlertRepository, PacketRepository
+from ui.i18n import locale_manager
 
 
 class ReportPage(QWidget):
     def __init__(self, database: Database) -> None:
         super().__init__()
+        self._lm = locale_manager()
         self.database = database
         self.packet_repository = PacketRepository(database)
         self.alert_repository = AlertRepository(database)
@@ -17,12 +19,12 @@ class ReportPage(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
-        self.hint = QLabel("Export a full HTML detection report, or export alerts as CSV or JSON.")
+        self.hint = QLabel(self._lm.tr("page.reports.hint"))
         self.hint.setObjectName("PageHint")
         self.hint.setWordWrap(True)
-        self.html_button = QPushButton("Export HTML report")
-        self.csv_button = QPushButton("Export alerts CSV")
-        self.json_button = QPushButton("Export alerts JSON")
+        self.html_button = QPushButton(self._lm.tr("page.reports.export_html"))
+        self.csv_button = QPushButton(self._lm.tr("page.reports.export_csv"))
+        self.json_button = QPushButton(self._lm.tr("page.reports.export_json"))
 
         for button in [self.html_button, self.csv_button, self.json_button]:
             button.setMinimumHeight(34)
@@ -37,10 +39,19 @@ class ReportPage(QWidget):
         self.csv_button.clicked.connect(self.export_csv)
         self.json_button.clicked.connect(self.export_json)
 
+        self._lm.locale_changed.connect(self.retranslate_ui)
+
+    def retranslate_ui(self) -> None:
+        """Update all user-visible text after a locale change."""
+        self.hint.setText(self._lm.tr("page.reports.hint"))
+        self.html_button.setText(self._lm.tr("page.reports.export_html"))
+        self.csv_button.setText(self._lm.tr("page.reports.export_csv"))
+        self.json_button.setText(self._lm.tr("page.reports.export_json"))
+
     def export_html(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "Export HTML report",
+            self._lm.tr("page.reports.dialog.html"),
             "lightweight_ids_report.html",
             "HTML files (*.html);;All files (*)",
         )
@@ -51,12 +62,16 @@ class ReportPage(QWidget):
         packets = self.packet_repository.list_recent()
         statistics = self._build_statistics()
         self.report_generator.generate_html_report(alerts, packets, statistics, path)
-        QMessageBox.information(self, "Export complete", f"HTML report exported to: {path}")
+        QMessageBox.information(
+            self,
+            self._lm.tr("page.reports.export_complete"),
+            self._lm.tr("page.reports.html_done", path=path),
+        )
 
     def export_csv(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "Export alerts CSV",
+            self._lm.tr("page.reports.dialog.csv"),
             "alerts.csv",
             "CSV files (*.csv);;All files (*)",
         )
@@ -65,12 +80,16 @@ class ReportPage(QWidget):
 
         alerts = self.alert_repository.list_all()
         self.report_generator.export_alerts_csv(alerts, path)
-        QMessageBox.information(self, "Export complete", f"Alert CSV exported to: {path}")
+        QMessageBox.information(
+            self,
+            self._lm.tr("page.reports.export_complete"),
+            self._lm.tr("page.reports.csv_done", path=path),
+        )
 
     def export_json(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "Export alerts JSON",
+            self._lm.tr("page.reports.dialog.json"),
             "alerts.json",
             "JSON files (*.json);;All files (*)",
         )
@@ -79,7 +98,11 @@ class ReportPage(QWidget):
 
         alerts = self.alert_repository.list_all()
         self.report_generator.export_alerts_json(alerts, path)
-        QMessageBox.information(self, "Export complete", f"Alert JSON exported to: {path}")
+        QMessageBox.information(
+            self,
+            self._lm.tr("page.reports.export_complete"),
+            self._lm.tr("page.reports.json_done", path=path),
+        )
 
     def _build_statistics(self) -> dict[str, object]:
         severity_distribution = self.alert_repository.count_by_severity()

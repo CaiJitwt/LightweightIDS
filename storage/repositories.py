@@ -1,11 +1,86 @@
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import asdict
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from models import AlertRecord, BaselineRecord, CustomRuleRecord, PacketRecord, RuleRecord
 from storage.database import Database
 from storage.migrations import DEFAULT_RULES
+
+
+def _insert_record_batch(connection: sqlite3.Connection, table: str, records: list[object]) -> int:
+    if not records:
+        return 0
+    rows = []
+    for record in records:
+        data = asdict(record)  # type: ignore[arg-type]
+        data.pop("id", None)
+        rows.append(data)
+    columns = ", ".join(rows[0].keys())
+    placeholders = ", ".join("?" for _ in rows[0])
+    values = [tuple(row.values()) for row in rows]
+    connection.executemany(
+        f"INSERT INTO {table} ({columns}) VALUES ({placeholders})",
+        values,
+    )
+    return len(rows)
+
+
+class SettingsRepository:
+    def __init__(self, database: Database) -> None:
+        self.database = database
+
+    def get(self, key: str, default: str = "") -> str:
+        with self.database.connect() as connection:
+            row = connection.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        if row is None:
+            return default
+        return str(row["value"])
+
+    def set(self, key: str, value: str) -> None:
+        self.set_many({key: value})
+
+    def set_many(self, values: dict[str, str]) -> None:
+        if not values:
+            return
+        with self.database.connect() as connection:
+            connection.executemany(
+                """
+                INSERT INTO settings (key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                values.items(),
+            )
+            connection.commit()
+
+    def get_bool(self, key: str, default: bool = False) -> bool:
+        fallback = "true" if default else "false"
+        return self.get(key, fallback).strip().lower() in {"1", "true", "yes", "on"}
+
+    def get_int(self, key: str, default: int = 0) -> int:
+        try:
+            return int(self.get(key, str(default)).strip())
+        except ValueError:
+            return default
+
+
+class TrafficRepository:
+    """Persists one capture batch in a single SQLite transaction."""
+
+    def __init__(self, database: Database) -> None:
+        self.database = database
+
+    def add_batch(self, packets: list[PacketRecord], alerts: list[AlertRecord]) -> tuple[int, int]:
+        if not packets and not alerts:
+            return 0, 0
+        with self.database.connect() as connection:
+            packet_count = _insert_record_batch(connection, "packets", packets)
+            alert_count = _insert_record_batch(connection, "alerts", alerts)
+            connection.commit()
+        return packet_count, alert_count
 
 
 class PacketRepository:
@@ -25,18 +100,10 @@ class PacketRepository:
     def add_many(self, packets: list[PacketRecord]) -> int:
         if not packets:
             return 0
-        rows = []
-        for packet in packets:
-            data = asdict(packet)
-            data.pop("id", None)
-            rows.append(data)
-        columns = ", ".join(rows[0].keys())
-        placeholders = ", ".join("?" for _ in rows[0])
-        values = [tuple(row.values()) for row in rows]
         with self.database.connect() as connection:
-            connection.executemany(f"INSERT INTO packets ({columns}) VALUES ({placeholders})", values)
+            inserted = _insert_record_batch(connection, "packets", packets)
             connection.commit()
-        return len(rows)
+        return inserted
 
     def list_recent(self, limit: int = 10_000) -> list[PacketRecord]:
         with self.database.connect() as connection:
@@ -55,6 +122,92 @@ class PacketRepository:
     def count(self) -> int:
         with self.database.connect() as connection:
             return int(connection.execute("SELECT COUNT(*) FROM packets").fetchone()[0])
+
+    def find_matching_alert(self, alert: AlertRecord) -> PacketRecord | None:
+        with self.database.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT id, timestamp, src_ip, dst_ip, src_port, dst_port, protocol, length,
+                       tcp_flags, dns_query, http_method, http_host, http_path, raw_summary
+                FROM packets
+                WHERE timestamp = ?
+                  AND src_ip IS ?
+                  AND dst_ip IS ?
+                  AND src_port IS ?
+                  AND dst_port IS ?
+                  AND protocol IS ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (
+                    alert.timestamp,
+                    alert.src_ip,
+                    alert.dst_ip,
+                    alert.src_port,
+                    alert.dst_port,
+                    alert.protocol,
+                ),
+            ).fetchone()
+        return None if row is None else self._from_row(row)
+
+    def list_related_to_alert(self, alert: AlertRecord, limit: int = 500) -> list[PacketRecord]:
+        try:
+            end_time = datetime.fromisoformat(alert.timestamp)
+        except ValueError:
+            packet = self.find_matching_alert(alert)
+            return [packet] if packet else []
+
+        with self.database.connect() as connection:
+            rule_row = connection.execute(
+                "SELECT time_window FROM rules WHERE id = ?",
+                (alert.rule_id,),
+            ).fetchone()
+            window_seconds = max(1, int(rule_row["time_window"]) if rule_row else 1)
+            start_time = end_time - timedelta(seconds=window_seconds)
+            clauses = ["timestamp BETWEEN ? AND ?"]
+            values: list[object] = [
+                start_time.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+                end_time.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+            ]
+            if alert.src_ip:
+                clauses.append("src_ip = ?")
+                values.append(alert.src_ip)
+
+            source_only_rules = {"HOST_SCAN", "LATERAL_MOVEMENT", "DNS_ANOMALY", "ABNORMAL_OUTBOUND"}
+            if alert.rule_id not in source_only_rules and alert.dst_ip:
+                clauses.append("dst_ip = ?")
+                values.append(alert.dst_ip)
+            if alert.rule_id == "BRUTE_FORCE" and alert.dst_port is not None:
+                clauses.append("dst_port = ?")
+                values.append(alert.dst_port)
+            if alert.rule_id not in source_only_rules | {"PORT_SCAN", "SYN_FLOOD", "ICMP_FLOOD", "BRUTE_FORCE"}:
+                if alert.src_port is not None:
+                    clauses.append("src_port = ?")
+                    values.append(alert.src_port)
+                if alert.dst_port is not None:
+                    clauses.append("dst_port = ?")
+                    values.append(alert.dst_port)
+                if alert.protocol:
+                    clauses.append("protocol = ?")
+                    values.append(alert.protocol)
+
+            values.append(limit)
+            rows = connection.execute(
+                f"""
+                SELECT id, timestamp, src_ip, dst_ip, src_port, dst_port, protocol, length,
+                       tcp_flags, dns_query, http_method, http_host, http_path, raw_summary
+                FROM packets
+                WHERE {' AND '.join(clauses)}
+                ORDER BY timestamp, id
+                LIMIT ?
+                """,
+                tuple(values),
+            ).fetchall()
+        packets = [self._from_row(row) for row in rows]
+        if packets:
+            return packets
+        packet = self.find_matching_alert(alert)
+        return [packet] if packet else []
 
     def protocol_distribution(self) -> dict[str, int]:
         with self.database.connect() as connection:
@@ -129,18 +282,10 @@ class AlertRepository:
     def add_many(self, alerts: list[AlertRecord]) -> int:
         if not alerts:
             return 0
-        rows = []
-        for alert in alerts:
-            data = asdict(alert)
-            data.pop("id", None)
-            rows.append(data)
-        columns = ", ".join(rows[0].keys())
-        placeholders = ", ".join("?" for _ in rows[0])
-        values = [tuple(row.values()) for row in rows]
         with self.database.connect() as connection:
-            connection.executemany(f"INSERT INTO alerts ({columns}) VALUES ({placeholders})", values)
+            inserted = _insert_record_batch(connection, "alerts", alerts)
             connection.commit()
-        return len(rows)
+        return inserted
 
     def list_all(self, severity: str | None = None, keyword: str | None = None, limit: int = 10_000) -> list[AlertRecord]:
         sql = """
@@ -170,6 +315,20 @@ class AlertRepository:
             rows = connection.execute(sql, tuple(values)).fetchall()
         return [self._from_row(row) for row in rows]
 
+    def list_for_host(self, host_ip: str, limit: int = 1_000) -> list[AlertRecord]:
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, timestamp, rule_id, rule_name, alert_type, severity, src_ip, dst_ip,
+                       src_port, dst_port, protocol, description, evidence, status
+                FROM alerts
+                WHERE src_ip = ? OR dst_ip = ?
+                ORDER BY id DESC LIMIT ?
+                """,
+                (host_ip, host_ip, limit),
+            ).fetchall()
+        return [self._from_row(row) for row in rows]
+
     def update_status(self, alert_id: int, status: str) -> bool:
         with self.database.connect() as connection:
             cursor = connection.execute("UPDATE alerts SET status = ? WHERE id = ?", (status, alert_id))
@@ -195,6 +354,60 @@ class AlertRepository:
         with self.database.connect() as connection:
             rows = connection.execute("SELECT alert_type, COUNT(*) AS total FROM alerts GROUP BY alert_type ORDER BY total DESC").fetchall()
         return {str(row["alert_type"]): int(row["total"]) for row in rows}
+
+    def count_by_time_bucket(self, bucket: str = "hour", limit: int = 24) -> list[tuple[str, int]]:
+        formats = {
+            "hour": "%Y-%m-%d %H:00",
+            "day": "%Y-%m-%d",
+        }
+        if bucket not in formats:
+            raise ValueError("bucket must be 'hour' or 'day'")
+
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT strftime(?, timestamp) AS bucket, COUNT(*) AS total
+                FROM alerts
+                WHERE timestamp IS NOT NULL AND timestamp != ''
+                GROUP BY bucket
+                ORDER BY bucket DESC
+                LIMIT ?
+                """,
+                (formats[bucket], limit),
+            ).fetchall()
+        return [(str(row["bucket"]), int(row["total"])) for row in reversed(rows) if row["bucket"]]
+
+    def rule_feedback(self) -> dict[str, dict[str, float | int]]:
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    rule_id,
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) AS confirmed,
+                    SUM(CASE WHEN status = 'ignored' THEN 1 ELSE 0 END) AS ignored,
+                    SUM(CASE WHEN status NOT IN ('confirmed', 'ignored') THEN 1 ELSE 0 END) AS unconfirmed
+                FROM alerts
+                GROUP BY rule_id
+                ORDER BY total DESC
+                """
+            ).fetchall()
+
+        feedback: dict[str, dict[str, float | int]] = {}
+        for row in rows:
+            total = int(row["total"])
+            confirmed = int(row["confirmed"] or 0)
+            ignored = int(row["ignored"] or 0)
+            unconfirmed = int(row["unconfirmed"] or 0)
+            feedback[str(row["rule_id"])] = {
+                "total": total,
+                "confirmed": confirmed,
+                "ignored": ignored,
+                "unconfirmed": unconfirmed,
+                "confirmed_ratio": 0.0 if total == 0 else confirmed / total,
+                "ignored_ratio": 0.0 if total == 0 else ignored / total,
+            }
+        return feedback
 
     def _from_row(self, row: object) -> AlertRecord:
         return AlertRecord(
@@ -401,8 +614,45 @@ class BaselineRepository:
             connection.commit()
 
     def upsert_many(self, baselines: list[BaselineRecord]) -> None:
-        for baseline in baselines:
-            self.upsert(baseline)
+        if not baselines:
+            return
+        values = [
+            (
+                baseline.src_ip,
+                baseline.updated_at,
+                baseline.window_seconds,
+                baseline.packet_count,
+                baseline.connection_count,
+                baseline.unique_dst_ips,
+                baseline.unique_dst_ports,
+                baseline.avg_packet_length,
+                baseline.bytes_per_window,
+                baseline.internal_to_external_ratio,
+            )
+            for baseline in baselines
+        ]
+        with self.database.connect() as connection:
+            connection.executemany(
+                """
+                INSERT INTO baselines
+                    (src_ip, updated_at, window_seconds, packet_count, connection_count,
+                     unique_dst_ips, unique_dst_ports, avg_packet_length, bytes_per_window,
+                     internal_to_external_ratio)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(src_ip) DO UPDATE SET
+                    updated_at = excluded.updated_at,
+                    window_seconds = excluded.window_seconds,
+                    packet_count = excluded.packet_count,
+                    connection_count = excluded.connection_count,
+                    unique_dst_ips = excluded.unique_dst_ips,
+                    unique_dst_ports = excluded.unique_dst_ports,
+                    avg_packet_length = excluded.avg_packet_length,
+                    bytes_per_window = excluded.bytes_per_window,
+                    internal_to_external_ratio = excluded.internal_to_external_ratio
+                """,
+                values,
+            )
+            connection.commit()
 
     def list_all(self, limit: int = 100) -> list[BaselineRecord]:
         with self.database.connect() as connection:
@@ -456,7 +706,7 @@ class BlacklistRepository:
             value = ip.strip()
             if value and value not in cleaned:
                 cleaned.append(value)
-        content = "# 每行一个 IP，空行和 # 注释会被忽略。\n" + "\n".join(cleaned)
+        content = "# One IP per line. Blank lines and comments are ignored.\n" + "\n".join(cleaned)
         if cleaned:
             content += "\n"
         self.path.write_text(content, encoding="utf-8")

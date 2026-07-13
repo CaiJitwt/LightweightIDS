@@ -15,12 +15,13 @@ def packet(
     dst_port: int | None = 445,
     protocol: str = "TCP",
     raw_summary: str = "",
+    src_port: int = 50000,
 ) -> PacketRecord:
     return PacketRecord(
         timestamp=timestamp,
         src_ip=src_ip,
         dst_ip=dst_ip,
-        src_port=50000,
+        src_port=src_port,
         dst_port=dst_port,
         protocol=protocol,
         raw_summary=raw_summary,
@@ -95,14 +96,15 @@ def test_abnormal_outbound_rule_detects_fixed_interval_heartbeat():
     rule = AbnormalOutboundRule(threshold=4, time_window=300)
     alerts = []
 
-    for seconds in (0, 10, 20, 30):
+    for index, seconds in enumerate((0, 10, 20, 30)):
         alerts.extend(
             rule.process(
                 packet(
                     timestamp=f"2026-01-01 00:00:{seconds:02d}.000",
-                    dst_ip="8.8.8.8",
-                    dst_port=443,
-                )
+                        dst_ip="8.8.8.8",
+                        dst_port=443,
+                        src_port=50000 + index,
+                    )
             )
         )
 

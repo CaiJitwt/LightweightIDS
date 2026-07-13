@@ -4,17 +4,31 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableWidget, QTableWidgetItem
 
 from models import AlertRecord
+from ui.i18n import locale_manager
+from ui.styles import apply_semantic_style, apply_severity_style, configure_responsive_table, severity_style, severity_tooltip
 
 
 class AlertTable(QTableWidget):
     def __init__(self) -> None:
         super().__init__(0, 8)
-        self.setHorizontalHeaderLabels(["Time", "Severity", "Type", "Rule", "Source IP", "Destination IP", "Description", "Status"])
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.horizontalHeader().setStretchLastSection(True)
-        self.setAlternatingRowColors(True)
+        self._lm = locale_manager()
+        self._header_keys = [
+            "widget.alert_table.time",
+            "widget.alert_table.severity",
+            "widget.alert_table.type",
+            "widget.alert_table.rule",
+            "widget.alert_table.source_ip",
+            "widget.alert_table.destination_ip",
+            "widget.alert_table.description",
+            "widget.alert_table.status",
+        ]
+        self._apply_headers()
+        configure_responsive_table(self, stretch_columns=(2, 3, 6), resize_to_contents_columns=(1, 7))
+        self.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        self.verticalHeader().setDefaultSectionSize(24)
         self.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.setSortingEnabled(True)
         self.setColumnWidth(0, 160)
         self.setColumnWidth(1, 82)
         self.setColumnWidth(2, 150)
@@ -23,29 +37,62 @@ class AlertTable(QTableWidget):
         self.setColumnWidth(5, 130)
         self.setColumnWidth(7, 96)
 
+        self._lm.locale_changed.connect(self.retranslate_ui)
+
+    # ------------------------------------------------------------------
+    # i18n
+    # ------------------------------------------------------------------
+
+    def _apply_headers(self) -> None:
+        """Set horizontal header labels from the current locale."""
+        self.setHorizontalHeaderLabels([self._lm.tr(key) for key in self._header_keys])
+
+    def retranslate_ui(self) -> None:
+        """Re-apply translated table headers when the locale changes."""
+        self._apply_headers()
+
+    # ------------------------------------------------------------------
+    # Data
+    # ------------------------------------------------------------------
+
     def set_alerts(self, alerts: list[AlertRecord]) -> None:
+        sorting_enabled = self.isSortingEnabled()
         self.setSortingEnabled(False)
+        self.setUpdatesEnabled(False)
         self.setRowCount(len(alerts))
 
-        for row, alert in enumerate(alerts):
-            values = [
-                alert.timestamp,
-                alert.severity,
-                alert.alert_type,
-                alert.rule_name,
-                alert.src_ip or "",
-                alert.dst_ip or "",
-                alert.description,
-                alert.status,
-            ]
-            for column, value in enumerate(values):
-                item = QTableWidgetItem(value)
-                item.setToolTip(value)
-                if alert.id is not None:
-                    item.setData(Qt.UserRole, alert.id)
-                self.setItem(row, column, item)
+        try:
+            for row, alert in enumerate(alerts):
+                values = [
+                    alert.timestamp,
+                    alert.severity,
+                    alert.alert_type,
+                    alert.rule_name,
+                    alert.src_ip or "",
+                    alert.dst_ip or "",
+                    alert.description,
+                    alert.status,
+                ]
+                for column, value in enumerate(values):
+                    item = QTableWidgetItem(value)
+                    item.setToolTip(value)
+                    if column == 1:
+                        apply_severity_style(item, alert.severity)
+                        item.setTextAlignment(Qt.AlignCenter)
+                        item.setToolTip(f"{severity_tooltip(alert.severity)}\n{alert.description}")
+                    elif column == 7:
+                        apply_semantic_style(item, alert.status)
+                        item.setTextAlignment(Qt.AlignCenter)
+                    if alert.id is not None:
+                        item.setData(Qt.UserRole, alert.id)
+                    self.setItem(row, column, item)
+        finally:
+            self.setUpdatesEnabled(True)
+            self.setSortingEnabled(sorting_enabled)
 
-        self.setSortingEnabled(True)
+    # ------------------------------------------------------------------
+    # Selection helpers
+    # ------------------------------------------------------------------
 
     def selected_alert_id(self) -> int | None:
         row = self.currentRow()
@@ -66,3 +113,12 @@ class AlertTable(QTableWidget):
 
         value = item.data(Qt.UserRole)
         return int(value) if value is not None else None
+
+    def select_alert_id(self, alert_id: int) -> bool:
+        for row in range(self.rowCount()):
+            item = self.item(row, 0)
+            if item is not None and item.data(Qt.UserRole) == alert_id:
+                self.selectRow(row)
+                self.scrollToItem(item)
+                return True
+        return False

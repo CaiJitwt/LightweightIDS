@@ -54,6 +54,16 @@ def test_packet_parser_identifies_tls_handshake_payload():
     assert record.protocol == "TLS"
 
 
+def test_packet_parser_identifies_tls_application_data_on_nonstandard_port():
+    payload = b"\x17\x03\x03\x00\x10encrypted-content"
+    packet = scapy.IP(src="10.0.0.10", dst="8.8.8.8") / scapy.TCP(sport=52000, dport=3000) / scapy.Raw(payload)
+
+    record = PacketParser().parse(packet)
+
+    assert record.protocol == "TLS"
+    assert record.http_method is None
+
+
 def test_packet_parser_identifies_arp():
     packet = scapy.ARP(psrc="192.168.1.10", pdst="192.168.1.1")
 
@@ -70,3 +80,20 @@ def test_packet_parser_identifies_common_udp_protocols():
     record = PacketParser().parse(packet)
 
     assert record.protocol == "LLMNR"
+
+
+def test_packet_parser_decodes_raw_ethernet_frame_from_capture_startup():
+    ethernet_frame = (
+        scapy.Ether(src="00:11:22:33:44:55", dst="66:77:88:99:aa:bb")
+        / scapy.IP(src="192.168.1.10", dst="192.168.1.20")
+        / scapy.TCP(sport=53000, dport=443, flags="S")
+    )
+    packet = scapy.Raw(bytes(ethernet_frame))
+
+    record = PacketParser().parse(packet)
+
+    assert record.src_ip == "192.168.1.10"
+    assert record.dst_ip == "192.168.1.20"
+    assert record.src_port == 53000
+    assert record.dst_port == 443
+    assert record.protocol == "HTTPS"
