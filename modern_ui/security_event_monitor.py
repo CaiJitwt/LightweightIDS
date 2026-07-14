@@ -66,6 +66,16 @@ class SecurityEventMonitorService:
     def set_poll_seconds(self, seconds: int) -> None:
         self._poll_seconds = max(2, min(seconds, 300))
 
+    def reset_statistics(self) -> None:
+        with self._poll_lock:
+            self.analyzer.reset()
+            with self._state_lock:
+                self._last_poll = ""
+                self._last_error = ""
+                self._unavailable_channels = []
+                self._session_events = 0
+                self._session_alerts = 0
+
     def refresh_once(self) -> dict[str, Any]:
         with self._poll_lock:
             result = self.collector.collect(self.repository.cursors())

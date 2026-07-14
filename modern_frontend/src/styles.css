@@ -275,6 +275,17 @@ kbd { padding: 2px 5px; border: 1px solid var(--border); border-radius: 3px; bac
 .app-shell[data-theme="dark"] .capture-notice { color: #bcdff8; background: #203a4d; border-color: #355d78; }
 .app-shell[data-theme="dark"] .capture-notice.error { color: #ffceca; background: #48292a; border-color: #754245; }
 .traffic-chart-panel .chart-area { height: 132px; }
+.traffic-packet-workspace { min-height: 360px; }
+.traffic-packet-table { min-width: 0; overflow: hidden; }
+.traffic-packet-table .data-table { table-layout: fixed; }
+.traffic-packet-table .data-table th:nth-child(1), .traffic-packet-table .data-table td:nth-child(1) { width: 66px; }
+.traffic-packet-table .data-table th:nth-child(2), .traffic-packet-table .data-table td:nth-child(2) { width: 112px; }
+.traffic-packet-table .data-table th:nth-child(5), .traffic-packet-table .data-table td:nth-child(5) { width: 76px; }
+.traffic-packet-table .data-table th:nth-child(6), .traffic-packet-table .data-table td:nth-child(6) { width: 64px; }
+.traffic-packet-table .data-table th:nth-child(7), .traffic-packet-table .data-table td:nth-child(7) { width: 58px; }
+.packet-detail-panel { min-height: 360px; }
+.packet-full-metadata { min-height: 0; flex: 1; overflow: hidden; }
+.packet-full-metadata code { max-height: 320px; overflow: auto; white-space: pre-wrap; }
 .settings-workspace { max-width: 960px; font-size: 11px; }
 .settings-section { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .settings-body { display: flex; flex-direction: column; gap: 14px; padding: 16px; }

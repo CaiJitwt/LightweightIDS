@@ -116,13 +116,13 @@ const copy = {
     title: "Help Center", subtitle: "Learn the analyst workflow and open any workspace directly.", language: "Help language", quick: "Quick navigation", workflow: "Recommended workflow",
     steps: ["Start the local API and confirm that System Health shows the engine as connected.", "Open Traffic Monitor, select an interface or PCAP file, then start analysis.", "Review alerts and associated packets before confirming or ignoring them.", "Create investigations, tune noisy rules and export reports when the evidence is ready."],
     modules: "Workspace guide", open: "Open page", notes: "Important notes",
-    noteItems: ["Live capture normally requires Npcap and sufficient Windows permissions.", "TLS detection uses metadata and fingerprint risk only; this application does not decrypt HTTPS traffic.", "Rule changes apply to future detection sessions, while existing alerts remain unchanged.", "Reset statistics removes packets, alerts and baselines, but preserves assets, investigations and evidence snapshots."],
+    noteItems: ["Live capture normally requires Npcap and sufficient Windows permissions.", "TLS detection uses metadata and fingerprint risk only; this application does not decrypt HTTPS traffic.", "Rule changes apply to future detection sessions, while existing alerts remain unchanged.", "Reset statistics clears packets, alerts, security events, baselines, live buffers and import counters, but preserves assets, investigations and evidence snapshots."],
   },
   zh: {
     title: "帮助中心", subtitle: "了解分析工作流，并快速打开任意功能页面。", language: "帮助页面语言", quick: "快速导航", workflow: "推荐使用流程",
     steps: ["启动本地 API，并确认系统健康页面显示引擎已连接。", "打开流量监控，选择网络接口或 PCAP 文件，然后开始分析。", "确认或忽略告警前，应检查告警证据及其关联数据包。", "证据整理完成后，可以创建调查、调整误报较多的规则并导出报告。"],
     modules: "功能页面说明", open: "打开页面", notes: "重要说明",
-    noteItems: ["实时抓包通常需要安装 Npcap，并具有足够的 Windows 权限。", "TLS 检测仅分析元数据和指纹风险，本程序不会解密 HTTPS 流量。", "规则修改对后续检测会话生效，不会改变已经生成的告警。", "重置统计会清除数据包、告警和基线，但会保留资产、调查和证据快照。"],
+    noteItems: ["实时抓包通常需要安装 Npcap，并具有足够的 Windows 权限。", "TLS 检测仅分析元数据和指纹风险，本程序不会解密 HTTPS 流量。", "规则修改对后续检测会话生效，不会改变已经生成的告警。", "重置统计会清除数据包、告警、安全事件、基线、实时缓冲和导入计数，但会保留资产、调查和证据快照。"],
   },
 };
 

@@ -173,10 +173,23 @@ def test_local_api_updates_rules_and_resets_statistics(tmp_path):
     packets = PacketRepository(database)
     alerts = AlertRepository(database)
     rules = RuleRepository(database)
+    security_events = SecurityEventRepository(database)
     packets.add(PacketRecord(timestamp="2026-07-14 01:00:00.000", src_ip="10.0.0.2", dst_ip="10.0.0.3", protocol="TCP", length=60))
     alerts.add(AlertRecord(timestamp="2026-07-14 01:00:00.000", rule_id="HOST_SCAN", rule_name="Host scan", alert_type="RECONNAISSANCE", severity="HIGH"))
+    security_events.add_many(
+        [SecurityEventRecord(timestamp="2026-07-14T01:00:00+00:00", channel="System", event_id=7045, record_id=88)]
+    )
+    security_events.update_cursor("System", 88)
 
     server = LocalApiServer(("127.0.0.1", 0), database)
+    server.capture_service._packet_total = 9
+    server.capture_service._alert_total = 4
+    server.capture_service._sequence = 13
+    server.capture_service._recent_packets.append({"sequence": 13})
+    server.pcap_import._state = "completed"
+    server.pcap_import._filename = "previous.pcap"
+    server.pcap_import._packet_total = 9
+    server.pcap_import._alert_total = 4
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     host, port = server.server_address
@@ -209,8 +222,31 @@ def test_local_api_updates_rules_and_resets_statistics(tmp_path):
         assert reset_payload["reset"] is True
         assert reset_payload["dashboard"]["statistics"]["packetTotal"] == 0
         assert reset_payload["dashboard"]["statistics"]["alertTotal"] == 0
+        assert reset_payload["dashboard"]["capture"]["packetTotal"] == 0
+        assert reset_payload["dashboard"]["capture"]["alertTotal"] == 0
         assert packets.count() == 0
         assert alerts.count() == 0
+        assert security_events.count() == 0
+        assert security_events.cursors()["System"] == 88
+
+        with urlopen(f"{base}/api/pcap/status", timeout=3) as response:
+            pcap_status = json.loads(response.read())
+        assert pcap_status["state"] == "idle"
+        assert pcap_status["filename"] == ""
+        assert pcap_status["packetTotal"] == 0
+
+        first_packet = PacketRecord(
+            timestamp="2026-07-14 02:00:00.000",
+            src_ip="10.0.0.4",
+            dst_ip="10.0.0.5",
+            protocol="TCP",
+            length=60,
+        )
+        assert packets.add(first_packet) == 1
+        server.capture_service._append_packet(first_packet)
+        live_records = server.capture_service.packets_since(0)["records"]
+        assert live_records[0]["sequence"] == 1
+        assert live_records[0]["id"] == 1
     finally:
         server.shutdown()
         server.server_close()
