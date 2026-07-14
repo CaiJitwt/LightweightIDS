@@ -1,27 +1,110 @@
-import { useState } from "react";
-import { Download, FileJson, FileText, TableProperties } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Download, FileJson, FileText, FileSpreadsheet, CheckCircle2 } from "lucide-react";
 
 import { idsApi } from "../api/idsApi";
+import { alerts as demoAlerts } from "../data/mockData";
+import { SeverityBadge } from "../components/SeverityBadge";
 import type { AlertRecord } from "../types";
 
 export function ReportsPage() {
-  const [notice, setNotice] = useState("Export current persisted alerts from the local API.");
+  const [notice, setNotice] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
+
+  const previewAlerts = useMemo(() => demoAlerts.slice(0, 6), []);
+
+  const stats = useMemo(() => {
+    const critical = demoAlerts.filter((a) => a.severity === "CRITICAL" || a.severity === "HIGH").length;
+    const confirmed = demoAlerts.filter((a) => a.status === "confirmed").length;
+    return { total: demoAlerts.length, critical, confirmed };
+  }, []);
+
   const exportAlerts = async (kind: "csv" | "json" | "html") => {
     try {
-      const { records } = await idsApi.alerts();
-      const content = kind === "json" ? JSON.stringify(records, null, 2) : kind === "csv" ? csv(records) : html(records);
+      const { records } = await idsApi.alerts({});
+      const content = kind === "json" ? JSON.stringify(records, null, 2) : kind === "csv" ? toCsv(records) : toHtml(records);
       const blob = new Blob([content], { type: kind === "json" ? "application/json" : kind === "csv" ? "text/csv" : "text/html" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
-      link.download = `lightweight-ids-alerts.${kind}`;
+      link.download = `lightweight-ids-alerts-${Date.now()}.${kind === "html" ? "html" : kind}`;
       link.click();
       URL.revokeObjectURL(link.href);
       setNotice(`${records.length} alerts exported as ${kind.toUpperCase()}.`);
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Report export failed."); }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Report export failed. Preview data is available offline.");
+    }
   };
-  return <div className="page-stack reports-workspace"><section className="section-panel"><header className="section-heading"><div><h2>Reports</h2><p>Portable analyst exports from persisted alert records</p></div><Download size={17} /></header><div className="report-actions"><button type="button" onClick={() => void exportAlerts("html")}><FileText size={20} /><span><strong>HTML report</strong><small>Analyst-friendly overview</small></span></button><button type="button" onClick={() => void exportAlerts("csv")}><TableProperties size={20} /><span><strong>CSV export</strong><small>Spreadsheet-compatible alert list</small></span></button><button type="button" onClick={() => void exportAlerts("json")}><FileJson size={20} /><span><strong>JSON export</strong><small>Structured integration data</small></span></button></div><p className="page-note">{notice}</p></section></div>;
+
+  return (
+    <div className="page-stack">
+      <section className="report-summary-strip">
+        <div className="report-stat"><span>Total alerts</span><strong>{stats.total}</strong><small>Available for export</small></div>
+        <div className="report-stat"><span>High / Critical</span><strong>{stats.critical}</strong><small>Prioritized in report</small></div>
+        <div className="report-stat"><span>Confirmed</span><strong>{stats.confirmed}</strong><small>Analyst-reviewed</small></div>
+        <div className="report-stat"><span>Export formats</span><strong>3</strong><small>HTML · CSV · JSON</small></div>
+      </section>
+
+      <section className="section-panel">
+        <header className="section-heading"><div><h2>Export reports</h2><p>Portable analyst exports from persisted alert records</p></div><Download size={17} /></header>
+        <div style={{ padding: 14 }}>
+          <div className="report-export-grid">
+            <button type="button" className="report-export-card" onClick={() => void exportAlerts("html")}>
+              <div className="export-icon"><FileText size={20} /></div>
+              <div><strong>HTML report</strong><p>Analyst-friendly overview with styled alert table</p></div>
+              <footer><Download size={12} />Export HTML</footer>
+            </button>
+            <button type="button" className="report-export-card" onClick={() => void exportAlerts("csv")}>
+              <div className="export-icon"><FileSpreadsheet size={20} /></div>
+              <div><strong>CSV export</strong><p>Spreadsheet-compatible for Excel, Sheets or data analysis</p></div>
+              <footer><Download size={12} />Export CSV</footer>
+            </button>
+            <button type="button" className="report-export-card" onClick={() => void exportAlerts("json")}>
+              <div className="export-icon"><FileJson size={20} /></div>
+              <div><strong>JSON export</strong><p>Structured data for SIEM integration or custom tooling</p></div>
+              <footer><Download size={12} />Export JSON</footer>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {notice && <p className="capture-notice"><CheckCircle2 size={14} />{notice}</p>}
+
+      <section className="section-panel">
+        <header className="section-heading">
+          <div><h2>Alert preview</h2><p>Offline sample of the data included in reports</p></div>
+          <button className="text-button" type="button" onClick={() => setShowPreview((v) => !v)}>{showPreview ? "Hide preview" : "Show preview"}</button>
+        </header>
+        {showPreview && (
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead><tr><th>Time</th><th>Severity</th><th>Rule</th><th>Source</th><th>Destination</th><th>Status</th></tr></thead>
+              <tbody>
+                {previewAlerts.map((alert) => (
+                  <tr key={alert.id}>
+                    <td>{alert.timestamp}</td>
+                    <td><SeverityBadge severity={alert.severity} /></td>
+                    <td style={{ maxWidth: 200 }}>{alert.ruleName}</td>
+                    <td>{alert.source}</td>
+                    <td>{alert.destination}</td>
+                    <td><span className={`status status-${alert.status}`}>{alert.status}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
 }
 
-function csv(records: AlertRecord[]) { const keys: (keyof AlertRecord)[] = ["id", "timestamp", "severity", "ruleName", "source", "destination", "protocol", "description", "evidence", "status"]; return [keys.join(","), ...records.map((record) => keys.map((key) => `"${String(record[key] ?? "").replaceAll('"', '""')}"`).join(","))].join("\n"); }
-function html(records: AlertRecord[]) { return `<!doctype html><html><head><meta charset="utf-8"><title>Lightweight IDS Alert Report</title><style>body{font-family:Arial;margin:32px;color:#17212b}table{border-collapse:collapse;width:100%}th,td{padding:8px;border:1px solid #d9e0e7;text-align:left;vertical-align:top}th{background:#f2f5f7}</style></head><body><h1>Lightweight IDS Alert Report</h1><p>Exported ${new Date().toLocaleString()}</p><table><thead><tr><th>Time</th><th>Severity</th><th>Rule</th><th>Source</th><th>Destination</th><th>Description</th><th>Status</th></tr></thead><tbody>${records.map((record) => `<tr><td>${esc(record.timestamp)}</td><td>${esc(record.severity)}</td><td>${esc(record.ruleName)}</td><td>${esc(record.source)}</td><td>${esc(record.destination)}</td><td>${esc(record.description)}</td><td>${esc(record.status)}</td></tr>`).join("") || "<tr><td colspan=\"7\">No alerts</td></tr>"}</tbody></table></body></html>`; }
+function toCsv(records: AlertRecord[]) {
+  const keys: (keyof AlertRecord)[] = ["id", "timestamp", "severity", "ruleName", "source", "destination", "protocol", "description", "evidence", "status"];
+  return [keys.join(","), ...records.map((r) => keys.map((k) => `"${String(r[k] ?? "").replaceAll('"', '""')}"`).join(","))].join("\n");
+}
+
+function toHtml(records: AlertRecord[]) {
+  const rows = records.map((r) => `<tr><td>${esc(r.timestamp)}</td><td>${esc(r.severity)}</td><td>${esc(r.ruleName)}</td><td>${esc(r.source)}</td><td>${esc(r.destination)}</td><td>${esc(r.status)}</td></tr>`).join("") || "<tr><td colspan=\"6\">No alerts</td></tr>";
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Lightweight IDS Alert Report</title><style>body{font-family:Inter,Segoe UI,Arial,sans-serif;margin:32px;color:#17212b}table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:10px 12px;border:1px solid #d9e0e7;text-align:left;vertical-align:top}th{background:#f2f5f7;font-weight:700}tr:nth-child(even){background:#fafbfc}</style></head><body><h1>Lightweight IDS Alert Report</h1><p>Exported ${new Date().toLocaleString()}</p><table><thead><tr><th>Time</th><th>Severity</th><th>Rule</th><th>Source</th><th>Destination</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+}
+
 function esc(value: unknown) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;"); }

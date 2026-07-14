@@ -24,12 +24,13 @@ class LateralMovementRule(RuleBase):
     threshold = 5
     time_window = 60
 
-    LATERAL_PORTS = {22, 139, 445, 3389}
+    LATERAL_PORTS = {22, 135, 139, 445, 3389, 5985, 5986}
     ADMIN_SHARE_MARKERS = ("\\\\admin$", "\\admin$", "admin$", "\\\\c$", "\\c$", " c$")
 
     def __init__(self, **kwargs: object) -> None:
         super().__init__(**kwargs)  # type: ignore[arg-type]
         self._hits: dict[tuple[str, int | None], deque[LateralHit]] = defaultdict(deque)
+        self._target_hits: dict[tuple[str, str], deque[LateralHit]] = defaultdict(deque)
 
     def process(self, packet: PacketRecord) -> list[AlertRecord]:
         alerts: list[AlertRecord] = []
@@ -52,6 +53,11 @@ class LateralMovementRule(RuleBase):
         hits.append(LateralHit(timestamp=now, dst_ip=packet.dst_ip or "", dst_port=packet.dst_port))
         self._prune(hits, now)
 
+        target_key = (packet.src_ip or "", packet.dst_ip or "")
+        target_hits = self._target_hits[target_key]
+        target_hits.append(LateralHit(timestamp=now, dst_ip=packet.dst_ip or "", dst_port=packet.dst_port))
+        self._prune(target_hits, now)
+
         targets = sorted({hit.dst_ip for hit in hits if hit.dst_ip})
         if len(targets) >= self.threshold:
             alerts.append(
@@ -67,10 +73,27 @@ class LateralMovementRule(RuleBase):
                 )
             )
 
+        service_ports = sorted({hit.dst_port for hit in target_hits if hit.dst_port is not None})
+        if len(target_hits) >= self.threshold and len(service_ports) >= 2:
+            alerts.append(
+                self.create_alert(
+                    packet,
+                    alert_type="REMOTE_SERVICE_LATERAL_MOVEMENT",
+                    description="Internal host repeatedly used multiple remote administration services against one peer.",
+                    evidence=(
+                        f"src_ip={packet.src_ip}; dst_ip={packet.dst_ip}; "
+                        f"event_count={len(target_hits)}; service_ports={service_ports}; "
+                        f"threshold={self.threshold}; time_window={self.time_window}s"
+                    ),
+                )
+            )
+            target_hits.clear()
+
         return alerts
 
     def reset(self) -> None:
         self._hits.clear()
+        self._target_hits.clear()
 
     def _is_internal_lateral_service(self, packet: PacketRecord) -> bool:
         return bool(

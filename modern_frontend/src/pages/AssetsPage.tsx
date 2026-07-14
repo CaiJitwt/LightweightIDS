@@ -1,5 +1,5 @@
-import { FormEvent, useEffect, useState } from "react";
-import { Plus, RefreshCw, Trash2 } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { BarChart3, Package, Plus, RefreshCw, Search, Shield, Trash2 } from "lucide-react";
 
 import { idsApi } from "../api/idsApi";
 import type { AssetRecord } from "../types";
@@ -8,11 +8,119 @@ const emptyAsset = { ip: "", displayName: "", role: "Workstation", importance: 5
 
 export function AssetsPage() {
   const [assets, setAssets] = useState<AssetRecord[]>([]);
+  const [query, setQuery] = useState("");
   const [form, setForm] = useState(emptyAsset);
-  const [notice, setNotice] = useState("Define important assets for host risk prioritization.");
-  const load = () => idsApi.assets().then(({ records }) => setAssets(records)).catch(() => setNotice("Local API unavailable. Assets cannot be saved from this preview."));
+  const [notice, setNotice] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    try {
+      const { records } = await idsApi.assets();
+      setAssets(records);
+      setNotice("");
+    } catch {
+      setNotice("Local API unavailable. Assets cannot be saved from this preview.");
+    }
+  };
   useEffect(() => { void load(); }, []);
-  const save = async (event: FormEvent) => { event.preventDefault(); try { await idsApi.saveAsset(form); setForm(emptyAsset); setNotice("Asset saved."); await load(); } catch (error) { setNotice(error instanceof Error ? error.message : "Asset could not be saved."); } };
-  const remove = async (ip: string) => { await idsApi.deleteAsset(ip); await load(); };
-  return <div className="page-stack"><section className="section-panel"><header className="section-heading"><div><h2>Asset inventory</h2><p>Important assets raise analyst priority; they are not allow-list entries.</p></div><button className="icon-button" type="button" title="Refresh assets" onClick={() => void load()}><RefreshCw size={15} /></button></header><form className="asset-form" onSubmit={save}><input required aria-label="Asset IP" placeholder="IP address" value={form.ip} onChange={(event) => setForm({ ...form, ip: event.target.value })} /><input aria-label="Asset name" placeholder="Display name" value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} /><select aria-label="Asset role" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>{["Workstation", "Server", "Database", "Gateway", "Domain Controller", "Other"].map((role) => <option key={role}>{role}</option>)}</select><input aria-label="Asset importance" type="number" min="0" max="100" value={form.importance} onChange={(event) => setForm({ ...form, importance: Number(event.target.value) })} /><input aria-label="Asset notes" placeholder="Notes" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /><button className="primary-button" type="submit"><Plus size={15} />Add asset</button></form><p className="page-note">{notice}</p><div className="table-scroll"><table className="data-table"><thead><tr><th>IP</th><th>Name</th><th>Role</th><th>Importance</th><th>Notes</th><th /></tr></thead><tbody>{assets.map((asset) => <tr key={asset.ip}><td>{asset.ip}</td><td>{asset.display_name || "-"}</td><td>{asset.role}</td><td><span className="importance-value">{asset.importance}</span></td><td>{asset.notes || "-"}</td><td><button className="icon-button danger-icon" type="button" title={`Delete ${asset.ip}`} onClick={() => void remove(asset.ip)}><Trash2 size={14} /></button></td></tr>)}</tbody></table></div></section></div>;
+
+  const visible = useMemo(() => {
+    if (!query.trim()) return assets;
+    const q = query.toLowerCase();
+    return assets.filter((a) => a.ip.toLowerCase().includes(q) || a.display_name.toLowerCase().includes(q) || a.role.toLowerCase().includes(q));
+  }, [assets, query]);
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      await idsApi.saveAsset(form);
+      setForm(emptyAsset);
+      setNotice("Asset saved.");
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Asset could not be saved.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (ip: string) => {
+    await idsApi.deleteAsset(ip);
+    await load();
+  };
+
+  const importanceColor = (v: number) => (v >= 80 ? "high" : v >= 50 ? "medium" : "low");
+  const highCount = assets.filter((a) => a.importance >= 80).length;
+  const roleCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    assets.forEach((a) => { counts[a.role] = (counts[a.role] ?? 0) + 1; });
+    return counts;
+  }, [assets]);
+
+  return (
+    <div className="page-stack asset-workspace">
+      <section className="asset-form-panel">
+        <header className="section-heading"><div><h2>New asset</h2><p>High-importance assets raise analyst priority</p></div><Shield size={17} /></header>
+        <form className="asset-form-body" onSubmit={save}>
+          <label><span>IP Address</span><input required placeholder="e.g. 10.0.0.53" value={form.ip} onChange={(e) => setForm({ ...form, ip: e.target.value })} /></label>
+          <label><span>Display Name</span><input placeholder="Primary Domain Controller" value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label>
+          <label><span>Role</span><select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>{["Workstation", "Server", "Database", "Gateway", "Domain Controller", "Other"].map((r) => <option key={r}>{r}</option>)}</select></label>
+          <label>
+            <span>Importance <span className={`importance-val risk-${importanceColor(form.importance)}`}>{form.importance}</span></span>
+            <div className="importance-bar-wrap">
+              <input type="range" min="0" max="100" value={form.importance} onChange={(e) => setForm({ ...form, importance: Number(e.target.value) })} style={{ flex: 1 }} />
+            </div>
+          </label>
+          <label><span>Notes</span><textarea placeholder="Optional notes…" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
+          <button className="primary-button" type="submit" disabled={saving}><Plus size={15} />Add asset</button>
+          {notice && <p className="capture-notice" style={{ margin: 0 }}><Package size={14} />{notice}</p>}
+        </form>
+      </section>
+
+      <section className="section-panel" style={{ minWidth: 0, display: "flex", flexDirection: "column" }}>
+        <header className="section-heading"><div><h2>Asset inventory</h2><p>{assets.length} assets · {highCount} high-importance</p></div><button className="icon-button" type="button" title="Refresh" onClick={() => void load()}><RefreshCw size={15} /></button></header>
+
+        <div className="filter-row" style={{ borderRadius: 0, borderLeft: 0, borderRight: 0, borderTop: 0 }}>
+          <label className="search-box"><Search size={16} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by IP, name or role…" /></label>
+          <span className="result-count">{visible.length} assets</span>
+        </div>
+
+        {Object.keys(roleCounts).length > 0 && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "8px 14px" }}>
+            {Object.entries(roleCounts).map(([role, count]) => (
+              <span key={role} style={{ background: "var(--surface-muted)", border: "1px solid var(--border)", borderRadius: 12, padding: "2px 9px", fontSize: 10, color: "var(--muted)", display: "flex", alignItems: "center", gap: 5 }}>
+                <BarChart3 size={11} />{role} <strong style={{ color: "var(--text)" }}>{count}</strong>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="table-scroll" style={{ flex: 1 }}>
+          <table className="data-table">
+            <thead><tr><th>IP Address</th><th>Name</th><th>Role</th><th>Importance</th><th>Notes</th><th /></tr></thead>
+            <tbody>
+              {visible.length ? visible.map((asset) => (
+                <tr key={asset.ip}>
+                  <td style={{ fontWeight: 600 }}>{asset.ip}</td>
+                  <td>{asset.display_name || "—"}</td>
+                  <td>{asset.role}</td>
+                  <td>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <span className={`risk-score risk-${importanceColor(asset.importance)}`} style={{ minWidth: 28, fontSize: 10 }}>{asset.importance}</span>
+                      <div className="importance-bar" style={{ width: 48 }}>
+                        <div className={`importance-bar-fill ${importanceColor(asset.importance)}`} style={{ width: `${asset.importance}%` }} />
+                      </div>
+                    </span>
+                  </td>
+                  <td style={{ maxWidth: 160 }}>{asset.notes || "—"}</td>
+                  <td><button className="icon-button" type="button" title={`Delete ${asset.ip}`} onClick={() => void remove(asset.ip)} style={{ width: 28, height: 28 }}><Trash2 size={13} /></button></td>
+                </tr>
+              )) : <tr><td colSpan={6} className="empty-table">No assets match the current search.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
 }

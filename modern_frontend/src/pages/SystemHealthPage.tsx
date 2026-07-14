@@ -163,11 +163,11 @@ function GaugeMetric({ icon, label, value, meta, color }: { icon: React.ReactNod
 function HealthRow({ label, value, status }: { label: string; value: string; status?: "ok" | "warn" }) {
   return (
     <tr>
-      <td style={{ color: "var(--muted)", fontSize: 10 }}>{label}</td>
-      <td style={{ textAlign: "right", fontWeight: 600, fontSize: 10 }}>
+      <td style={{ color: "var(--muted)" }}>{label}</td>
+      <td style={{ textAlign: "right", fontWeight: 600 }}>
         {value}
         {status && (
-          <span style={{ marginLeft: 6, color: status === "ok" ? "#2f8f66" : "#d97706", fontSize: 9 }}>
+          <span style={{ marginLeft: 6, color: status === "ok" ? "#2f8f66" : "#d97706" }}>
             {status === "ok" ? "●" : "●"}
           </span>
         )}

@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Gauge,
   HeartPulse,
+  CircleHelp,
   Laptop,
   Moon,
   Network,
@@ -24,6 +25,7 @@ import {
 } from "lucide-react";
 import type { FontScale, LlmSettings, ThemePreference } from "./types";
 import type { PersonalizationState } from "./pages/PersonalizationPage";
+import type { HelpLanguage } from "./pages/HelpPage";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
 const TrafficPage = lazy(() => import("./pages/TrafficPage").then((module) => ({ default: module.TrafficPage })));
@@ -39,8 +41,9 @@ const PersonalizationPage = lazy(() => import("./pages/PersonalizationPage").the
 const EventTimelinePage = lazy(() => import("./pages/EventTimelinePage").then((module) => ({ default: module.EventTimelinePage })));
 const NetworkTopologyPage = lazy(() => import("./pages/NetworkTopologyPage").then((module) => ({ default: module.NetworkTopologyPage })));
 const SystemHealthPage = lazy(() => import("./pages/SystemHealthPage").then((module) => ({ default: module.SystemHealthPage })));
+const HelpPage = lazy(() => import("./pages/HelpPage").then((module) => ({ default: module.HelpPage })));
 
-type PageKey = "dashboard" | "traffic" | "hosts" | "alerts" | "investigations" | "assets" | "rules" | "reports" | "timeline" | "topology" | "health" | "endpoint" | "settings" | "personalization";
+type PageKey = "dashboard" | "traffic" | "hosts" | "alerts" | "investigations" | "assets" | "rules" | "reports" | "timeline" | "topology" | "health" | "endpoint" | "settings" | "personalization" | "help";
 
 const navItems = [
   { key: "dashboard" as const, label: "Dashboard", icon: Gauge },
@@ -57,6 +60,7 @@ const navItems = [
   { key: "endpoint" as const, label: "Endpoint Security", icon: ShieldCheck },
   { key: "settings" as const, label: "Settings", icon: Settings },
   { key: "personalization" as const, label: "Personalization", icon: Palette },
+  { key: "help" as const, label: "Help Center", icon: CircleHelp },
 ];
 
 const pageMeta: Record<PageKey, { title: string; subtitle: string }> = {
@@ -74,6 +78,7 @@ const pageMeta: Record<PageKey, { title: string; subtitle: string }> = {
   endpoint: { title: "Endpoint security", subtitle: "Read-only host posture, process inventory and file integrity" },
   settings: { title: "Settings", subtitle: "Appearance and local analyst integrations" },
   personalization: { title: "Personalization", subtitle: "Workspace wallpaper and overlay companion" },
+  help: { title: "Help center", subtitle: "Product guidance, analyst workflow and quick navigation" },
 };
 
 const defaultPersonalization: PersonalizationState = { accent: "#2677bd", background: "", petImage: "", petPosition: "bottom-right", petSize: 96, petOpacity: 85 };
@@ -90,6 +95,7 @@ export default function App() {
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [selectedHostIp, setSelectedHostIp] = useState<string | undefined>();
   const [personalization, setPersonalization] = useState<PersonalizationState>(readPersonalization);
+  const [helpLanguage, setHelpLanguage] = useState<HelpLanguage>(readHelpLanguage);
 
   useEffect(() => {
     localStorage.setItem("ids-prototype-theme", themePreference);
@@ -109,13 +115,17 @@ export default function App() {
     try { localStorage.setItem("ids-prototype-personalization", JSON.stringify(personalization)); } catch { /* Browser storage can reject large image data. */ }
   }, [personalization]);
 
+  useEffect(() => localStorage.setItem("ids-help-language", helpLanguage), [helpLanguage]);
+
   useEffect(() => {
     if (!autoRefresh || page !== "dashboard") return undefined;
     const timer = window.setInterval(() => setRefreshVersion((value) => value + 1), 5000);
     return () => window.clearInterval(timer);
   }, [autoRefresh, page]);
 
-  const meta = pageMeta[page];
+  const meta = page === "help" && helpLanguage === "zh"
+    ? { title: "帮助中心", subtitle: "产品说明、分析工作流和快速页面导航" }
+    : pageMeta[page];
 
   return (
     <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`} data-theme={theme} data-font-scale={fontScale} style={{ "--accent": personalization.accent } as React.CSSProperties}>
@@ -129,7 +139,6 @@ export default function App() {
         </nav>
         <div className="sidebar-footer">
           <div className="sensor-summary"><span className="live-dot" /><span><strong>Sensor online</strong><small>Ethernet 3 - 1.2k pkt/min</small></span></div>
-          <button type="button" className="nav-utility" title="Settings" onClick={() => setPage("settings")}><Settings size={18} /><span>Settings</span></button>
           <button type="button" className="collapse-button" onClick={() => setCollapsed((value) => !value)} title={collapsed ? "Expand sidebar" : "Collapse sidebar"}>{collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}<span>Collapse</span></button>
         </div>
       </aside>
@@ -161,6 +170,7 @@ export default function App() {
             {page === "endpoint" && <EndpointSecurityPage />}
             {page === "settings" && <SettingsPage themePreference={themePreference} onThemePreferenceChange={setThemePreference} fontScale={fontScale} onFontScaleChange={setFontScale} llmSettings={llmSettings} onLlmSettingsChange={setLlmSettings} />}
             {page === "personalization" && <PersonalizationPage state={personalization} onChange={setPersonalization} />}
+            {page === "help" && <HelpPage onNavigate={setPage} language={helpLanguage} onLanguageChange={setHelpLanguage} />}
           </Suspense>
         </div>
       </main>
@@ -182,6 +192,10 @@ function readThemePreference(): ThemePreference {
 function readFontScale(): FontScale {
   const value = localStorage.getItem("ids-prototype-font-scale");
   return value === "compact" || value === "comfortable" ? value : "default";
+}
+
+function readHelpLanguage(): HelpLanguage {
+  return localStorage.getItem("ids-help-language") === "zh" ? "zh" : "en";
 }
 
 function readLlmSettings(): LlmSettings {

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Activity, Globe, Laptop, Network, Search, Server, ShieldAlert, Wifi } from "lucide-react";
+import { Activity, Globe, Laptop, Network, Search, Server, ShieldAlert } from "lucide-react";
 import { hosts } from "../data/mockData";
 import type { HostRecord } from "../types";
 
@@ -21,17 +21,11 @@ interface TopologyEdge {
 }
 
 const nodeKindIcon: Record<TopologyNode["kind"], typeof Laptop> = {
-  workstation: Laptop,
-  server: Server,
-  gateway: Network,
-  external: Globe,
+  workstation: Laptop, server: Server, gateway: Network, external: Globe,
 };
 
 const nodeKindLabel: Record<TopologyNode["kind"], string> = {
-  workstation: "Workstation",
-  server: "Server",
-  gateway: "Gateway",
-  external: "External",
+  workstation: "Workstation", server: "Server", gateway: "Gateway", external: "External",
 };
 
 const gatewayNode: TopologyNode = { id: "gw", label: "Default Gateway", ip: "10.0.0.1", kind: "gateway", risk: 5, x: 400, y: 40 };
@@ -39,28 +33,16 @@ const gatewayNode: TopologyNode = { id: "gw", label: "Default Gateway", ip: "10.
 function topologyFromHosts(list: HostRecord[]): { nodes: TopologyNode[]; edges: TopologyEdge[] } {
   const nodes: TopologyNode[] = [gatewayNode];
   const edges: TopologyEdge[] = [];
-  const placed = new Set<string>();
 
   list.forEach((host, index) => {
     const row = Math.floor(index / 2);
     const col = index % 2;
-    const node: TopologyNode = {
-      id: host.ip,
-      label: host.name,
-      ip: host.ip,
+    nodes.push({
+      id: host.ip, label: host.name, ip: host.ip,
       kind: host.role.includes("Server") ? "server" : "workstation",
-      risk: host.risk,
-      x: 120 + col * 440,
-      y: 130 + row * 170,
-    };
-    nodes.push(node);
-    placed.add(host.ip);
-    edges.push({
-      source: host.ip,
-      target: "gw",
-      protocol: host.protocols?.[0]?.name ?? "TCP",
-      packets: host.packets,
+      risk: host.risk, x: 120 + col * 440, y: 130 + row * 170,
     });
+    edges.push({ source: host.ip, target: "gw", protocol: host.protocols?.[0]?.name ?? "TCP", packets: host.packets });
   });
 
   const externalServices = [
@@ -84,39 +66,55 @@ export function NetworkTopologyPage() {
   const { nodes, edges } = useMemo(() => topologyFromHosts(hosts), []);
 
   const visibleHosts = useMemo(() => {
-    return hosts.filter((h) => {
-      const q = query.toLowerCase();
-      return `${h.ip} ${h.name} ${h.role}`.toLowerCase().includes(q);
-    });
+    const q = query.toLowerCase();
+    return hosts.filter((h) => `${h.ip} ${h.name} ${h.role}`.toLowerCase().includes(q));
   }, [query]);
 
   const selected = selectedNode ? nodes.find((n) => n.id === selectedNode) : undefined;
   const selectedHost = selectedNode ? hosts.find((h) => h.ip === selectedNode) : undefined;
   const connectedToSelected = edges.filter((e) => selectedNode && (e.source === selectedNode || e.target === selectedNode));
 
+  const workstationCount = nodes.filter((n) => n.kind === "workstation").length;
+  const serverCount = nodes.filter((n) => n.kind === "server").length;
+  const highRiskCount = nodes.filter((n) => n.risk >= 50).length;
+
   return (
     <div className="page-stack">
+      <section className="topology-summary">
+        <div className="topo-stat">
+          <div className="stat-icon" style={{ color: "#2878d0", background: "#dcecff" }}><Laptop size={15} /></div>
+          <div><span>Workstations</span><strong>{workstationCount}</strong></div>
+        </div>
+        <div className="topo-stat">
+          <div className="stat-icon" style={{ color: "#2f8f66", background: "#d8f3e6" }}><Server size={15} /></div>
+          <div><span>Servers</span><strong>{serverCount}</strong></div>
+        </div>
+        <div className="topo-stat">
+          <div className="stat-icon" style={{ color: "#c2413b", background: "#fde2e0" }}><ShieldAlert size={15} /></div>
+          <div><span>High Risk</span><strong>{highRiskCount}</strong></div>
+        </div>
+        <div className="topo-stat">
+          <div className="stat-icon" style={{ color: "#6d7f90", background: "#e5eaee" }}><Network size={15} /></div>
+          <div><span>Connections</span><strong>{edges.length}</strong></div>
+        </div>
+      </section>
+
       <section className="filter-row">
-        <label className="search-box">
-          <Search size={16} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search hosts by name, IP or role" />
-        </label>
+        <label className="search-box"><Search size={16} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search hosts by name, IP or role" /></label>
         <span className="result-count">{visibleHosts.length} managed hosts</span>
       </section>
+
       <div className="topology-workspace">
-        <div className="topology-legend">
-          {(["workstation", "server", "gateway", "external"] as const).map((kind) => {
-            const Icon = nodeKindIcon[kind];
-            return (
-              <span key={kind} className="topology-legend-item">
-                <span className={`topology-legend-dot topology-kind-${kind}`}><Icon size={12} /></span>
-                {nodeKindLabel[kind]}
-              </span>
-            );
-          })}
-        </div>
-        <div className="topology-canvas-wrap">
-          <svg className="topology-canvas" viewBox="0 0 800 560" preserveAspectRatio="xMidYMid meet">
+        <div className="topology-stage">
+          <div className="topology-legend">
+            <strong>Observed network</strong>
+            <div>{(["workstation", "server", "gateway", "external"] as const).map((kind) => {
+              const Icon = nodeKindIcon[kind];
+              return <span key={kind} className="topology-legend-item"><span className={`topology-legend-dot topology-kind-${kind}`}><Icon size={12} /></span>{nodeKindLabel[kind]}</span>;
+            })}</div>
+          </div>
+          <div className="topology-canvas-wrap">
+            <svg className="topology-canvas" viewBox="0 0 800 560" preserveAspectRatio="xMidYMid meet">
             <defs>
               <filter id="glow">
                 <feGaussianBlur stdDeviation="3" result="blur" />
@@ -133,11 +131,7 @@ export function NetworkTopologyPage() {
               const isHighlighted = selectedNode && (edge.source === selectedNode || edge.target === selectedNode);
               return (
                 <line
-                  key={`edge-${i}`}
-                  x1={src.x}
-                  y1={src.y}
-                  x2={tgt.x}
-                  y2={tgt.y}
+                  key={`edge-${i}`} x1={src.x} y1={src.y} x2={tgt.x} y2={tgt.y}
                   stroke={isHighlighted ? "var(--accent)" : "#8899aa"}
                   strokeWidth={isHighlighted ? 2 : 1}
                   strokeOpacity={selectedNode ? (isHighlighted ? 0.9 : 0.12) : 0.35}
@@ -150,13 +144,7 @@ export function NetworkTopologyPage() {
               const Icon = nodeKindIcon[node.kind];
               const riskColor = node.risk >= 80 ? "#c2413b" : node.risk >= 50 ? "#d97706" : "#2f8f66";
               return (
-                <g
-                  key={node.id}
-                  transform={`translate(${node.x}, ${node.y})`}
-                  className="topology-node-group"
-                  onClick={() => setSelectedNode(node.id === selectedNode ? null : node.id)}
-                  style={{ cursor: "pointer" }}
-                >
+                <g key={node.id} transform={`translate(${node.x}, ${node.y})`} className="topology-node-group" onClick={() => setSelectedNode(node.id === selectedNode ? null : node.id)} style={{ cursor: "pointer" }}>
                   {isSelected && <circle cx={0} cy={0} r={34} fill="var(--accent)" opacity={0.08} filter="url(#glow)" />}
                   <circle cx={0} cy={0} r={22} fill={isSelected ? "var(--accent)" : "var(--surface)"} stroke={isSelected ? "var(--accent)" : "var(--border-strong)"} strokeWidth={isSelected ? 2 : 1.5} />
                   <foreignObject x={-15} y={-15} width={30} height={30}>
@@ -175,8 +163,10 @@ export function NetworkTopologyPage() {
                 </g>
               );
             })}
-          </svg>
+            </svg>
+          </div>
         </div>
+
         <aside className="topology-detail">
           {selected && selectedHost ? (
             <>
@@ -190,14 +180,14 @@ export function NetworkTopologyPage() {
                 <div><dt>Role</dt><dd>{selectedHost.role}</dd></div>
                 <div><dt>Last Seen</dt><dd>{selectedHost.lastSeen}</dd></div>
               </dl>
-              <div className="detail-section">
-                <h3>Connections <span>{connectedToSelected.length}</span></h3>
+              <div className="topology-detail-section">
+                <h3>Connected edges <span>{connectedToSelected.length}</span></h3>
                 <div className="packet-stack">
                   {connectedToSelected.map((edge, i) => (
-                    <div key={i}>
+                    <div key={i} style={{ padding: "6px 0", borderBottom: "1px solid var(--border)", fontSize: 10 }}>
                       <strong>{edge.source === selectedNode ? edge.source : edge.target}</strong>
-                      <span>↔ {edge.source === selectedNode ? edge.target : edge.source} · {edge.protocol}</span>
-                      <small>{edge.packets.toLocaleString()} packets</small>
+                      <span style={{ color: "var(--muted)", marginLeft: 8 }}>to {edge.source === selectedNode ? edge.target : edge.source} - {edge.protocol}</span>
+                      <small style={{ color: "var(--muted)", display: "block" }}>{edge.packets.toLocaleString()} packets</small>
                     </div>
                   ))}
                   {connectedToSelected.length === 0 && <p className="empty-hint">No connections recorded.</p>}

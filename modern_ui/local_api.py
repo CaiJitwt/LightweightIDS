@@ -16,8 +16,9 @@ from endpoint_security import EndpointPostureService, FileIntegrityService, Proc
 from modern_ui.capture_session import CaptureSessionService, default_capture_options, parse_capture_options
 from modern_ui.llm_guidance import LlmGuidanceError, LlmGuidanceService
 from modern_ui.pcap_import import PcapImportService
+from models import RuleRecord
 from storage.database import Database
-from storage.repositories import AlertRepository, PacketRepository, SettingsRepository
+from storage.repositories import AlertRepository, PacketRepository, RuleRepository, SettingsRepository
 
 
 class LocalApiServer(ThreadingHTTPServer):
@@ -27,6 +28,7 @@ class LocalApiServer(ThreadingHTTPServer):
         self.database = database
         self.alerts = AlertRepository(database)
         self.packets = PacketRepository(database)
+        self.rules = RuleRepository(database)
         self.settings = SettingsRepository(database)
         self.host_profiles = HostProfileService(database)
         self.alert_trends = AlertTrendAnalyzer()
@@ -58,6 +60,8 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 self._send_json({"ok": True, "service": "Lightweight IDS local API"})
             elif parsed.path == "/api/settings":
                 self._send_json(_settings_payload(self.server.settings))
+            elif parsed.path == "/api/rules":
+                self._send_json({"records": [_rule_payload(record) for record in self.server.rules.list_all()]})
             elif parsed.path == "/api/capture/interfaces":
                 self._send_json({"interfaces": self.server.capture_service.list_interfaces()})
             elif parsed.path == "/api/capture/status":
@@ -156,6 +160,12 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/settings":
                 self._update_settings(payload)
                 self._send_json(_settings_payload(self.server.settings))
+            elif parsed.path.startswith("/api/rules/"):
+                rule_id = unquote(parsed.path.removeprefix("/api/rules/"))
+                self._send_json({"record": self._update_rule(rule_id, payload)})
+            elif parsed.path == "/api/statistics/reset":
+                self._reset_statistics()
+                self._send_json({"reset": True, "dashboard": self._dashboard_payload()})
             elif parsed.path == "/api/capture/pause":
                 self._send_json(self.server.capture_service.pause())
             elif parsed.path == "/api/capture/resume":
@@ -210,6 +220,32 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 raise ValueError("minimumAlertSeverity must be LOW, MEDIUM, HIGH, or CRITICAL")
             values["minimum_alert_severity"] = severity
         self.server.settings.set_many(values)
+
+    def _update_rule(self, rule_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        current = next((record for record in self.server.rules.list_all() if record.id == rule_id), None)
+        if current is None:
+            raise ValueError("Rule not found.")
+        updated = RuleRecord(
+            id=current.id,
+            name=current.name,
+            category=current.category,
+            severity=current.severity,
+            enabled=_optional_bool(payload, "enabled", current.enabled),
+            threshold=max(1, _optional_int(payload, "threshold", current.threshold)),
+            time_window=max(0, _optional_int(payload, "timeWindow", current.time_window)),
+            description=current.description,
+        )
+        self.server.rules.update_rule(updated)
+        return _rule_payload(updated)
+
+    def _reset_statistics(self) -> None:
+        if self.server.capture_service.status().get("state") != "stopped":
+            raise RuntimeError("Stop live capture before resetting statistics.")
+        with self.server.database.connect() as connection:
+            connection.execute("DELETE FROM alerts")
+            connection.execute("DELETE FROM packets")
+            connection.execute("DELETE FROM baselines")
+            connection.execute("DELETE FROM sqlite_sequence WHERE name IN ('alerts', 'packets', 'baselines')")
 
     def _dashboard_payload(self) -> dict[str, Any]:
         recent_alerts = self.server.alerts.list_all(limit=500)
@@ -457,6 +493,37 @@ def _settings_payload(settings: SettingsRepository) -> dict[str, Any]:
         "alertCooldownSeconds": settings.get_int("alert_cooldown_seconds", 10),
         "minimumAlertSeverity": settings.get("minimum_alert_severity", "LOW").upper(),
     }
+
+
+def _rule_payload(rule: RuleRecord) -> dict[str, Any]:
+    return {
+        "id": rule.id,
+        "name": rule.name,
+        "category": rule.category,
+        "severity": rule.severity,
+        "enabled": rule.enabled,
+        "threshold": rule.threshold,
+        "timeWindow": rule.time_window,
+        "description": rule.description,
+    }
+
+
+def _optional_int(payload: dict[str, Any], key: str, default: int) -> int:
+    if key not in payload:
+        return default
+    try:
+        return int(payload[key])
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{key} must be an integer") from exc
+
+
+def _optional_bool(payload: dict[str, Any], key: str, default: bool) -> bool:
+    if key not in payload:
+        return default
+    value = payload[key]
+    if not isinstance(value, bool):
+        raise ValueError(f"{key} must be a boolean")
+    return value
 
 
 def _setting_integer(payload: dict[str, Any], key: str) -> int:

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Activity, BellRing, Radio, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Activity, BellRing, Radio, RotateCcw, ShieldCheck, TriangleAlert } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -50,6 +50,8 @@ const previewSnapshot: DashboardSnapshot = {
 export function DashboardPage({ onOpenAlerts, onOpenHost, refreshVersion }: DashboardPageProps) {
   const [snapshot, setSnapshot] = useState<DashboardSnapshot>(previewSnapshot);
   const [connected, setConnected] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetNotice, setResetNotice] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -67,8 +69,27 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, refreshVersion }: Dash
 
   const captureLive = snapshot.capture.state === "running";
   const dataLabel = connected ? "Local SQLite data" : "Offline preview";
+  const resetStatistics = async () => {
+    if (!window.confirm("Delete all packet, alert, and baseline statistics? Investigations and assets will be preserved.")) return;
+    setResetting(true);
+    setResetNotice("");
+    try {
+      const result = await idsApi.resetStatistics();
+      setSnapshot(result.dashboard);
+      setConnected(true);
+      setResetNotice("Statistics reset. New activity will start from zero.");
+    } catch (error) {
+      setResetNotice(error instanceof Error ? error.message : "Statistics could not be reset.");
+    } finally {
+      setResetting(false);
+    }
+  };
   return (
     <div className="page-stack" data-refresh-version={refreshVersion}>
+      <section className="dashboard-toolbar">
+        <span>{resetNotice || `${dataLabel} is active.`}</span>
+        <button className="danger-button" type="button" disabled={!connected || resetting} onClick={() => void resetStatistics()} title={connected ? "Reset persisted statistics" : "Start the local API to reset statistics"}><RotateCcw size={15} />{resetting ? "Resetting..." : "Reset statistics"}</button>
+      </section>
       <section className="metric-strip" aria-label="Current IDS statistics">
         <Metric icon={<Radio size={18} />} label="Capture status" value={captureLive ? "Live" : titleCase(snapshot.capture.state)} meta={snapshot.capture.interface || "No active interface"} tone={captureLive ? "green" : "blue"} />
         <Metric icon={<Activity size={18} />} label="Packets observed" value={formatNumber(snapshot.statistics.packetTotal)} meta={`${formatNumber(snapshot.statistics.lastHourPackets)} in latest hour`} tone="blue" />

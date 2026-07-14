@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Check, RefreshCw, ShieldCheck } from "lucide-react";
+import { Info, RefreshCw, ShieldCheck } from "lucide-react";
 
 import { idsApi } from "../api/idsApi";
 import { SeverityBadge } from "../components/SeverityBadge";
+import { FALLBACK_RULE_GUIDANCE, RULE_GUIDANCE } from "../data/ruleGuidance";
 import type { RuleRecord } from "../types";
 
 export function RulesPage() {
@@ -17,5 +18,43 @@ export function RulesPage() {
       setNotice(`${record.name} updated.`);
     } catch (error) { setNotice(error instanceof Error ? error.message : "Could not update rule."); }
   };
-  return <div className="page-stack"><section className="section-panel"><header className="section-heading"><div><h2>Built-in detection rules</h2><p>Thresholds and windows apply to future detection sessions</p></div><button className="icon-button" type="button" title="Refresh rules" onClick={() => void load()}><RefreshCw size={15} /></button></header><p className="page-note"><ShieldCheck size={15} />{notice}</p><div className="table-scroll"><table className="data-table rules-table"><thead><tr><th>Rule</th><th>Severity</th><th>Enabled</th><th>Threshold</th><th>Window</th><th>Description</th></tr></thead><tbody>{records.map((rule) => <tr key={rule.id}><td><strong>{rule.name}</strong><small>{rule.category}</small></td><td><SeverityBadge severity={rule.severity} /></td><td><label className="switch"><input aria-label={`Enable ${rule.name}`} type="checkbox" checked={rule.enabled} onChange={(event) => void update(rule, { enabled: event.target.checked })} /><span /></label></td><td><input className="table-input" aria-label={`${rule.name} threshold`} type="number" min="0" value={rule.threshold} onChange={(event) => void update(rule, { threshold: Number(event.target.value) || 0 })} /></td><td><input className="table-input" aria-label={`${rule.name} window`} type="number" min="0" value={rule.timeWindow} onChange={(event) => void update(rule, { timeWindow: Number(event.target.value) || 0 })} /></td><td title={rule.description}>{rule.description}</td></tr>)}{!records.length && <tr><td colSpan={6} className="empty-table">No rule data is available.</td></tr>}</tbody></table></div></section></div>;
+  return (
+    <div className="page-stack">
+      <section className="section-panel">
+        <header className="section-heading">
+          <div><h2>Built-in detection rules</h2><p>Thresholds and windows apply to future detection sessions</p></div>
+          <button className="icon-button" type="button" title="Refresh rules" onClick={() => void load()}><RefreshCw size={15} /></button>
+        </header>
+        <p className="page-note"><ShieldCheck size={15} />{notice}</p>
+        <div className="rule-tuning-note">
+          <Info size={16} />
+          <div><strong>Rule tuning reference</strong><p>Threshold controls the count, multiplier or score needed to alert. Window is measured in seconds; 0 means immediate packet evaluation without time aggregation.</p></div>
+        </div>
+        <div className="table-scroll">
+          <table className="data-table rules-table">
+            <thead><tr><th>Rule</th><th>Severity</th><th>Enabled</th><th title="Rule-specific count, multiplier or score">Threshold</th><th title="Observation period in seconds">Window</th><th>Detection and tuning</th><th>Description</th></tr></thead>
+            <tbody>
+              {records.map((rule) => {
+                const guidance = RULE_GUIDANCE[rule.id] ?? FALLBACK_RULE_GUIDANCE;
+                return <tr key={rule.id}>
+                  <td><div className="rule-identity"><strong>{rule.name}</strong><span className="rule-category" data-category={rule.category}>{rule.category}</span></div></td>
+                  <td><SeverityBadge severity={rule.severity} /></td>
+                  <td><label className="switch"><input aria-label={`Enable ${rule.name}`} type="checkbox" checked={rule.enabled} onChange={(event) => void update(rule, { enabled: event.target.checked })} /><span /></label></td>
+                  <td><input className="table-input" aria-label={`${rule.name} threshold`} type="number" min="1" value={rule.threshold} onChange={(event) => void update(rule, { threshold: Math.max(1, Number(event.target.value) || 1) })} /></td>
+                  <td><input className="table-input" aria-label={`${rule.name} window`} type="number" min="0" value={rule.timeWindow} onChange={(event) => void update(rule, { timeWindow: Math.max(0, Number(event.target.value) || 0) })} /></td>
+                  <td className="rule-guidance-cell">
+                    <p><strong>Method</strong>{guidance.method}</p>
+                    <p><strong>Threshold</strong>{guidance.threshold}</p>
+                    <p><strong>Window</strong>{guidance.window}</p>
+                  </td>
+                  <td title={rule.description}>{rule.description}</td>
+                </tr>;
+              })}
+              {!records.length && <tr><td colSpan={7} className="empty-table">No rule data is available.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
 }

@@ -66,4 +66,21 @@ describe("modern IDS frontend", () => {
     expect(screen.getByPlaceholderText("Stored only for this browser session")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^System$/ })).toHaveClass("selected");
   });
+
+  it("switches the help language and opens a page from quick navigation", async () => {
+    render(<App />);
+
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Primary navigation" })).getByRole("button", { name: "Help Center" }));
+    expect(await screen.findByRole("heading", { name: "Help Center" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "中文" }));
+    expect(screen.getByRole("heading", { name: "帮助中心", level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "帮助中心", level: 2 })).toBeInTheDocument();
+    expect(localStorage.getItem("ids-help-language")).toBe("zh");
+
+    const quickNavigation = screen.getByRole("heading", { name: "快速导航" }).closest("section");
+    expect(quickNavigation).not.toBeNull();
+    fireEvent.click(within(quickNavigation as HTMLElement).getByRole("button", { name: "仪表盘" }));
+    expect(await screen.findByRole("heading", { name: "Security overview" })).toBeInTheDocument();
+  });
 });

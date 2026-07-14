@@ -169,7 +169,7 @@ DEFAULT_RULES = [
     ("XSS", "XSS detection", "web", "HIGH", 1, 1, 0, "Detects cross-site scripting indicators in HTTP traffic."),
     ("MALICIOUS_COMMAND", "Malicious command detection", "web", "CRITICAL", 1, 1, 0, "Detects suspicious system commands, reverse shells and download-execute patterns."),
     ("ABNORMAL_OUTBOUND", "Abnormal outbound traffic", "behavior", "HIGH", 1, 4, 300, "Detects internal hosts connecting to public addresses on uncommon ports or with fixed heartbeat intervals."),
-    ("LATERAL_MOVEMENT", "Lateral movement", "behavior", "CRITICAL", 1, 5, 60, "Detects internal movement across SMB, RDP, SSH and Windows administrative shares."),
+    ("LATERAL_MOVEMENT", "Lateral movement", "behavior", "CRITICAL", 1, 5, 60, "Detects internal movement across SMB, RPC, RDP, SSH, WinRM and Windows administrative shares."),
     ("HOST_SCAN", "Host scan", "scan", "HIGH", 1, 30, 10, "Detects one source host contacting many different destination hosts in a short time window."),
     ("TLS_FINGERPRINT", "TLS fingerprint risk", "tls", "HIGH", 1, 1, 0, "Detects weak TLS versions, weak ciphers and suspicious certificate indicators in TLS metadata."),
     ("ML_ANOMALY", "ML anomaly score", "behavior", "MEDIUM", 1, 80, 0, "Uses a lightweight anomaly score based on packet size, protocol and port features."),
