@@ -336,7 +336,9 @@ class PacketPage(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
-        toolbar = QHBoxLayout()
+
+        # 第一行：网卡选择框单独一行
+        interface_row = QHBoxLayout()
         self.interface_combo = QComboBox()
         self.interface_combo.setMinimumWidth(260)
         self.interface_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -350,8 +352,6 @@ class PacketPage(QWidget):
         self.clear_button = QPushButton(self._lm.tr("page.packets.clear_table"))
         self.stop_capture_button.setEnabled(False)
 
-        toolbar.addWidget(self.interface_combo, 1)
-        toolbar.addWidget(self.refresh_interfaces_button)
         toolbar.addWidget(self.import_button)
         toolbar.addWidget(self.demo_button)
         toolbar.addWidget(self.import_decrypted_button)
@@ -400,6 +400,7 @@ class PacketPage(QWidget):
         self.status_label.setWordWrap(True)
         self.packet_table = PacketTable()
 
+        layout.addLayout(interface_row, 0)
         layout.addLayout(toolbar, 0)
         layout.addLayout(capture_options, 0)
         layout.addWidget(self.filter_result_label)

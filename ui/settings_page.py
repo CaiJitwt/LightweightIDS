@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from detection.llm.client import LlmClient, LlmConfig
 from storage.database import Database
 from storage.repositories import SettingsRepository
 from ui.i18n import locale_manager
@@ -123,6 +124,31 @@ class SettingsPage(QWidget):
         self._add_form_rows()
         self.minimum_severity_label = QLabel("Minimum alert severity")
         self._form.addRow(self.minimum_severity_label, self.minimum_severity_combo)
+
+        # LLM configuration
+        self.llm_section_label = QLabel("LLM Analysis")
+        self.llm_section_label.setObjectName("SectionTitle")
+
+        self.llm_provider = QComboBox()
+        self.llm_provider.addItems(["ollama", "openai"])
+        self.llm_api_url = QLineEdit()
+        self.llm_api_url.setPlaceholderText("http://localhost:11434")
+        self.llm_model = QLineEdit()
+        self.llm_model.setPlaceholderText("e.g. llama3.2 or gpt-4o-mini")
+        self.llm_enabled = QCheckBox()
+        self.llm_enabled.setChecked(True)
+        self.llm_test_btn = QPushButton("Test connection")
+        self.llm_test_result = QLabel("")
+
+        llm_form = QFormLayout()
+        llm_form.addRow("Provider", self.llm_provider)
+        llm_form.addRow("API URL", self.llm_api_url)
+        llm_form.addRow("Model", self.llm_model)
+        llm_form.addRow("Enabled", self.llm_enabled)
+        llm_form.addRow("", self.llm_test_btn)
+        llm_form.addRow("", self.llm_test_result)
+
+        self._load_llm_settings()
 
         self.status_label = QLabel("")
         self.status_label.setObjectName("PageHint")
