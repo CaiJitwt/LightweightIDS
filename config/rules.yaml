@@ -102,7 +102,7 @@ rules:
     enabled: true
     threshold: 5
     time_window: 60
-    description: Detects internal movement through SMB, RDP, SSH and admin shares.
+    description: Detects internal movement through SMB, RPC, RDP, SSH, WinRM and admin shares.
   - id: HOST_SCAN
     name: Host scan
     category: scan

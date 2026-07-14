@@ -79,6 +79,27 @@ def test_lateral_movement_rule_detects_windows_admin_share_access():
     assert any(alert.alert_type == "ADMIN_SHARE_ACCESS" for alert in alerts)
 
 
+def test_lateral_movement_rule_detects_multiple_remote_services_to_one_host():
+    rule = LateralMovementRule(threshold=4, time_window=60)
+    alerts = []
+
+    for index, dst_port in enumerate((445, 135, 5985, 3389)):
+        alerts.extend(
+            rule.process(
+                packet(
+                    timestamp=f"2026-01-01 00:00:0{index}.000",
+                    dst_ip="192.168.1.40",
+                    dst_port=dst_port,
+                )
+            )
+        )
+
+    matching = [alert for alert in alerts if alert.alert_type == "REMOTE_SERVICE_LATERAL_MOVEMENT"]
+    assert len(matching) == 1
+    assert "service_ports=[135, 445, 3389, 5985]" in matching[0].evidence
+    assert "threshold=4" in matching[0].evidence
+
+
 def test_abnormal_outbound_rule_detects_uncommon_public_port():
     alerts = AbnormalOutboundRule().process(
         packet(

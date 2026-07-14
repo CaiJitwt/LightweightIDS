@@ -138,6 +138,42 @@ CREATE TABLE IF NOT EXISTS blocklist_entries (
     UNIQUE (kind, value, field, protocol)
 );
 
+CREATE TABLE IF NOT EXISTS security_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT NOT NULL,
+    channel TEXT NOT NULL,
+    event_id INTEGER NOT NULL,
+    record_id INTEGER NOT NULL,
+    provider TEXT NOT NULL DEFAULT '',
+    computer TEXT NOT NULL DEFAULT '',
+    level TEXT NOT NULL DEFAULT '',
+    user TEXT NOT NULL DEFAULT '',
+    source_ip TEXT NOT NULL DEFAULT '',
+    logon_type TEXT NOT NULL DEFAULT '',
+    process_name TEXT NOT NULL DEFAULT '',
+    command_line TEXT NOT NULL DEFAULT '',
+    summary TEXT NOT NULL DEFAULT '',
+    details_json TEXT NOT NULL DEFAULT '{}',
+    severity TEXT NOT NULL DEFAULT 'INFO',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (channel, record_id)
+);
+
+CREATE TABLE IF NOT EXISTS security_event_cursors (
+    channel TEXT PRIMARY KEY,
+    last_record_id INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS security_event_alert_links (
+    security_event_id INTEGER NOT NULL,
+    alert_id INTEGER NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (security_event_id, alert_id),
+    FOREIGN KEY (security_event_id) REFERENCES security_events(id) ON DELETE CASCADE,
+    FOREIGN KEY (alert_id) REFERENCES alerts(id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_packets_alert_match
 ON packets (timestamp, src_ip, dst_ip, src_port, dst_port, protocol);
 
@@ -154,6 +190,11 @@ CREATE INDEX IF NOT EXISTS idx_alerts_dst_timestamp ON alerts (dst_ip, timestamp
 CREATE INDEX IF NOT EXISTS idx_investigations_status ON investigations (status, updated_at);
 CREATE INDEX IF NOT EXISTS idx_investigation_evidence_case ON investigation_evidence (investigation_id, added_at);
 CREATE INDEX IF NOT EXISTS idx_blocklist_enabled ON blocklist_entries (enabled, kind, field);
+CREATE INDEX IF NOT EXISTS idx_security_events_timestamp ON security_events (timestamp);
+CREATE INDEX IF NOT EXISTS idx_security_events_event_id ON security_events (event_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_security_events_source ON security_events (source_ip, timestamp);
+CREATE INDEX IF NOT EXISTS idx_security_events_severity ON security_events (severity, timestamp);
+CREATE INDEX IF NOT EXISTS idx_security_event_links_event ON security_event_alert_links (security_event_id);
 """
 
 DEFAULT_RULES = [
@@ -169,7 +210,7 @@ DEFAULT_RULES = [
     ("XSS", "XSS detection", "web", "HIGH", 1, 1, 0, "Detects cross-site scripting indicators in HTTP traffic."),
     ("MALICIOUS_COMMAND", "Malicious command detection", "web", "CRITICAL", 1, 1, 0, "Detects suspicious system commands, reverse shells and download-execute patterns."),
     ("ABNORMAL_OUTBOUND", "Abnormal outbound traffic", "behavior", "HIGH", 1, 4, 300, "Detects internal hosts connecting to public addresses on uncommon ports or with fixed heartbeat intervals."),
-    ("LATERAL_MOVEMENT", "Lateral movement", "behavior", "CRITICAL", 1, 5, 60, "Detects internal movement across SMB, RDP, SSH and Windows administrative shares."),
+    ("LATERAL_MOVEMENT", "Lateral movement", "behavior", "CRITICAL", 1, 5, 60, "Detects internal movement across SMB, RPC, RDP, SSH, WinRM and Windows administrative shares."),
     ("HOST_SCAN", "Host scan", "scan", "HIGH", 1, 30, 10, "Detects one source host contacting many different destination hosts in a short time window."),
     ("TLS_FINGERPRINT", "TLS fingerprint risk", "tls", "HIGH", 1, 1, 0, "Detects weak TLS versions, weak ciphers and suspicious certificate indicators in TLS metadata."),
     ("ML_ANOMALY", "ML anomaly score", "behavior", "MEDIUM", 1, 80, 0, "Uses a lightweight anomaly score based on packet size, protocol and port features."),
@@ -179,4 +220,10 @@ DEFAULT_RULES = [
     ("BASELINE_DEVIATION", "Baseline deviation", "behavior", "HIGH", 1, 3, 60, "Detects hosts whose activity exceeds historical packet, destination, port or byte baselines."),
     ("BANDWIDTH_SPIKE", "Bandwidth spike", "behavior", "HIGH", 1, 4, 60, "Detects hosts whose byte volume sharply exceeds their historical baseline."),
     ("SESSION_DURATION_ANOMALY", "Session duration anomaly", "behavior", "MEDIUM", 1, 3, 600, "Detects sessions that last much longer than the host historical average."),
+    ("WINDOWS_LOGON_FAILURE", "Windows logon failure burst", "host", "HIGH", 1, 5, 120, "Detects repeated Windows authentication failures from the same source or account."),
+    ("WINDOWS_PERSISTENCE", "Windows persistence change", "host", "HIGH", 1, 1, 0, "Detects service and scheduled-task creation or modification events."),
+    ("WINDOWS_PRIVILEGE_CHANGE", "Windows privilege change", "host", "HIGH", 1, 1, 0, "Detects account creation and privileged group membership changes."),
+    ("POWERSHELL_SUSPICIOUS", "Suspicious PowerShell activity", "host", "HIGH", 1, 2, 0, "Detects suspicious indicators in PowerShell operational events."),
+    ("SECURITY_CONTROL_TAMPER", "Security control tampering", "host", "CRITICAL", 1, 1, 0, "Detects security-log clearing and protection-disable events."),
+    ("RDP_LATERAL_ACTIVITY", "RDP lateral activity", "host", "HIGH", 1, 3, 300, "Detects repeated remote interactive logons from the same source."),
 ]

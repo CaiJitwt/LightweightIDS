@@ -75,6 +75,7 @@ class PcapImportWorker(QThread):
             alert_cooldown_seconds=self.alert_cooldown_seconds,
             asset_importance=AssetRepository(self.database).importance_map(),
             blocklist_entries=BlocklistEntryRepository(self.database).list_all(enabled_only=True),
+            minimum_severity=SettingsRepository(self.database).get("minimum_alert_severity", "LOW"),
         )
         traffic_repository = TrafficRepository(self.database)
         packet_batch: list[PacketRecord] = []
@@ -147,6 +148,7 @@ class DecryptedHttpImportWorker(QThread):
             alert_cooldown_seconds=self.alert_cooldown_seconds,
             asset_importance=AssetRepository(self.database).importance_map(),
             blocklist_entries=BlocklistEntryRepository(self.database).list_all(enabled_only=True),
+            minimum_severity=SettingsRepository(self.database).get("minimum_alert_severity", "LOW"),
         )
         traffic_repository = TrafficRepository(self.database)
         packet_batch: list[PacketRecord] = []
@@ -226,6 +228,7 @@ class LiveCaptureWorker(QThread):
             alert_cooldown_seconds=self.alert_cooldown_seconds,
             asset_importance=AssetRepository(self.database).importance_map(),
             blocklist_entries=BlocklistEntryRepository(self.database).list_all(enabled_only=True),
+            minimum_severity=SettingsRepository(self.database).get("minimum_alert_severity", "LOW"),
         )
         traffic_repository = TrafficRepository(self.database)
         packet_batch: list[PacketRecord] = []

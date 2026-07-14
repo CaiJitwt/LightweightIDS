@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import asdict
+import json
+from dataclasses import asdict, replace
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from models import AlertRecord, BaselineRecord, CustomRuleRecord, PacketRecord, RuleRecord
+from models import AlertRecord, BaselineRecord, CustomRuleRecord, PacketRecord, RuleRecord, SecurityEventRecord
 from storage.database import Database
 from storage.migrations import DEFAULT_RULES
 
@@ -246,6 +247,29 @@ class PacketRepository:
             ).fetchall()
         return [(int(row["dst_port"]), int(row["total"])) for row in rows]
 
+    def count_by_time_bucket(self, bucket: str = "hour", limit: int = 24) -> list[tuple[str, int]]:
+        """Return persisted packet counts for the lightweight local analyst API."""
+        formats = {
+            "hour": "%Y-%m-%d %H:00",
+            "day": "%Y-%m-%d",
+        }
+        if bucket not in formats:
+            raise ValueError("bucket must be 'hour' or 'day'")
+
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT strftime(?, timestamp) AS bucket, COUNT(*) AS total
+                FROM packets
+                WHERE timestamp IS NOT NULL AND timestamp != ''
+                GROUP BY bucket
+                ORDER BY bucket DESC
+                LIMIT ?
+                """,
+                (formats[bucket], limit),
+            ).fetchall()
+        return [(str(row["bucket"]), int(row["total"])) for row in reversed(rows) if row["bucket"]]
+
     def _from_row(self, row: object) -> PacketRecord:
         return PacketRecord(
             id=row["id"],  # type: ignore[index]
@@ -315,6 +339,19 @@ class AlertRepository:
             rows = connection.execute(sql, tuple(values)).fetchall()
         return [self._from_row(row) for row in rows]
 
+    def get(self, alert_id: int) -> AlertRecord | None:
+        with self.database.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT id, timestamp, rule_id, rule_name, alert_type, severity, src_ip, dst_ip,
+                       src_port, dst_port, protocol, description, evidence, status
+                FROM alerts
+                WHERE id = ?
+                """,
+                (alert_id,),
+            ).fetchone()
+        return None if row is None else self._from_row(row)
+
     def list_for_host(self, host_ip: str, limit: int = 1_000) -> list[AlertRecord]:
         with self.database.connect() as connection:
             rows = connection.execute(
@@ -349,6 +386,11 @@ class AlertRepository:
         with self.database.connect() as connection:
             rows = connection.execute("SELECT severity, COUNT(*) AS total FROM alerts GROUP BY severity ORDER BY total DESC").fetchall()
         return {str(row["severity"]): int(row["total"]) for row in rows}
+
+    def count_by_status(self) -> dict[str, int]:
+        with self.database.connect() as connection:
+            rows = connection.execute("SELECT status, COUNT(*) AS total FROM alerts GROUP BY status").fetchall()
+        return {str(row["status"] or "unconfirmed"): int(row["total"]) for row in rows}
 
     def count_by_type(self) -> dict[str, int]:
         with self.database.connect() as connection:
@@ -425,6 +467,192 @@ class AlertRepository:
             description=row["description"],  # type: ignore[index]
             evidence=row["evidence"],  # type: ignore[index]
             status=row["status"],  # type: ignore[index]
+        )
+
+
+class SecurityEventRepository:
+    def __init__(self, database: Database) -> None:
+        self.database = database
+
+    def add_many(self, records: list[SecurityEventRecord]) -> list[SecurityEventRecord]:
+        inserted: list[SecurityEventRecord] = []
+        if not records:
+            return inserted
+        with self.database.connect() as connection:
+            for record in records:
+                cursor = connection.execute(
+                    """
+                    INSERT OR IGNORE INTO security_events
+                        (timestamp, channel, event_id, record_id, provider, computer, level,
+                         user, source_ip, logon_type, process_name, command_line, summary,
+                         details_json, severity)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        record.timestamp,
+                        record.channel,
+                        record.event_id,
+                        record.record_id,
+                        record.provider,
+                        record.computer,
+                        record.level,
+                        record.user,
+                        record.source_ip,
+                        record.logon_type,
+                        record.process_name,
+                        record.command_line,
+                        record.summary,
+                        json.dumps(record.details, ensure_ascii=True, sort_keys=True),
+                        record.severity,
+                    ),
+                )
+                if cursor.rowcount:
+                    inserted.append(replace(record, id=int(cursor.lastrowid)))
+            connection.commit()
+        return inserted
+
+    def list_all(
+        self,
+        *,
+        keyword: str | None = None,
+        severity: str | None = None,
+        channel: str | None = None,
+        event_id: int | None = None,
+        limit: int = 500,
+    ) -> list[SecurityEventRecord]:
+        sql = """
+            SELECT e.id, e.timestamp, e.channel, e.event_id, e.record_id, e.provider,
+                   e.computer, e.level, e.user, e.source_ip, e.logon_type,
+                   e.process_name, e.command_line, e.summary, e.details_json, e.severity,
+                   (SELECT MIN(link.alert_id) FROM security_event_alert_links AS link
+                    WHERE link.security_event_id = e.id) AS alert_id
+            FROM security_events AS e
+        """
+        clauses: list[str] = []
+        values: list[object] = []
+        if keyword:
+            like_value = f"%{keyword}%"
+            clauses.append(
+                "(e.user LIKE ? OR e.source_ip LIKE ? OR e.computer LIKE ? OR e.provider LIKE ? "
+                "OR e.process_name LIKE ? OR e.command_line LIKE ? OR e.summary LIKE ?)"
+            )
+            values.extend([like_value] * 7)
+        if severity and severity != "All severities":
+            clauses.append("e.severity = ?")
+            values.append(severity.upper())
+        if channel and channel != "All channels":
+            clauses.append("e.channel = ?")
+            values.append(channel)
+        if event_id is not None:
+            clauses.append("e.event_id = ?")
+            values.append(event_id)
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY e.id DESC LIMIT ?"
+        values.append(max(1, min(limit, 2_000)))
+        with self.database.connect() as connection:
+            rows = connection.execute(sql, tuple(values)).fetchall()
+        return [self._from_row(row) for row in rows]
+
+    def get(self, event_id: int) -> SecurityEventRecord | None:
+        with self.database.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT e.id, e.timestamp, e.channel, e.event_id, e.record_id, e.provider,
+                       e.computer, e.level, e.user, e.source_ip, e.logon_type,
+                       e.process_name, e.command_line, e.summary, e.details_json, e.severity,
+                       (SELECT MIN(link.alert_id) FROM security_event_alert_links AS link
+                        WHERE link.security_event_id = e.id) AS alert_id
+                FROM security_events AS e WHERE e.id = ?
+                """,
+                (event_id,),
+            ).fetchone()
+        return None if row is None else self._from_row(row)
+
+    def get_for_alert(self, alert_id: int) -> SecurityEventRecord | None:
+        with self.database.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT e.id, e.timestamp, e.channel, e.event_id, e.record_id, e.provider,
+                       e.computer, e.level, e.user, e.source_ip, e.logon_type,
+                       e.process_name, e.command_line, e.summary, e.details_json, e.severity,
+                       link.alert_id
+                FROM security_event_alert_links AS link
+                JOIN security_events AS e ON e.id = link.security_event_id
+                WHERE link.alert_id = ?
+                """,
+                (alert_id,),
+            ).fetchone()
+        return None if row is None else self._from_row(row)
+
+    def add_alert(self, event_id: int, alert: AlertRecord) -> int:
+        data = asdict(alert)
+        data.pop("id", None)
+        columns = ", ".join(data.keys())
+        placeholders = ", ".join("?" for _ in data)
+        with self.database.connect() as connection:
+            cursor = connection.execute(f"INSERT INTO alerts ({columns}) VALUES ({placeholders})", tuple(data.values()))
+            alert_id = int(cursor.lastrowid)
+            connection.execute(
+                "INSERT INTO security_event_alert_links (security_event_id, alert_id) VALUES (?, ?)",
+                (event_id, alert_id),
+            )
+            connection.commit()
+        return alert_id
+
+    def count(self) -> int:
+        with self.database.connect() as connection:
+            return int(connection.execute("SELECT COUNT(*) FROM security_events").fetchone()[0])
+
+    def count_by_severity(self) -> dict[str, int]:
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                "SELECT severity, COUNT(*) AS total FROM security_events GROUP BY severity"
+            ).fetchall()
+        return {str(row["severity"]): int(row["total"]) for row in rows}
+
+    def cursors(self) -> dict[str, int]:
+        with self.database.connect() as connection:
+            rows = connection.execute("SELECT channel, last_record_id FROM security_event_cursors").fetchall()
+        return {str(row["channel"]): int(row["last_record_id"]) for row in rows}
+
+    def update_cursor(self, channel: str, last_record_id: int) -> None:
+        with self.database.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO security_event_cursors (channel, last_record_id, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(channel) DO UPDATE SET
+                    last_record_id = MAX(last_record_id, excluded.last_record_id),
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (channel, last_record_id),
+            )
+            connection.commit()
+
+    def _from_row(self, row: object) -> SecurityEventRecord:
+        try:
+            details = json.loads(str(row["details_json"]))  # type: ignore[index]
+        except (TypeError, ValueError, json.JSONDecodeError):
+            details = {}
+        return SecurityEventRecord(
+            id=int(row["id"]),  # type: ignore[index]
+            timestamp=str(row["timestamp"]),  # type: ignore[index]
+            channel=str(row["channel"]),  # type: ignore[index]
+            event_id=int(row["event_id"]),  # type: ignore[index]
+            record_id=int(row["record_id"]),  # type: ignore[index]
+            provider=str(row["provider"]),  # type: ignore[index]
+            computer=str(row["computer"]),  # type: ignore[index]
+            level=str(row["level"]),  # type: ignore[index]
+            user=str(row["user"]),  # type: ignore[index]
+            source_ip=str(row["source_ip"]),  # type: ignore[index]
+            logon_type=str(row["logon_type"]),  # type: ignore[index]
+            process_name=str(row["process_name"]),  # type: ignore[index]
+            command_line=str(row["command_line"]),  # type: ignore[index]
+            summary=str(row["summary"]),  # type: ignore[index]
+            details=details if isinstance(details, dict) else {},
+            severity=str(row["severity"]),  # type: ignore[index]
+            alert_id=None if row["alert_id"] is None else int(row["alert_id"]),  # type: ignore[index]
         )
 
 

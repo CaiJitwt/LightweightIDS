@@ -15,5 +15,6 @@ ui:
 
 detection:
   alert_cooldown_seconds: 10
+  minimum_alert_severity: LOW
   enable_realtime_detection: true
   auto_save_packets: true

@@ -8,6 +8,7 @@ from models.packet_record import PacketRecord
 from models.host_profile import HostConnectionSummary, HostSummary, HostTimelineEvent
 from models.investigation_record import InvestigationEvidenceRecord, InvestigationRecord
 from models.rule_record import RuleRecord
+from models.security_event_record import SecurityEventRecord
 from models.statistics_record import StatisticsRecord
 
 __all__ = [
@@ -24,5 +25,6 @@ __all__ = [
     "InvestigationEvidenceRecord",
     "InvestigationRecord",
     "RuleRecord",
+    "SecurityEventRecord",
     "StatisticsRecord",
 ]
