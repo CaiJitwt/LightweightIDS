@@ -26,6 +26,7 @@ import {
 import type { FontScale, LlmSettings, ThemePreference } from "./types";
 import type { PersonalizationState } from "./pages/PersonalizationPage";
 import type { HelpLanguage } from "./pages/HelpPage";
+import { idsApi } from "./api/idsApi";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
 const TrafficPage = lazy(() => import("./pages/TrafficPage").then((module) => ({ default: module.TrafficPage })));
@@ -49,7 +50,7 @@ const navItems = [
   { key: "dashboard" as const, label: "Dashboard", icon: Gauge },
   { key: "traffic" as const, label: "Traffic Monitor", icon: Activity },
   { key: "hosts" as const, label: "Host Explorer", icon: Network },
-  { key: "alerts" as const, label: "Alert Center", icon: BellRing, count: 9 },
+  { key: "alerts" as const, label: "Alert Center", icon: BellRing },
   { key: "investigations" as const, label: "Investigations", icon: BriefcaseBusiness },
   { key: "assets" as const, label: "Assets", icon: Package },
   { key: "rules" as const, label: "Rule Management", icon: SlidersHorizontal },
@@ -96,6 +97,8 @@ export default function App() {
   const [selectedHostIp, setSelectedHostIp] = useState<string | undefined>();
   const [personalization, setPersonalization] = useState<PersonalizationState>(readPersonalization);
   const [helpLanguage, setHelpLanguage] = useState<HelpLanguage>(readHelpLanguage);
+  const [openAlertCount, setOpenAlertCount] = useState(0);
+  const [alertBadgeRefresh, setAlertBadgeRefresh] = useState(0);
 
   useEffect(() => {
     localStorage.setItem("ids-prototype-theme", themePreference);
@@ -118,6 +121,16 @@ export default function App() {
   useEffect(() => localStorage.setItem("ids-help-language", helpLanguage), [helpLanguage]);
 
   useEffect(() => {
+    let active = true;
+    const syncOpenAlerts = () => idsApi.dashboard()
+      .then((snapshot) => { if (active) setOpenAlertCount(Math.max(0, snapshot.statistics.openAlerts)); })
+      .catch(() => { if (active) setOpenAlertCount(0); });
+    void syncOpenAlerts();
+    const timer = autoRefresh ? window.setInterval(syncOpenAlerts, 5000) : undefined;
+    return () => { active = false; if (timer !== undefined) window.clearInterval(timer); };
+  }, [alertBadgeRefresh, autoRefresh]);
+
+  useEffect(() => {
     if (!autoRefresh || page !== "dashboard") return undefined;
     const timer = window.setInterval(() => setRefreshVersion((value) => value + 1), 5000);
     return () => window.clearInterval(timer);
@@ -134,7 +147,8 @@ export default function App() {
         <nav className="primary-nav" aria-label="Primary navigation">
           {navItems.map((item) => {
             const Icon = item.icon;
-            return <button type="button" key={item.key} className={page === item.key ? "active" : ""} onClick={() => setPage(item.key)} title={collapsed ? item.label : undefined}><Icon size={18} /><span>{item.label}</span>{item.count && <b>{item.count}</b>}</button>;
+            const badge = item.key === "alerts" && openAlertCount > 0 ? (openAlertCount > 99 ? "99+" : openAlertCount) : null;
+            return <button type="button" key={item.key} className={page === item.key ? "active" : ""} onClick={() => setPage(item.key)} title={collapsed ? item.label : undefined}><Icon size={18} /><span>{item.label}</span>{badge !== null && <b title={`${openAlertCount} unconfirmed alerts`}>{badge}</b>}</button>;
           })}
         </nav>
         <div className="sidebar-footer">
@@ -149,17 +163,17 @@ export default function App() {
           <div className="topbar-actions">
             <button className="global-search" type="button"><Search size={16} /><span>Search</span><kbd>Ctrl K</kbd></button>
             {page === "dashboard" && <label className="refresh-toggle"><input type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)} /><span>Auto-refresh</span></label>}
-            <button className="icon-button" type="button" title="Refresh current view" onClick={() => setRefreshVersion((value) => value + 1)}><RefreshCw size={17} /></button>
+            <button className="icon-button" type="button" title="Refresh current view" onClick={() => { setRefreshVersion((value) => value + 1); setAlertBadgeRefresh((value) => value + 1); }}><RefreshCw size={17} /></button>
             <button className="icon-button" type="button" title={`Use ${theme === "light" ? "dark" : "light"} theme`} onClick={() => setThemePreference(theme === "light" ? "dark" : "light")}>{theme === "light" ? <Moon size={17} /> : <Sun size={17} />}</button>
             <button className="user-button" type="button" title="Analyst profile"><Laptop size={16} /><span>Analyst</span></button>
           </div>
         </header>
         <div className="page-content">
           <Suspense fallback={<div className="page-loading">Loading view...</div>}>
-            {page === "dashboard" && <DashboardPage refreshVersion={refreshVersion} onOpenAlerts={() => setPage("alerts")} onOpenHost={(ip) => { setSelectedHostIp(ip); setPage("hosts"); }} />}
+            {page === "dashboard" && <DashboardPage refreshVersion={refreshVersion} onOpenAlertCountChange={setOpenAlertCount} onOpenAlerts={() => setPage("alerts")} onOpenHost={(ip) => { setSelectedHostIp(ip); setPage("hosts"); }} />}
             {page === "traffic" && <TrafficPage />}
             {page === "hosts" && <HostsPage initialHostIp={selectedHostIp} refreshVersion={refreshVersion} />}
-            {page === "alerts" && <AlertsPage llmSettings={llmSettings} refreshVersion={refreshVersion} />}
+            {page === "alerts" && <AlertsPage llmSettings={llmSettings} refreshVersion={refreshVersion} onAlertsChanged={() => setAlertBadgeRefresh((value) => value + 1)} />}
             {page === "investigations" && <InvestigationsPage />}
             {page === "assets" && <AssetsPage />}
             {page === "rules" && <RulesPage />}

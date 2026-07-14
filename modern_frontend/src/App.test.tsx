@@ -31,6 +31,9 @@ describe("modern IDS frontend", () => {
     expect(await screen.findByText("128")).toBeInTheDocument();
     expect(screen.getByText("Local SQLite data - last 12 observed hours")).toBeInTheDocument();
     expect(screen.getByText("Lab host")).toBeInTheDocument();
+    const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
+    expect(await within(navigation).findByTitle("1 unconfirmed alerts")).toHaveTextContent("1");
+    expect(within(navigation).getByRole("button", { name: /Alert Center/ })).not.toHaveTextContent("9");
   });
 
   it("navigates from the dashboard to alert evidence", async () => {

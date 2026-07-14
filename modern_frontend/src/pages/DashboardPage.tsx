@@ -21,6 +21,7 @@ import type { DashboardSnapshot } from "../types";
 interface DashboardPageProps {
   onOpenAlerts: () => void;
   onOpenHost: (ip: string) => void;
+  onOpenAlertCountChange: (count: number) => void;
   refreshVersion: number;
 }
 
@@ -47,7 +48,7 @@ const previewSnapshot: DashboardSnapshot = {
   recentAlerts: alerts,
 };
 
-export function DashboardPage({ onOpenAlerts, onOpenHost, refreshVersion }: DashboardPageProps) {
+export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange, refreshVersion }: DashboardPageProps) {
   const [snapshot, setSnapshot] = useState<DashboardSnapshot>(previewSnapshot);
   const [connected, setConnected] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -60,12 +61,13 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, refreshVersion }: Dash
         if (!active) return;
         setSnapshot(next);
         setConnected(true);
+        onOpenAlertCountChange(next.statistics.openAlerts);
       })
       .catch(() => {
         if (active) setConnected(false);
       });
     return () => { active = false; };
-  }, [refreshVersion]);
+  }, [onOpenAlertCountChange, refreshVersion]);
 
   const captureLive = snapshot.capture.state === "running";
   const dataLabel = connected ? "Local SQLite data" : "Offline preview";
@@ -77,6 +79,7 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, refreshVersion }: Dash
       const result = await idsApi.resetStatistics();
       setSnapshot(result.dashboard);
       setConnected(true);
+      onOpenAlertCountChange(result.dashboard.statistics.openAlerts);
       setResetNotice("Statistics reset. New activity will start from zero.");
     } catch (error) {
       setResetNotice(error instanceof Error ? error.message : "Statistics could not be reset.");

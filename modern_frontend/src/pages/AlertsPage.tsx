@@ -9,7 +9,7 @@ import { SeverityBadge } from "../components/SeverityBadge";
 import { alerts as initialAlerts, packets as previewPackets } from "../data/mockData";
 import type { AlertRecord, AlertStatus, LlmSettings, PacketRecord } from "../types";
 
-export function AlertsPage({ llmSettings, refreshVersion }: { llmSettings: LlmSettings; refreshVersion: number }) {
+export function AlertsPage({ llmSettings, refreshVersion, onAlertsChanged }: { llmSettings: LlmSettings; refreshVersion: number; onAlertsChanged: () => void }) {
   const [records, setRecords] = useState(initialAlerts);
   const [query, setQuery] = useState("");
   const [severity, setSeverity] = useState("All severities");
@@ -72,6 +72,7 @@ export function AlertsPage({ llmSettings, refreshVersion }: { llmSettings: LlmSe
     try {
       const { record } = await idsApi.updateAlertStatus(selected.id, status);
       setRecords((items) => items.map((item) => item.id === record.id ? record : item));
+      onAlertsChanged();
     } catch {
       setRecords((items) => items.map((item) => item.id === selected.id ? { ...item, status } : item));
     } finally {
