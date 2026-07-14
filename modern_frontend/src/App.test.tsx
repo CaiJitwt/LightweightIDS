@@ -50,10 +50,14 @@ describe("modern IDS frontend", () => {
   it("filters the traffic table by protocol", async () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "Traffic Monitor" }));
+    const packetRows = within(await screen.findByRole("table")).getAllByRole("row");
+    expect(packetRows[1]).toHaveTextContent("8421");
     fireEvent.change(await screen.findByRole("combobox", { name: "Protocol" }), { target: { value: "DNS" } });
 
     expect(screen.getByText(/1 packets shown/)).toBeInTheDocument();
-    expect(screen.getByText("Query A api.internal.example")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Query A api.internal.example"));
+    expect(screen.getByRole("complementary", { name: "Selected packet details" })).toHaveTextContent("Packet #8419");
+    expect(screen.getByText("Complete stored metadata")).toBeInTheDocument();
   });
 
   it("opens the Windows security event workspace from the sidebar", async () => {

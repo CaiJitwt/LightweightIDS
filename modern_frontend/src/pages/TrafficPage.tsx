@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { CirclePause, CirclePlay, Download, FileUp, Filter, Play, RefreshCw, Search, Square, WifiOff } from "lucide-react";
+import { CirclePause, CirclePlay, Download, FileUp, Filter, Play, RefreshCw, Search, Square, WifiOff, X } from "lucide-react";
 
 import { idsApi } from "../api/idsApi";
 import { DataTable } from "../components/DataTable";
@@ -36,6 +36,7 @@ export function TrafficPage() {
   const [query, setQuery] = useState("");
   const [protocol, setProtocol] = useState("All protocols");
   const [livePackets, setLivePackets] = useState<PacketRecord[]>([]);
+  const [selectedPacketKey, setSelectedPacketKey] = useState<string | null>(null);
   const [rateHistory, setRateHistory] = useState<{ time: string; rate: number; alerts: number }[]>([]);
   const [pcapImport, setPcapImport] = useState<PcapImportStatus>(emptyPcapImport);
   const cursor = useRef(0);
@@ -50,7 +51,11 @@ export function TrafficPage() {
       setInterfaces(interfaceResponse.interfaces);
       setPcapImport(pcapResponse);
       setServiceReady(true);
-      if (packetResponse.records.length) setLivePackets((records) => [...records, ...packetResponse.records].slice(-1_000));
+      if (packetResponse.records.length) {
+        setLivePackets((records) => [...packetResponse.records, ...records]
+          .sort((left, right) => packetOrder(right) - packetOrder(left))
+          .slice(0, 1_000));
+      }
       setRateHistory((history) => [...history, { time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }), rate: nextStatus.packetsPerSecond, alerts: nextStatus.alertTotal }].slice(-60));
       if (nextStatus.error) setActionError(nextStatus.error);
     } catch {
@@ -70,6 +75,7 @@ export function TrafficPage() {
     const text = `${packet.source} ${packet.destination} ${packet.protocol} ${packet.summary}`.toLowerCase();
     return matchesProtocol && text.includes(query.toLowerCase());
   }), [displayedPackets, protocol, query]);
+  const selectedPacket = displayedPackets.find((packet) => packetKey(packet) === selectedPacketKey) ?? null;
 
   const columns = useMemo<ColumnDef<PacketRecord, unknown>[]>(() => [
     { accessorKey: "id", header: "ID", size: 64 },
@@ -94,6 +100,7 @@ export function TrafficPage() {
 
   const startCapture = () => runAction(async () => {
     setLivePackets([]);
+    setSelectedPacketKey(null);
     cursor.current = 0;
     return idsApi.start({ interface: selectedInterface || null, filterExpression, savePackets: true, detectionEnabled: true, alertCooldownSeconds: 10 });
   });
@@ -167,9 +174,35 @@ export function TrafficPage() {
         <label className="select-box"><Filter size={15} /><select aria-label="Protocol" value={protocol} onChange={(event) => setProtocol(event.target.value)}><option>All protocols</option><option>TLS</option><option>TCP</option><option>DNS</option><option>MDNS</option></select></label>
         <span className="result-count">{visiblePackets.length} packets shown{serviceReady ? " from this session" : " from demo data"}</span>
       </section>
-      <section className="table-panel grow-panel"><DataTable columns={columns} data={visiblePackets} getRowId={(row) => String(row.sequence ?? row.id)} /></section>
+      <div className="master-detail traffic-packet-workspace">
+        <section className="table-panel traffic-packet-table">
+          <DataTable
+            columns={columns}
+            data={visiblePackets}
+            getRowId={packetKey}
+            selectedRowId={selectedPacketKey ?? undefined}
+            onRowClick={(packet) => setSelectedPacketKey(packetKey(packet))}
+          />
+        </section>
+        <aside className="detail-panel packet-detail-panel" aria-label="Selected packet details">
+          {selectedPacket ? <>
+            <header className="detail-header"><div><span className={`protocol protocol-${selectedPacket.protocol.toLowerCase()}`}>{selectedPacket.protocol}</span><h2>Packet #{selectedPacket.id}</h2><p>{selectedPacket.timestamp}</p></div><button className="icon-button" type="button" title="Close packet details" onClick={() => setSelectedPacketKey(null)}><X size={17} /></button></header>
+            <dl className="detail-grid"><div><dt>Source</dt><dd title={selectedPacket.source}>{selectedPacket.source}</dd></div><div><dt>Destination</dt><dd title={selectedPacket.destination}>{selectedPacket.destination}</dd></div><div><dt>Length</dt><dd>{selectedPacket.length.toLocaleString()} bytes</dd></div><div><dt>TCP flags</dt><dd>{selectedPacket.flags || "-"}</dd></div></dl>
+            <div className="detail-section"><h3>Packet summary</h3><p>{selectedPacket.summary || "No summary is available."}</p></div>
+            <div className="detail-section packet-full-metadata"><h3>Complete stored metadata</h3><code>{JSON.stringify({ id: selectedPacket.id, sequence: selectedPacket.sequence, timestamp: selectedPacket.timestamp, source: selectedPacket.source, destination: selectedPacket.destination, protocol: selectedPacket.protocol, length: selectedPacket.length, flags: selectedPacket.flags, ...selectedPacket.details }, null, 2)}</code></div>
+          </> : <div className="empty-detail">Select a packet to inspect its complete stored metadata.</div>}
+        </aside>
+      </div>
     </div>
   );
+}
+
+function packetKey(packet: PacketRecord): string {
+  return String(packet.sequence ?? packet.id);
+}
+
+function packetOrder(packet: PacketRecord): number {
+  return packet.sequence ?? packet.id;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

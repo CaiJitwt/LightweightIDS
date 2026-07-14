@@ -77,6 +77,19 @@ class PcapImportService:
         if thread and thread.is_alive():
             thread.join(timeout_seconds)
 
+    def reset_statistics(self) -> None:
+        with self._lock:
+            if self._thread and self._thread.is_alive():
+                raise RuntimeError("Wait for the PCAP import to finish before resetting statistics.")
+            self._state = "idle"
+            self._filename = ""
+            self._packet_total = 0
+            self._alert_total = 0
+            self._skipped_total = 0
+            self._saved_packet_total = 0
+            self._saved_alert_total = 0
+            self._error = ""
+
     def _run(self, pcap_path: Path, remove_after: bool) -> None:
         packet_batch: list[PacketRecord] = []
         alert_batch: list[AlertRecord] = []

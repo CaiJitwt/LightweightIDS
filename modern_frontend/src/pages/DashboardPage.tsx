@@ -72,7 +72,7 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
   const captureLive = snapshot.capture.state === "running";
   const dataLabel = connected ? "Local SQLite data" : "Offline preview";
   const resetStatistics = async () => {
-    if (!window.confirm("Delete all packet, alert, and baseline statistics? Investigations and assets will be preserved.")) return;
+    if (!window.confirm("Delete all packet, alert, and security-event runtime data and start from zero? Assets, investigations, and evidence snapshots will be preserved.")) return;
     setResetting(true);
     setResetNotice("");
     try {
@@ -80,7 +80,7 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
       setSnapshot(result.dashboard);
       setConnected(true);
       onOpenAlertCountChange(result.dashboard.statistics.openAlerts);
-      setResetNotice("Statistics reset. New activity will start from zero.");
+      setResetNotice("Packet, alert, and security-event runtime data reset. New activity will start from zero.");
     } catch (error) {
       setResetNotice(error instanceof Error ? error.message : "Statistics could not be reset.");
     } finally {

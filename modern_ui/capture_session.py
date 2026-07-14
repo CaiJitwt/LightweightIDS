@@ -149,6 +149,23 @@ class CaptureSessionService:
                 "nextSequence": self._sequence,
             }
 
+    def reset_statistics(self) -> None:
+        with self._lock:
+            if self._thread and self._thread.is_alive():
+                raise RuntimeError("Stop live capture before resetting statistics.")
+            self._state = "stopped"
+            self._error = ""
+            self._started_at = None
+            self._options = CaptureStartOptions()
+            self._packet_total = 0
+            self._alert_total = 0
+            self._skipped_total = 0
+            self._saved_packet_total = 0
+            self._saved_alert_total = 0
+            self._sequence = 0
+            self._recent_packets.clear()
+            self._recent_alerts.clear()
+
     def packets_since(self, sequence: int, limit: int = 250) -> dict[str, Any]:
         with self._lock:
             records = [record for record in self._recent_packets if int(record["sequence"]) > sequence]

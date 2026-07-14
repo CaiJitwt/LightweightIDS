@@ -223,7 +223,7 @@ DEFAULT_RULES = [
     ("WINDOWS_LOGON_FAILURE", "Windows logon failure burst", "host", "HIGH", 1, 5, 120, "Detects repeated Windows authentication failures from the same source or account."),
     ("WINDOWS_PERSISTENCE", "Windows persistence change", "host", "HIGH", 1, 1, 0, "Detects service and scheduled-task creation or modification events."),
     ("WINDOWS_PRIVILEGE_CHANGE", "Windows privilege change", "host", "HIGH", 1, 1, 0, "Detects account creation and privileged group membership changes."),
-    ("POWERSHELL_SUSPICIOUS", "Suspicious PowerShell activity", "host", "HIGH", 1, 2, 0, "Detects suspicious indicators in PowerShell operational events."),
+    ("POWERSHELL_SUSPICIOUS", "Suspicious PowerShell activity", "host", "HIGH", 1, 3, 0, "Detects suspicious indicators in PowerShell operational events."),
     ("SECURITY_CONTROL_TAMPER", "Security control tampering", "host", "CRITICAL", 1, 1, 0, "Detects security-log clearing and protection-disable events."),
     ("RDP_LATERAL_ACTIVITY", "RDP lateral activity", "host", "HIGH", 1, 3, 300, "Detects repeated remote interactive logons from the same source."),
 ]

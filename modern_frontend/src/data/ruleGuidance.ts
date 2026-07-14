@@ -134,7 +134,7 @@ export const RULE_GUIDANCE: Record<string, RuleGuidance> = {
   },
   POWERSHELL_SUSPICIOUS: {
     method: "Scores PowerShell 4103 and 4104 content for encoded commands, download cradles, policy bypass and credential tooling.",
-    threshold: "Distinct suspicious indicators required in one PowerShell event.",
+    threshold: "Distinct suspicious indicators required in one PowerShell event (default: 3).",
     window: IMMEDIATE_WINDOW,
   },
   SECURITY_CONTROL_TAMPER: {

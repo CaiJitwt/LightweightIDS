@@ -299,11 +299,24 @@ class LocalApiHandler(BaseHTTPRequestHandler):
     def _reset_statistics(self) -> None:
         if self.server.capture_service.status().get("state") != "stopped":
             raise RuntimeError("Stop live capture before resetting statistics.")
+        if self.server.pcap_import.status().get("state") == "importing":
+            raise RuntimeError("Wait for the PCAP import to finish before resetting statistics.")
+        security_monitor_running = self.server.security_event_monitor.status().get("state") == "running"
+        if security_monitor_running:
+            self.server.security_event_monitor.stop()
         with self.server.database.connect() as connection:
             connection.execute("DELETE FROM alerts")
             connection.execute("DELETE FROM packets")
             connection.execute("DELETE FROM baselines")
-            connection.execute("DELETE FROM sqlite_sequence WHERE name IN ('alerts', 'packets', 'baselines')")
+            connection.execute("DELETE FROM security_events")
+            connection.execute(
+                "DELETE FROM sqlite_sequence WHERE name IN ('alerts', 'packets', 'baselines', 'security_events')"
+            )
+        self.server.capture_service.reset_statistics()
+        self.server.pcap_import.reset_statistics()
+        self.server.security_event_monitor.reset_statistics()
+        if security_monitor_running:
+            self.server.security_event_monitor.start()
 
     def _dashboard_payload(self) -> dict[str, Any]:
         recent_alerts = self.server.alerts.list_all(limit=500)
