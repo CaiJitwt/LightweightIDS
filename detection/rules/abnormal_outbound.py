@@ -112,25 +112,11 @@ class AbnormalOutboundRule(RuleBase):
         return None
 
     def _track_uncommon_connections(self, packet: PacketRecord) -> int | None:
-        if packet.dst_port is None or packet.dst_port in self.COMMON_OUTBOUND_PORTS:
+        if packet.dst_port is None:
             return None
         if packet.dst_port in self.HIGH_RISK_PORTS:
             return 1
-
-        now = self.packet_time(packet)
-        key = (packet.src_ip or "", packet.dst_ip or "", packet.dst_port, packet.protocol)
-        hits = self._uncommon_connections[key]
-        hits.append(OutboundHit(timestamp=now, src_port=packet.src_port))
-        self._prune(hits, now)
-        distinct_connections = len({hit.src_port for hit in hits})
-        if distinct_connections < max(2, self.threshold):
-            return None
-
-        previous_alert = self._last_uncommon_alert.get(key)
-        if previous_alert is not None and now - previous_alert < self.time_window:
-            return None
-        self._last_uncommon_alert[key] = now
-        return distinct_connections
+        return None
 
     def _is_connection_start(self, packet: PacketRecord) -> bool:
         now = self.packet_time(packet)
