@@ -97,7 +97,7 @@ def test_llm_settings_are_protected_persisted_and_not_returned(tmp_path):
 
         guidance_request = Request(
             f"{base}/api/llm/defense-guidance",
-            data=json.dumps({"settings": {"apiKey": "browser-injected"}, "alert": {"rule": "Host scan"}}).encode(),
+            data=json.dumps({"settings": {"apiKey": "browser-injected"}, "alert": {"rule": "Host scan"}, "language": "zh"}).encode(),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
@@ -111,6 +111,7 @@ def test_llm_settings_are_protected_persisted_and_not_returned(tmp_path):
             "model": "defender-model",
         }
         assert guidance.payload["alert"] == {"rule": "Host scan"}
+        assert guidance.payload["language"] == "zh"
     finally:
         server.shutdown()
         server.server_close()
