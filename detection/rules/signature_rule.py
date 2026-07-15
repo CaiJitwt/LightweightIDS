@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from detection.rule_base import RuleBase
+from detection.rules.payload_utils import has_inspectable_payload
 from detection.signature_matcher import SignatureMatcher
 from models import AlertRecord, PacketRecord
 
@@ -27,6 +28,8 @@ class SignatureRule(RuleBase):
         self.matcher = matcher or SignatureMatcher.from_yaml()
 
     def process(self, packet: PacketRecord) -> list[AlertRecord]:
+        if not has_inspectable_payload(packet):
+            return []
         alerts: list[AlertRecord] = []
         for match in self.matcher.match_packet(packet):
             signature = match.signature

@@ -22,7 +22,7 @@ class AbnormalOutboundRule(RuleBase):
     threshold = 4
     time_window = 300
 
-    COMMON_OUTBOUND_PORTS = {20, 21, 22, 25, 53, 80, 110, 123, 143, 443, 465, 587, 993, 995, 853, 13203}
+    COMMON_OUTBOUND_PORTS = {20, 21, 22, 25, 53, 80, 110, 123, 143, 443, 465, 587, 993, 995, 853, 12202, 13203}
     HIGH_RISK_PORTS = {1337, 31337, 4444, 5555, 6666, 6667, 7777, 9001}
 
     def __init__(self, **kwargs: object) -> None:
