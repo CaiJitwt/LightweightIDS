@@ -12,6 +12,7 @@ from endpoint_security.event_log import EventCollectionResult
 from modern_ui.capture_session import CaptureStartOptions, parse_capture_options
 from modern_ui.local_api import LocalApiServer
 from models import AlertRecord, PacketRecord, SecurityEventRecord
+from storage.analyst_repositories import AssetRepository, InvestigationRepository
 from storage.database import Database
 from storage.repositories import AlertRepository, PacketRepository, RuleRepository, SecurityEventRepository
 
@@ -64,6 +65,7 @@ def test_local_api_serves_status_and_filter_validation(tmp_path):
             health = json.loads(response.read())
         assert health["apiVersion"] >= 3
         assert "endpoint-security-v1" in health["capabilities"]
+        assert "analyst-workflow-v1" in health["capabilities"]
         assert health["database"] == str(database.path.resolve())
 
         with urlopen(f"{base}/api/system/health", timeout=3) as response:
@@ -400,6 +402,98 @@ def test_local_api_imports_a_uploaded_pcap_in_the_background(tmp_path):
         assert status["state"] == "completed", status.get("error")
         assert status["savedPacketTotal"] == 1
         assert PacketRepository(database).count() == 1
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+
+
+def test_local_api_persists_asset_and_investigation_crud(tmp_path):
+    database = Database(tmp_path / "ids.db")
+    database.initialize()
+    server = LocalApiServer(("127.0.0.1", 0), database)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = server.server_address
+    base = f"http://{host}:{port}"
+
+    def request_json(path: str, *, method: str = "GET", payload: dict[str, object] | None = None):
+        data = None if payload is None else json.dumps(payload).encode()
+        request = Request(
+            f"{base}{path}",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method=method,
+        )
+        with urlopen(request, timeout=3) as response:
+            return response.status, json.loads(response.read())
+
+    try:
+        status, created_asset = request_json(
+            "/api/assets",
+            method="POST",
+            payload={
+                "ip": "10.0.0.10",
+                "displayName": "Database-01",
+                "role": "Database",
+                "importance": 85,
+                "notes": "Primary course lab database",
+            },
+        )
+        assert status == 201
+        assert created_asset["record"]["display_name"] == "Database-01"
+
+        _, asset_list = request_json("/api/assets")
+        assert [record["ip"] for record in asset_list["records"]] == ["10.0.0.10"]
+
+        _, updated_asset = request_json(
+            "/api/assets/10.0.0.10",
+            method="PUT",
+            payload={"displayName": "Database-Primary", "role": "Database", "importance": 95, "notes": "Updated"},
+        )
+        assert updated_asset["record"]["importance"] == 95
+        assert AssetRepository(database).get("10.0.0.10").display_name == "Database-Primary"  # type: ignore[union-attr]
+
+        status, created_case = request_json(
+            "/api/investigations",
+            method="POST",
+            payload={
+                "title": "Review database activity",
+                "status": "Open",
+                "priority": "HIGH",
+                "hostIp": "10.0.0.10",
+                "summary": "Validate recent alerts.",
+                "notes": "Created from the modern workspace.",
+            },
+        )
+        assert status == 201
+        investigation_id = created_case["record"]["id"]
+
+        _, updated_case = request_json(
+            f"/api/investigations/{investigation_id}",
+            method="PUT",
+            payload={
+                "title": "Review database activity",
+                "status": "Monitoring",
+                "priority": "CRITICAL",
+                "hostIp": "10.0.0.10",
+                "summary": "Validation is in progress.",
+                "notes": "Persisted edit.",
+            },
+        )
+        assert updated_case["record"]["status"] == "Monitoring"
+
+        _, case_detail = request_json(f"/api/investigations/{investigation_id}")
+        assert case_detail["record"]["notes"] == "Persisted edit."
+        assert case_detail["evidence"] == []
+        assert InvestigationRepository(database).get(investigation_id).priority == "CRITICAL"  # type: ignore[union-attr]
+
+        _, deleted_case = request_json(f"/api/investigations/{investigation_id}", method="DELETE")
+        _, deleted_asset = request_json("/api/assets/10.0.0.10", method="DELETE")
+        assert deleted_case == {"deleted": True}
+        assert deleted_asset == {"deleted": True}
+        assert InvestigationRepository(database).get(investigation_id) is None
+        assert AssetRepository(database).get("10.0.0.10") is None
     finally:
         server.shutdown()
         server.server_close()

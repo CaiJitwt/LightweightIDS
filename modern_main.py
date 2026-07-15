@@ -29,6 +29,7 @@ REQUIRED_API_CAPABILITIES = {
     "topology-v1",
     "timeline-v1",
     "resource-monitor-v1",
+    "analyst-workflow-v1",
 }
 
 

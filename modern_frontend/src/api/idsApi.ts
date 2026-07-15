@@ -107,8 +107,10 @@ export const idsApi = {
   updateRule: (id: string, update: Partial<Pick<RuleRecord, "enabled" | "threshold" | "timeWindow">>) => request<{ record: RuleRecord }>(`/api/rules/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(update) }),
   assets: () => request<{ records: AssetRecord[] }>("/api/assets"),
   saveAsset: (asset: { ip: string; displayName: string; role: string; importance: number; notes: string }) => request<{ record: AssetRecord }>("/api/assets", { method: "POST", body: JSON.stringify(asset) }),
+  updateAsset: (ip: string, asset: { displayName: string; role: string; importance: number; notes: string }) => request<{ record: AssetRecord }>(`/api/assets/${encodeURIComponent(ip)}`, { method: "PUT", body: JSON.stringify(asset) }),
   deleteAsset: (ip: string) => request<{ deleted: boolean }>(`/api/assets/${encodeURIComponent(ip)}`, { method: "DELETE" }),
   investigations: () => request<{ records: InvestigationRecord[] }>("/api/investigations"),
   createInvestigation: (record: { title: string; status: string; priority: string; hostIp: string; summary: string; notes: string }) => request<{ record: InvestigationRecord }>("/api/investigations", { method: "POST", body: JSON.stringify(record) }),
+  updateInvestigation: (id: number, record: { title: string; status: string; priority: string; hostIp: string; summary: string; notes: string }) => request<{ record: InvestigationRecord }>(`/api/investigations/${id}`, { method: "PUT", body: JSON.stringify(record) }),
   deleteInvestigation: (id: number) => request<{ deleted: boolean }>(`/api/investigations/${id}`, { method: "DELETE" }),
 };

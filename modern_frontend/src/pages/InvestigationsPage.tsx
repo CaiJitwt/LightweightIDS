@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Calendar, ClipboardPlus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { Calendar, ClipboardPlus, Pencil, RefreshCw, Search, Trash2, X } from "lucide-react";
 
 import { idsApi } from "../api/idsApi";
 import { SeverityBadge } from "../components/SeverityBadge";
@@ -15,6 +15,7 @@ export function InvestigationsPage() {
   const [form, setForm] = useState(emptyForm);
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const load = async () => {
     try {
@@ -41,10 +42,17 @@ export function InvestigationsPage() {
     event.preventDefault();
     setSaving(true);
     try {
-      await idsApi.createInvestigation(form);
+      if (editingId !== null) {
+        await idsApi.updateInvestigation(editingId, form);
+      } else {
+        await idsApi.createInvestigation(form);
+      }
       setForm(emptyForm);
-      setNotice("Investigation created.");
+      const savedId = editingId;
+      setEditingId(null);
       await load();
+      if (savedId !== null) setSelectedId(savedId);
+      setNotice(savedId !== null ? "Investigation updated." : "Investigation created.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not create investigation.");
     } finally {
@@ -53,12 +61,30 @@ export function InvestigationsPage() {
   };
 
   const remove = async (id: number) => {
-    await idsApi.deleteInvestigation(id);
-    if (selectedId === id) setSelectedId(null);
-    await load();
+    try {
+      await idsApi.deleteInvestigation(id);
+      if (selectedId === id) setSelectedId(null);
+      if (editingId === id) {
+        setEditingId(null);
+        setForm(emptyForm);
+      }
+      await load();
+      setNotice("Investigation deleted.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Investigation could not be deleted.");
+    }
   };
 
-  const openCount = records.filter((r) => r.status === "Open").length;
+  const edit = (record: InvestigationRecord) => {
+    setEditingId(record.id);
+    setForm({ title: record.title, status: record.status, priority: record.priority, hostIp: record.host_ip ?? "", summary: record.summary, notes: record.notes });
+    setNotice("");
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+  };
 
   return (
     <div className="page-stack investigation-workspace">
@@ -95,6 +121,7 @@ export function InvestigationsPage() {
                 <p>{selected.host_ip ?? "No host"} · Created {selected.created_at}</p>
               </div>
               <div style={{ display: "flex", gap: 6 }}>
+                <button className="icon-button" type="button" title="Edit investigation" onClick={() => edit(selected)}><Pencil size={14} /></button>
                 <button className="icon-button" type="button" title="Delete investigation" onClick={() => void remove(selected.id)}><Trash2 size={14} /></button>
                 <button className="icon-button" type="button" title="Close details" onClick={() => setSelectedId(null)}><X size={17} /></button>
               </div>
@@ -116,7 +143,7 @@ export function InvestigationsPage() {
         )}
 
         <form className="investigation-form-panel" onSubmit={submit} style={{ borderTop: "1px solid var(--border)", marginTop: selected ? 0 : "auto" }}>
-          <header className="section-heading" style={{ padding: "0 0 8px", height: "auto", borderBottom: "none" }}><div><h2>New investigation</h2><p>Capture alert evidence before it expires</p></div></header>
+          <header className="section-heading" style={{ padding: "0 0 8px", height: "auto", borderBottom: "none" }}><div><h2>{editingId === null ? "New investigation" : "Edit investigation"}</h2><p>Persist analyst context in the local database</p></div></header>
           <input required placeholder="Investigation title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           <div className="form-row">
             <input placeholder="Host IP (optional)" value={form.hostIp} onChange={(e) => setForm({ ...form, hostIp: e.target.value })} />
@@ -124,9 +151,15 @@ export function InvestigationsPage() {
               {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((v) => <option key={v}>{v}</option>)}
             </select>
           </div>
+          <select aria-label="Investigation status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as typeof form.status })}>
+            {["Open", "Monitoring", "Closed"].map((value) => <option key={value}>{value}</option>)}
+          </select>
           <textarea placeholder="Summary" value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} />
           <textarea placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-          <button className="primary-button" type="submit" disabled={saving}><ClipboardPlus size={15} />Create investigation</button>
+          <div className="inline-actions">
+            <button className="primary-button" type="submit" disabled={saving}>{editingId === null ? <ClipboardPlus size={15} /> : <Pencil size={15} />}{editingId === null ? "Create investigation" : "Save changes"}</button>
+            {editingId !== null && <button className="icon-text-button" type="button" onClick={cancelEdit}><X size={15} />Cancel</button>}
+          </div>
           {notice && <p className="capture-notice" style={{ margin: 0 }}><Calendar size={14} />{notice}</p>}
         </form>
       </aside>

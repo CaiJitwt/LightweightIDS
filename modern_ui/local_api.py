@@ -21,12 +21,13 @@ from modern_ui.llm_guidance import LlmGuidanceError, LlmGuidanceService
 from modern_ui.pcap_import import PcapImportService
 from modern_ui.secret_store import WindowsDpapiSecretStore
 from modern_ui.security_event_monitor import SecurityEventMonitorService
-from models import RuleRecord
+from models import AssetRecord, InvestigationRecord, RuleRecord
+from storage.analyst_repositories import AssetRepository, InvestigationRepository
 from storage.database import Database
 from storage.repositories import AlertRepository, PacketRepository, RuleRepository, SecurityEventRepository, SettingsRepository
 
 
-LOCAL_API_VERSION = 5
+LOCAL_API_VERSION = 6
 LOCAL_API_CAPABILITIES = [
     "capture-v1",
     "endpoint-security-v1",
@@ -35,6 +36,7 @@ LOCAL_API_CAPABILITIES = [
     "llm-guidance-v1",
     "timeline-v1",
     "resource-monitor-v1",
+    "analyst-workflow-v1",
 ]
 
 
@@ -52,6 +54,8 @@ class LocalApiServer(ThreadingHTTPServer):
         self.alerts = AlertRepository(database)
         self.packets = PacketRepository(database)
         self.rules = RuleRepository(database)
+        self.asset_repository = AssetRepository(database)
+        self.investigation_repository = InvestigationRepository(database)
         self.settings = SettingsRepository(database)
         self.host_profiles = HostProfileService(database)
         self.alert_trends = AlertTrendAnalyzer()
@@ -154,6 +158,49 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 self._send_json(_settings_payload(self.server.settings))
             elif parsed.path == "/api/rules":
                 self._send_json({"records": [_rule_payload(record) for record in self.server.rules.list_all()]})
+            elif parsed.path == "/api/assets":
+                query = parse_qs(parsed.query)
+                self._send_json(
+                    {
+                        "records": [
+                            _asset_payload(record)
+                            for record in self.server.asset_repository.list_all(query.get("query", [""])[0])
+                        ]
+                    }
+                )
+            elif parsed.path.startswith("/api/assets/"):
+                asset_ip = unquote(parsed.path.removeprefix("/api/assets/"))
+                record = self.server.asset_repository.get(str(ipaddress.ip_address(asset_ip)))
+                if record is None:
+                    self._send_error(HTTPStatus.NOT_FOUND, "Asset not found.")
+                    return
+                self._send_json({"record": _asset_payload(record)})
+            elif parsed.path == "/api/investigations":
+                query = parse_qs(parsed.query)
+                active_only = query.get("activeOnly", ["false"])[0].lower() == "true"
+                self._send_json(
+                    {
+                        "records": [
+                            _investigation_payload(record)
+                            for record in self.server.investigation_repository.list_all(active_only=active_only)
+                        ]
+                    }
+                )
+            elif parsed.path.startswith("/api/investigations/"):
+                investigation_id = _route_id(parsed.path, "/api/investigations/", "")
+                record = self.server.investigation_repository.get(investigation_id)
+                if record is None:
+                    self._send_error(HTTPStatus.NOT_FOUND, "Investigation not found.")
+                    return
+                self._send_json(
+                    {
+                        "record": _investigation_payload(record),
+                        "evidence": [
+                            _investigation_evidence_payload(item)
+                            for item in self.server.investigation_repository.list_evidence(investigation_id)
+                        ],
+                    }
+                )
             elif parsed.path == "/api/capture/interfaces":
                 self._send_json({"interfaces": self.server.capture_service.list_interfaces()})
             elif parsed.path == "/api/capture/status":
@@ -282,7 +329,24 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 self._send_json(self._receive_pcap_upload(), HTTPStatus.ACCEPTED)
                 return
             payload = self._read_json()
-            if parsed.path == "/api/capture/start":
+            if parsed.path == "/api/assets":
+                asset = _asset_from_payload(payload)
+                created = self.server.asset_repository.get(asset.ip) is None
+                self.server.asset_repository.save(asset)
+                saved = self.server.asset_repository.get(asset.ip)
+                self._send_json(
+                    {"record": _asset_payload(saved or asset)},
+                    HTTPStatus.CREATED if created else HTTPStatus.OK,
+                )
+            elif parsed.path == "/api/investigations":
+                record = _investigation_from_payload(payload)
+                investigation_id = self.server.investigation_repository.add(record)
+                saved = self.server.investigation_repository.get(investigation_id)
+                self._send_json(
+                    {"record": _investigation_payload(saved or record)},
+                    HTTPStatus.CREATED,
+                )
+            elif parsed.path == "/api/capture/start":
                 options = parse_capture_options(payload, default_capture_options(self.server.database))
                 self._send_json(self.server.capture_service.start(options), HTTPStatus.ACCEPTED)
             elif parsed.path == "/api/settings":
@@ -358,6 +422,66 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except RuntimeError as exc:
             self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except Exception as exc:
+            self._send_error(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc))
+
+    def do_PUT(self) -> None:  # noqa: N802
+        if not self._check_access() or not self._check_rate_limit():
+            return
+        content_length = int(self.headers.get("Content-Length", 0))
+        if not self._check_upload_size(content_length):
+            return
+        try:
+            parsed = urlparse(self.path)
+            payload = self._read_json()
+            if parsed.path.startswith("/api/assets/"):
+                asset_ip = str(ipaddress.ip_address(unquote(parsed.path.removeprefix("/api/assets/"))))
+                current = self.server.asset_repository.get(asset_ip)
+                if current is None:
+                    self._send_error(HTTPStatus.NOT_FOUND, "Asset not found.")
+                    return
+                updated = _asset_from_payload(payload, current=current, route_ip=asset_ip)
+                self.server.asset_repository.save(updated)
+                self._send_json({"record": _asset_payload(self.server.asset_repository.get(asset_ip) or updated)})
+            elif parsed.path.startswith("/api/investigations/"):
+                investigation_id = _route_id(parsed.path, "/api/investigations/", "")
+                current = self.server.investigation_repository.get(investigation_id)
+                if current is None:
+                    self._send_error(HTTPStatus.NOT_FOUND, "Investigation not found.")
+                    return
+                updated = _investigation_from_payload(payload, current=current)
+                updated.id = investigation_id
+                self.server.investigation_repository.update(updated)
+                saved = self.server.investigation_repository.get(investigation_id)
+                self._send_json({"record": _investigation_payload(saved or updated)})
+            else:
+                self._send_error(HTTPStatus.NOT_FOUND, "Endpoint not found.")
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except Exception as exc:
+            self._send_error(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc))
+
+    def do_DELETE(self) -> None:  # noqa: N802
+        if not self._check_access() or not self._check_rate_limit():
+            return
+        try:
+            parsed = urlparse(self.path)
+            if parsed.path.startswith("/api/assets/"):
+                asset_ip = str(ipaddress.ip_address(unquote(parsed.path.removeprefix("/api/assets/"))))
+                if not self.server.asset_repository.delete(asset_ip):
+                    self._send_error(HTTPStatus.NOT_FOUND, "Asset not found.")
+                    return
+                self._send_json({"deleted": True})
+            elif parsed.path.startswith("/api/investigations/"):
+                investigation_id = _route_id(parsed.path, "/api/investigations/", "")
+                if not self.server.investigation_repository.delete(investigation_id):
+                    self._send_error(HTTPStatus.NOT_FOUND, "Investigation not found.")
+                    return
+                self._send_json({"deleted": True})
+            else:
+                self._send_error(HTTPStatus.NOT_FOUND, "Endpoint not found.")
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except Exception as exc:
             self._send_error(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc))
 
@@ -729,7 +853,7 @@ class LocalApiHandler(BaseHTTPRequestHandler):
         if origin in {"http://127.0.0.1:4173", "http://localhost:4173"}:
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Filename")
 
 
@@ -910,6 +1034,153 @@ def _rule_payload(rule: RuleRecord) -> dict[str, Any]:
         "timeWindow": rule.time_window,
         "description": rule.description,
     }
+
+
+def _asset_payload(asset: AssetRecord) -> dict[str, Any]:
+    return {
+        "ip": asset.ip,
+        "display_name": asset.display_name,
+        "role": asset.role,
+        "importance": asset.importance,
+        "notes": asset.notes,
+        "created_at": asset.created_at,
+        "updated_at": asset.updated_at,
+    }
+
+
+def _investigation_payload(record: InvestigationRecord) -> dict[str, Any]:
+    return {
+        "id": int(record.id or 0),
+        "title": record.title,
+        "status": record.status,
+        "priority": record.priority,
+        "host_ip": record.host_ip,
+        "summary": record.summary,
+        "notes": record.notes,
+        "created_at": record.created_at,
+        "updated_at": record.updated_at,
+    }
+
+
+def _investigation_evidence_payload(record: Any) -> dict[str, Any]:
+    return {
+        "id": int(record.id or 0),
+        "investigation_id": int(record.investigation_id),
+        "alert_id": record.alert_id,
+        "alert_timestamp": record.alert_timestamp,
+        "rule_id": record.rule_id,
+        "rule_name": record.rule_name,
+        "severity": record.severity,
+        "src_ip": record.src_ip,
+        "dst_ip": record.dst_ip,
+        "description": record.description,
+        "evidence": record.evidence,
+        "added_at": record.added_at,
+    }
+
+
+def _asset_from_payload(
+    payload: dict[str, Any],
+    *,
+    current: AssetRecord | None = None,
+    route_ip: str | None = None,
+) -> AssetRecord:
+    requested_ip = _payload_value(payload, "ip", default=route_ip or (current.ip if current else ""))
+    if not isinstance(requested_ip, str) or not requested_ip.strip():
+        raise ValueError("Asset IP is required.")
+    normalized_ip = str(ipaddress.ip_address(requested_ip.strip()))
+    if route_ip is not None and normalized_ip != route_ip:
+        raise ValueError("Asset IP cannot be changed.")
+    try:
+        importance = int(_payload_value(payload, "importance", default=current.importance if current else 50))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Asset importance must be an integer.") from exc
+    return AssetRecord(
+        ip=route_ip or normalized_ip,
+        display_name=_payload_text(
+            payload,
+            "displayName",
+            "display_name",
+            default=current.display_name if current else "",
+            maximum=200,
+        ),
+        role=_payload_text(
+            payload,
+            "role",
+            default=current.role if current else "Workstation",
+            maximum=50,
+            required=True,
+        ),
+        importance=importance,
+        notes=_payload_text(payload, "notes", default=current.notes if current else "", maximum=2_000),
+    )
+
+
+def _investigation_from_payload(
+    payload: dict[str, Any],
+    *,
+    current: InvestigationRecord | None = None,
+) -> InvestigationRecord:
+    host_value = _payload_value(
+        payload,
+        "hostIp",
+        "host_ip",
+        default=current.host_ip if current else None,
+    )
+    if host_value is not None and not isinstance(host_value, str):
+        raise ValueError("Investigation host IP must be a string.")
+    return InvestigationRecord(
+        id=current.id if current else None,
+        title=_payload_text(
+            payload,
+            "title",
+            default=current.title if current else "",
+            maximum=200,
+            required=True,
+        ),
+        status=_payload_text(
+            payload,
+            "status",
+            default=current.status if current else "Open",
+            maximum=20,
+            required=True,
+        ),
+        priority=_payload_text(
+            payload,
+            "priority",
+            default=current.priority if current else "MEDIUM",
+            maximum=20,
+            required=True,
+        ),
+        host_ip=host_value.strip() or None if isinstance(host_value, str) else None,
+        summary=_payload_text(payload, "summary", default=current.summary if current else "", maximum=4_000),
+        notes=_payload_text(payload, "notes", default=current.notes if current else "", maximum=10_000),
+    )
+
+
+def _payload_value(payload: dict[str, Any], *keys: str, default: Any = None) -> Any:
+    for key in keys:
+        if key in payload:
+            return payload[key]
+    return default
+
+
+def _payload_text(
+    payload: dict[str, Any],
+    *keys: str,
+    default: str = "",
+    maximum: int,
+    required: bool = False,
+) -> str:
+    value = _payload_value(payload, *keys, default=default)
+    if not isinstance(value, str):
+        raise ValueError(f"{keys[0]} must be a string.")
+    value = value.strip()
+    if required and not value:
+        raise ValueError(f"{keys[0]} is required.")
+    if len(value) > maximum:
+        raise ValueError(f"{keys[0]} must not exceed {maximum} characters.")
+    return value
 
 
 def _optional_int(payload: dict[str, Any], key: str, default: int) -> int:

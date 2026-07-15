@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { BarChart3, Package, Plus, RefreshCw, Search, Shield, Trash2 } from "lucide-react";
+import { BarChart3, Package, Pencil, Plus, RefreshCw, Search, Shield, Trash2, X } from "lucide-react";
 
 import { idsApi } from "../api/idsApi";
 import type { AssetRecord } from "../types";
@@ -12,6 +12,7 @@ export function AssetsPage() {
   const [form, setForm] = useState(emptyAsset);
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editingIp, setEditingIp] = useState<string | null>(null);
 
   const load = async () => {
     try {
@@ -34,10 +35,15 @@ export function AssetsPage() {
     event.preventDefault();
     setSaving(true);
     try {
-      await idsApi.saveAsset(form);
+      if (editingIp) {
+        await idsApi.updateAsset(editingIp, form);
+      } else {
+        await idsApi.saveAsset(form);
+      }
       setForm(emptyAsset);
-      setNotice("Asset saved.");
+      setEditingIp(null);
       await load();
+      setNotice(editingIp ? "Asset updated." : "Asset created.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Asset could not be saved.");
     } finally {
@@ -46,8 +52,28 @@ export function AssetsPage() {
   };
 
   const remove = async (ip: string) => {
-    await idsApi.deleteAsset(ip);
-    await load();
+    try {
+      await idsApi.deleteAsset(ip);
+      if (editingIp === ip) {
+        setEditingIp(null);
+        setForm(emptyAsset);
+      }
+      await load();
+      setNotice("Asset deleted.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Asset could not be deleted.");
+    }
+  };
+
+  const edit = (asset: AssetRecord) => {
+    setEditingIp(asset.ip);
+    setForm({ ip: asset.ip, displayName: asset.display_name, role: asset.role, importance: asset.importance, notes: asset.notes });
+    setNotice("");
+  };
+
+  const cancelEdit = () => {
+    setEditingIp(null);
+    setForm(emptyAsset);
   };
 
   const importanceColor = (v: number) => (v >= 80 ? "high" : v >= 50 ? "medium" : "low");
@@ -61,9 +87,9 @@ export function AssetsPage() {
   return (
     <div className="page-stack asset-workspace">
       <section className="asset-form-panel">
-        <header className="section-heading"><div><h2>New asset</h2><p>High-importance assets raise analyst priority</p></div><Shield size={17} /></header>
+        <header className="section-heading"><div><h2>{editingIp ? "Edit asset" : "New asset"}</h2><p>High-importance assets raise analyst priority</p></div><Shield size={17} /></header>
         <form className="asset-form-body" onSubmit={save}>
-          <label><span>IP Address</span><input required placeholder="e.g. 10.0.0.53" value={form.ip} onChange={(e) => setForm({ ...form, ip: e.target.value })} /></label>
+          <label><span>IP Address</span><input required readOnly={editingIp !== null} placeholder="e.g. 10.0.0.53" value={form.ip} onChange={(e) => setForm({ ...form, ip: e.target.value })} /></label>
           <label><span>Display Name</span><input placeholder="Primary Domain Controller" value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label>
           <label><span>Role</span><select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>{["Workstation", "Server", "Database", "Gateway", "Domain Controller", "Other"].map((r) => <option key={r}>{r}</option>)}</select></label>
           <label>
@@ -73,7 +99,10 @@ export function AssetsPage() {
             </div>
           </label>
           <label><span>Notes</span><textarea placeholder="Optional notes…" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
-          <button className="primary-button" type="submit" disabled={saving}><Plus size={15} />Add asset</button>
+          <div className="inline-actions">
+            <button className="primary-button" type="submit" disabled={saving}>{editingIp ? <Pencil size={15} /> : <Plus size={15} />}{editingIp ? "Save changes" : "Add asset"}</button>
+            {editingIp && <button className="icon-text-button" type="button" onClick={cancelEdit}><X size={15} />Cancel</button>}
+          </div>
           {notice && <p className="capture-notice" style={{ margin: 0 }}><Package size={14} />{notice}</p>}
         </form>
       </section>
@@ -114,7 +143,7 @@ export function AssetsPage() {
                     </span>
                   </td>
                   <td style={{ maxWidth: 160 }}>{asset.notes || "—"}</td>
-                  <td><button className="icon-button" type="button" title={`Delete ${asset.ip}`} onClick={() => void remove(asset.ip)} style={{ width: 28, height: 28 }}><Trash2 size={13} /></button></td>
+                  <td><span className="inline-actions"><button className="icon-button" type="button" title={`Edit ${asset.ip}`} onClick={() => edit(asset)} style={{ width: 28, height: 28 }}><Pencil size={13} /></button><button className="icon-button" type="button" title={`Delete ${asset.ip}`} onClick={() => void remove(asset.ip)} style={{ width: 28, height: 28 }}><Trash2 size={13} /></button></span></td>
                 </tr>
               )) : <tr><td colSpan={6} className="empty-table">No assets match the current search.</td></tr>}
             </tbody>
