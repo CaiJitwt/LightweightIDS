@@ -23,7 +23,7 @@ class WebAttackRule(RuleBase):
         ("cmd_inject_semicolon", re.compile(r";\s*(id|ls|cat |whoami|pwd|uname|dir |type )", re.IGNORECASE)),
         ("cmd_inject_pipe", re.compile(r"\|\s*(id|ls|cat |whoami|pwd|uname|dir |type )", re.IGNORECASE)),
         ("cmd_inject_and", re.compile(r"&&\s*(id|ls|cat |whoami|pwd|dir )", re.IGNORECASE)),
-        ("cmd_inject_backtick", re.compile(r"`[^`]*(?:id|ls|cat |whoami|dir |ping |wget |curl |nc |rm |chmod |/etc/passwd)[^`]*`", re.IGNORECASE)),
+        ("cmd_inject_backtick", re.compile(r"`[^`]*(?:\b(?:id|ls|whoami|uname|pwd|netstat)\b|\bcat\b|\bdir\b|\bping\b|\bwget\b|\bcurl\b|\bnc\b|\brm\b|\bchmod\b|\bnmap\b|/etc/passwd)[^`]*`", re.IGNORECASE)),
         ("cmd_inject_subshell", re.compile(r"\$\((?:id|ls|cat |whoami|dir |ping |wget |curl |nc )")),
         ("cmd_inject_powershell", re.compile(r"\bpowershell\b.*-enc\b|\bpowershell\b.*-command\b", re.IGNORECASE)),
         ("cmd_inject_cmd", re.compile(r"\bcmd\s*\.exe\s*/c\b|\bcmd\s*/c\b", re.IGNORECASE)),

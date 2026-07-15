@@ -270,7 +270,7 @@ class LiveCaptureWorker(QThread):
         self.capture = LiveCapture(
             interface=self.interface,
             packet_callback=handle_raw_packet,
-            idle_callback=lambda: flush_batch(force=True),
+            idle_callback=lambda: None if self.capture._stop_event.is_set() else flush_batch(force=True),
             capture_filter=self.capture_filter,
         )
         try:
@@ -278,7 +278,6 @@ class LiveCaptureWorker(QThread):
         except Exception as exc:
             self.capture_failed.emit(str(exc))
         finally:
-            flush_batch(force=True)
             self.capture_stopped.emit()
 
     def stop_capture(self) -> None:
