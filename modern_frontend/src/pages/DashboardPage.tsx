@@ -42,11 +42,11 @@ const previewSnapshot: DashboardSnapshot = {
     error: "",
     nextSequence: 0,
   },
-  statistics: { packetTotal: 48291, alertTotal: 29, openAlerts: 29, highPriorityAlerts: 9, highRiskHosts: 3, lastHourPackets: 1204 },
-  trend: trendData,
-  severityDistribution,
-  highRiskHosts: hosts,
-  recentAlerts: alerts,
+  statistics: { packetTotal: 0, alertTotal: 0, openAlerts: 0, highPriorityAlerts: 0, highRiskHosts: 0, lastHourPackets: 0 },
+  trend: [],
+  severityDistribution: [],
+  highRiskHosts: [],
+  recentAlerts: [],
 };
 
 export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange, onStatisticsReset, refreshVersion }: DashboardPageProps) {

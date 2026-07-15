@@ -10,11 +10,11 @@ import { alerts as initialAlerts, packets as previewPackets } from "../data/mock
 import type { AlertRecord, AlertStatus, LlmSettings, PacketRecord, SecurityEventRecord } from "../types";
 
 export function AlertsPage({ llmSettings, refreshVersion, initialAlertId, onAlertsChanged }: { llmSettings: LlmSettings; refreshVersion: number; initialAlertId?: number; onAlertsChanged: () => void }) {
-  const [records, setRecords] = useState(initialAlerts);
+  const [records, setRecords] = useState<AlertRecord[]>([]);
   const [query, setQuery] = useState("");
   const [severity, setSeverity] = useState("All severities");
-  const [selectedId, setSelectedId] = useState<number | null>(initialAlertId ?? initialAlerts[0].id);
-  const [relatedPackets, setRelatedPackets] = useState<PacketRecord[]>(previewPackets.filter((packet) => initialAlerts[0].packetIds?.includes(packet.id)));
+  const [selectedId, setSelectedId] = useState<number | null>(initialAlertId ?? null);
+  const [relatedPackets, setRelatedPackets] = useState<PacketRecord[]>([]);
   const [selectedPacketId, setSelectedPacketId] = useState<number | null>(null);
   const [linkedSecurityEvent, setLinkedSecurityEvent] = useState<SecurityEventRecord | null>(null);
   const [connected, setConnected] = useState(false);

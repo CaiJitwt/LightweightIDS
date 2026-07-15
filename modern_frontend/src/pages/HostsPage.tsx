@@ -15,9 +15,9 @@ interface HostsPageProps {
 
 export function HostsPage({ initialHostIp, refreshVersion }: HostsPageProps) {
   const [query, setQuery] = useState("");
-  const [records, setRecords] = useState<HostRecord[]>(previewHosts);
-  const [selectedIp, setSelectedIp] = useState(previewHosts[0].ip);
-  const [profile, setProfile] = useState<HostProfile>(() => previewProfile(previewHosts[0]));
+  const [records, setRecords] = useState<HostRecord[]>([]);
+  const [selectedIp, setSelectedIp] = useState("");
+  const [profile, setProfile] = useState<HostProfile>(() => previewProfile({ ip: "", name: "", role: "", risk: 0, importance: 0, packets: 0, alerts: 0, lastSeen: "" }));
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
