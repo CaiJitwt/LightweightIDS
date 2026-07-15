@@ -116,14 +116,13 @@ class SettingsPage(QWidget):
             "page.settings.default_pcap_path",
             "page.settings.auto_save_packets",
             "page.settings.enable_live_detection",
+            "page.settings.minimum_alert_severity",
             "page.settings.alert_cooldown",
             "page.settings.log_level",
             "page.settings.language",
         ]
 
         self._add_form_rows()
-        self.minimum_severity_label = QLabel("Minimum alert severity")
-        self._form.addRow(self.minimum_severity_label, self.minimum_severity_combo)
 
         # LLM configuration
         self.llm_section_label = QLabel("LLM Analysis")
@@ -175,6 +174,7 @@ class SettingsPage(QWidget):
             self.pcap_row(),
             self.auto_save_check,
             self.realtime_check,
+            self.minimum_severity_combo,
             self.cooldown_box,
             self.log_level_combo,
             self.language_combo,
