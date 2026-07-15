@@ -13,7 +13,7 @@ def test_modern_launcher_reuses_running_services_and_honors_no_browser(monkeypat
         lambda _url: {
             "service": "Lightweight IDS local API",
             "apiVersion": modern_main.LOCAL_API_VERSION,
-            "capabilities": ["endpoint-security-v1", "system-health-v1", "topology-v1"],
+            "capabilities": sorted(modern_main.REQUIRED_API_CAPABILITIES),
             "database": str(modern_main.DEFAULT_DATABASE_PATH.resolve()),
         },
     )

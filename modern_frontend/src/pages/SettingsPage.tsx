@@ -1,10 +1,10 @@
-import { CheckCircle2, Eye, EyeOff, Gauge, KeyRound, MonitorCog, Moon, Save, SlidersHorizontal, Sun } from "lucide-react";
+import { CheckCircle2, Gauge, KeyRound, MonitorCog, Moon, Save, SlidersHorizontal, Sun, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { idsApi } from "../api/idsApi";
 import type { FontScale, LlmSettings, RuntimeSettings, ThemePreference } from "../types";
 
-const fallbackSettings: RuntimeSettings = { autoSavePackets: true, realtimeDetection: true, alertCooldownSeconds: 10, minimumAlertSeverity: "LOW", securityEventMonitorEnabled: false, securityEventPollSeconds: 5 };
+const fallbackSettings: RuntimeSettings = { autoSavePackets: true, realtimeDetection: true, alertCooldownSeconds: 10, minimumAlertSeverity: "LOW", securityEventMonitorEnabled: false, securityEventPollSeconds: 5, llmBaseUrl: "https://api.openai.com/v1", llmModel: "gpt-4.1-mini", llmApiKeyConfigured: false };
 
 interface SettingsPageProps {
   themePreference: ThemePreference;
@@ -16,16 +16,59 @@ interface SettingsPageProps {
 }
 
 export function SettingsPage({ themePreference, onThemePreferenceChange, fontScale, onFontScaleChange, llmSettings, onLlmSettingsChange }: SettingsPageProps) {
-  const [showKey, setShowKey] = useState(false);
   const [runtimeSettings, setRuntimeSettings] = useState(fallbackSettings);
   const [runtimeNotice, setRuntimeNotice] = useState("");
-  const update = (field: keyof LlmSettings, value: string) => onLlmSettingsChange({ ...llmSettings, [field]: value });
+  const [llmForm, setLlmForm] = useState(() => ({ baseUrl: llmSettings.baseUrl, model: llmSettings.model }));
+  const [apiKeyDraft, setApiKeyDraft] = useState("");
+  const [llmNotice, setLlmNotice] = useState("");
+  const [savingLlm, setSavingLlm] = useState(false);
 
-  useEffect(() => { idsApi.settings().then(setRuntimeSettings).catch(() => setRuntimeNotice("Local API unavailable. Detection controls are preview-only.")); }, []);
+  useEffect(() => {
+    idsApi.settings().then((settings) => {
+      setRuntimeSettings(settings);
+      setLlmForm({ baseUrl: settings.llmBaseUrl, model: settings.llmModel });
+      onLlmSettingsChange({ baseUrl: settings.llmBaseUrl, model: settings.llmModel, apiKeyConfigured: settings.llmApiKeyConfigured });
+    }).catch(() => setRuntimeNotice("Local API unavailable. Detection controls are preview-only."));
+  }, [onLlmSettingsChange]);
   const updateRuntime = async (next: Partial<RuntimeSettings>) => {
     setRuntimeSettings((current) => ({ ...current, ...next }));
     try { setRuntimeSettings(await idsApi.saveSettings(next)); setRuntimeNotice("Detection settings saved."); }
     catch { setRuntimeNotice("Local API unavailable. Detection controls are preview-only."); }
+  };
+  const saveLlmSettings = async () => {
+    setSavingLlm(true);
+    setLlmNotice("");
+    try {
+      const saved = await idsApi.saveSettings({
+        llmBaseUrl: llmForm.baseUrl,
+        llmModel: llmForm.model,
+        ...(apiKeyDraft.trim() ? { llmApiKey: apiKeyDraft.trim() } : {}),
+      });
+      setRuntimeSettings(saved);
+      setApiKeyDraft("");
+      setLlmForm({ baseUrl: saved.llmBaseUrl, model: saved.llmModel });
+      onLlmSettingsChange({ baseUrl: saved.llmBaseUrl, model: saved.llmModel, apiKeyConfigured: saved.llmApiKeyConfigured });
+      setLlmNotice("LLM settings saved securely.");
+    } catch (error) {
+      setLlmNotice(error instanceof Error ? error.message : "Could not save LLM settings.");
+    } finally {
+      setSavingLlm(false);
+    }
+  };
+  const clearApiKey = async () => {
+    setSavingLlm(true);
+    setLlmNotice("");
+    try {
+      const saved = await idsApi.saveSettings({ clearLlmApiKey: true });
+      setRuntimeSettings(saved);
+      setApiKeyDraft("");
+      onLlmSettingsChange({ baseUrl: saved.llmBaseUrl, model: saved.llmModel, apiKeyConfigured: false });
+      setLlmNotice("Stored API key cleared.");
+    } catch (error) {
+      setLlmNotice(error instanceof Error ? error.message : "Could not clear the API key.");
+    } finally {
+      setSavingLlm(false);
+    }
   };
 
   return (
@@ -56,12 +99,13 @@ export function SettingsPage({ themePreference, onThemePreferenceChange, fontSca
       </section>
 
       <section className="settings-section">
-        <header className="section-heading"><div><h2>LLM defense guidance</h2><p>Configure an OpenAI-compatible endpoint for analyst-requested recommendations.</p></div><span className="local-only"><KeyRound size={14} />Local session</span></header>
+        <header className="section-heading"><div><h2>LLM defense guidance</h2><p>Configure an OpenAI-compatible endpoint for analyst-requested recommendations.</p></div><span className="local-only"><KeyRound size={14} />Protected locally</span></header>
         <div className="settings-body llm-settings">
-          <label><span>Base URL</span><input value={llmSettings.baseUrl} onChange={(event) => update("baseUrl", event.target.value)} placeholder="https://api.example.com/v1" autoComplete="url" /></label>
-          <label><span>Model</span><input value={llmSettings.model} onChange={(event) => update("model", event.target.value)} placeholder="gpt-4.1-mini" autoComplete="off" /></label>
-          <label className="api-key-field"><span>API key</span><div><input type={showKey ? "text" : "password"} value={llmSettings.apiKey} onChange={(event) => update("apiKey", event.target.value)} placeholder="Stored only for this browser session" autoComplete="off" /><button type="button" className="icon-button" title={showKey ? "Hide API key" : "Show API key"} onClick={() => setShowKey((value) => !value)}>{showKey ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></label>
-          <p className="settings-note"><Save size={14} />Base URL, model, and theme preference are saved locally. The API key remains in browser session storage and alert data is sent only after you select Generate defense guidance.</p>
+          <label><span>Base URL</span><input value={llmForm.baseUrl} onChange={(event) => setLlmForm((current) => ({ ...current, baseUrl: event.target.value }))} placeholder="https://api.example.com/v1" autoComplete="url" /></label>
+          <label><span>Model</span><input value={llmForm.model} onChange={(event) => setLlmForm((current) => ({ ...current, model: event.target.value }))} placeholder="gpt-4.1-mini" autoComplete="off" /></label>
+          <label className="api-key-field"><span>API key</span><input type="password" value={apiKeyDraft} onChange={(event) => setApiKeyDraft(event.target.value)} placeholder={runtimeSettings.llmApiKeyConfigured ? "API key configured - enter a new key to replace it" : "Enter API key"} autoComplete="new-password" /></label>
+          <div className="llm-actions"><button type="button" className="icon-text-button primary" disabled={savingLlm} onClick={() => void saveLlmSettings()}><Save size={15} />{savingLlm ? "Saving" : "Save LLM settings"}</button>{runtimeSettings.llmApiKeyConfigured && <button type="button" className="icon-text-button" disabled={savingLlm} onClick={() => void clearApiKey()}><Trash2 size={15} />Clear API key</button>}</div>
+          <p className="settings-note"><KeyRound size={14} />{llmNotice || "The API key is encrypted for your Windows account and is never returned to the browser. Alert data is sent only after you select Generate defense guidance."}</p>
         </div>
       </section>
     </div>

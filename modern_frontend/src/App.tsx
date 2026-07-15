@@ -95,7 +95,7 @@ export default function App() {
   const [fontScale, setFontScale] = useState<FontScale>(() => readFontScale());
   const systemDark = useSystemDarkMode();
   const theme = themePreference === "system" ? (systemDark ? "dark" : "light") : themePreference;
-  const [llmSettings, setLlmSettings] = useState<LlmSettings>(() => readLlmSettings());
+  const [llmSettings, setLlmSettings] = useState<LlmSettings>(defaultLlmSettings);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [selectedHostIp, setSelectedHostIp] = useState<string | undefined>();
@@ -114,10 +114,14 @@ export default function App() {
   }, [fontScale]);
 
   useEffect(() => {
-    localStorage.setItem("ids-prototype-llm", JSON.stringify({ baseUrl: llmSettings.baseUrl, model: llmSettings.model }));
-    if (llmSettings.apiKey) sessionStorage.setItem("ids-prototype-llm-api-key", llmSettings.apiKey);
-    else sessionStorage.removeItem("ids-prototype-llm-api-key");
-  }, [llmSettings]);
+    let active = true;
+    localStorage.removeItem("ids-prototype-llm");
+    sessionStorage.removeItem("ids-prototype-llm-api-key");
+    idsApi.settings()
+      .then((settings) => { if (active) setLlmSettings(llmSettingsFromRuntime(settings)); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     try { localStorage.setItem("ids-prototype-personalization", JSON.stringify(personalization)); } catch { /* Browser storage can reject large image data. */ }
@@ -182,8 +186,8 @@ export default function App() {
             {page === "investigations" && <InvestigationsPage />}
             {page === "assets" && <AssetsPage />}
             {page === "rules" && <RulesPage />}
-            {page === "reports" && <ReportsPage />}
-            {page === "timeline" && <EventTimelinePage />}
+            {page === "reports" && <ReportsPage refreshVersion={refreshVersion} />}
+            {page === "timeline" && <EventTimelinePage refreshVersion={refreshVersion} />}
             {page === "topology" && <NetworkTopologyPage refreshVersion={refreshVersion} />}
             {page === "security-events" && <SecurityEventsPage onOpenAlert={(alertId) => { setSelectedAlertId(alertId); setPage("alerts"); }} />}
             {page === "health" && <SystemHealthPage refreshVersion={refreshVersion} />}
@@ -218,17 +222,18 @@ function readHelpLanguage(): HelpLanguage {
   return localStorage.getItem("ids-help-language") === "zh" ? "zh" : "en";
 }
 
-function readLlmSettings(): LlmSettings {
-  try {
-    const stored = JSON.parse(localStorage.getItem("ids-prototype-llm") ?? "{}") as Partial<LlmSettings>;
-    return {
-      baseUrl: stored.baseUrl ?? "https://api.openai.com/v1",
-      model: stored.model ?? "gpt-4.1-mini",
-      apiKey: sessionStorage.getItem("ids-prototype-llm-api-key") ?? "",
-    };
-  } catch {
-    return { baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", apiKey: "" };
-  }
+const defaultLlmSettings: LlmSettings = {
+  baseUrl: "https://api.openai.com/v1",
+  model: "gpt-4.1-mini",
+  apiKeyConfigured: false,
+};
+
+function llmSettingsFromRuntime(settings: Partial<import("./types").RuntimeSettings>): LlmSettings {
+  return {
+    baseUrl: settings.llmBaseUrl || defaultLlmSettings.baseUrl,
+    model: settings.llmModel || defaultLlmSettings.model,
+    apiKeyConfigured: settings.llmApiKeyConfigured === true,
+  };
 }
 
 function useSystemDarkMode(): boolean {

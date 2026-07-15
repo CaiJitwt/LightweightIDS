@@ -1,26 +1,45 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download, FileJson, FileText, FileSpreadsheet, CheckCircle2 } from "lucide-react";
 
 import { idsApi } from "../api/idsApi";
-import { alerts as demoAlerts } from "../data/mockData";
 import { SeverityBadge } from "../components/SeverityBadge";
 import type { AlertRecord } from "../types";
 
-export function ReportsPage() {
+export function ReportsPage({ refreshVersion }: { refreshVersion: number }) {
   const [notice, setNotice] = useState("");
   const [showPreview, setShowPreview] = useState(false);
+  const [records, setRecords] = useState<AlertRecord[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const previewAlerts = useMemo(() => demoAlerts.slice(0, 6), []);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    idsApi.alerts({}).then(({ records: next }) => {
+      if (active) {
+        setRecords(next);
+        setNotice("");
+      }
+    }).catch((error) => {
+      if (active) {
+        setRecords([]);
+        setNotice(error instanceof Error ? error.message : "Persisted alerts are unavailable.");
+      }
+    }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [refreshVersion]);
+
+  const previewAlerts = useMemo(() => records.slice(0, 6), [records]);
 
   const stats = useMemo(() => {
-    const critical = demoAlerts.filter((a) => a.severity === "CRITICAL" || a.severity === "HIGH").length;
-    const confirmed = demoAlerts.filter((a) => a.status === "confirmed").length;
-    return { total: demoAlerts.length, critical, confirmed };
-  }, []);
+    const critical = records.filter((a) => a.severity === "CRITICAL" || a.severity === "HIGH").length;
+    const confirmed = records.filter((a) => a.status === "confirmed").length;
+    return { total: records.length, critical, confirmed };
+  }, [records]);
 
   const exportAlerts = async (kind: "csv" | "json" | "html") => {
     try {
       const { records } = await idsApi.alerts({});
+      setRecords(records);
       const content = kind === "json" ? JSON.stringify(records, null, 2) : kind === "csv" ? toCsv(records) : toHtml(records);
       const blob = new Blob([content], { type: kind === "json" ? "application/json" : kind === "csv" ? "text/csv" : "text/html" });
       const link = document.createElement("a");
@@ -30,7 +49,7 @@ export function ReportsPage() {
       URL.revokeObjectURL(link.href);
       setNotice(`${records.length} alerts exported as ${kind.toUpperCase()}.`);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Report export failed. Preview data is available offline.");
+      setNotice(error instanceof Error ? error.message : "Report export failed.");
     }
   };
 
@@ -40,7 +59,7 @@ export function ReportsPage() {
         <div className="report-stat"><span>Total alerts</span><strong>{stats.total}</strong><small>Available for export</small></div>
         <div className="report-stat"><span>High / Critical</span><strong>{stats.critical}</strong><small>Prioritized in report</small></div>
         <div className="report-stat"><span>Confirmed</span><strong>{stats.confirmed}</strong><small>Analyst-reviewed</small></div>
-        <div className="report-stat"><span>Export formats</span><strong>3</strong><small>HTML · CSV · JSON</small></div>
+        <div className="report-stat"><span>Export formats</span><strong>3</strong><small>HTML - CSV - JSON</small></div>
       </section>
 
       <section className="section-panel">
@@ -70,7 +89,7 @@ export function ReportsPage() {
 
       <section className="section-panel">
         <header className="section-heading">
-          <div><h2>Alert preview</h2><p>Offline sample of the data included in reports</p></div>
+          <div><h2>Alert preview</h2><p>Current persisted alerts included in reports</p></div>
           <button className="text-button" type="button" onClick={() => setShowPreview((v) => !v)}>{showPreview ? "Hide preview" : "Show preview"}</button>
         </header>
         {showPreview && (
@@ -88,6 +107,7 @@ export function ReportsPage() {
                     <td><span className={`status status-${alert.status}`}>{alert.status}</span></td>
                   </tr>
                 ))}
+                {!previewAlerts.length && <tr><td colSpan={6} className="empty-table">{loading ? "Loading persisted alerts..." : "No persisted alerts are available."}</td></tr>}
               </tbody>
             </table>
           </div>

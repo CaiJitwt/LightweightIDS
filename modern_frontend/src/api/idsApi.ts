@@ -5,6 +5,7 @@ import type {
   CaptureStartOptions,
   CaptureStatus,
   DashboardSnapshot,
+  EventTimelineRecord,
   HostProfile,
   HostRecord,
   IntegrityResult,
@@ -20,6 +21,7 @@ import type {
   TopologySnapshot,
   RuleRecord,
   RuntimeSettings,
+  RuntimeSettingsUpdate,
 } from "../types";
 
 const apiBase = import.meta.env.VITE_IDS_API_BASE ?? "";
@@ -65,6 +67,7 @@ export const idsApi = {
   validateFilter: (filterExpression: string) => request<{ expression: string; bpf: string }>("/api/capture/validate-filter", { method: "POST", body: JSON.stringify({ filterExpression }) }),
   packets: (after: number) => request<{ records: PacketRecord[]; nextSequence: number }>(`/api/packets?after=${after}&limit=250`),
   dashboard: () => request<DashboardSnapshot>("/api/dashboard"),
+  timeline: () => request<{ records: EventTimelineRecord[] }>("/api/timeline?limit=500"),
   topology: () => request<TopologySnapshot>("/api/topology"),
   resetStatistics: () => request<{ reset: boolean; dashboard: DashboardSnapshot }>("/api/statistics/reset", { method: "POST", body: "{}" }),
   alerts: (filters: { query?: string; severity?: string; limit?: number } = {}) => {
@@ -99,7 +102,7 @@ export const idsApi = {
   refreshSecurityEvents: () => request<SecurityEventStatus>("/api/security/events/refresh", { method: "POST", body: "{}" }),
   alertSecurityEvent: (alertId: number) => request<{ record: SecurityEventRecord | null }>(`/api/alerts/${alertId}/security-event`),
   settings: () => request<RuntimeSettings>("/api/settings"),
-  saveSettings: (settings: Partial<RuntimeSettings>) => request<RuntimeSettings>("/api/settings", { method: "POST", body: JSON.stringify(settings) }),
+  saveSettings: (settings: RuntimeSettingsUpdate) => request<RuntimeSettings>("/api/settings", { method: "POST", body: JSON.stringify(settings) }),
   rules: () => request<{ records: RuleRecord[] }>("/api/rules"),
   updateRule: (id: string, update: Partial<Pick<RuleRecord, "enabled" | "threshold" | "timeWindow">>) => request<{ record: RuleRecord }>(`/api/rules/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(update) }),
   assets: () => request<{ records: AssetRecord[] }>("/api/assets"),

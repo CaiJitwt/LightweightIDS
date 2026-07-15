@@ -1,14 +1,16 @@
 import type { AlertRecord, LlmSettings } from "../types";
 
-export async function generateDefenseAdvice(settings: LlmSettings, alert: AlertRecord): Promise<string> {
-  if (!settings.baseUrl.trim() || !settings.apiKey.trim() || !settings.model.trim()) {
-    throw new Error("Set a Base URL, API key, and model in Settings before requesting guidance.");
+export type DefenseAdviceLanguage = "en" | "zh";
+
+export async function generateDefenseAdvice(settings: LlmSettings, alert: AlertRecord, language: DefenseAdviceLanguage): Promise<string> {
+  if (!settings.baseUrl.trim() || !settings.model.trim() || !settings.apiKeyConfigured) {
+    throw new Error("Save a Base URL, API key, and model in Settings before requesting guidance.");
   }
   const response = await fetch("/api/llm/defense-guidance", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      settings,
+      language,
       alert: {
         rule: alert.ruleName,
         ruleId: alert.ruleId,

@@ -45,6 +45,10 @@ describe("modern IDS frontend", () => {
     expect(await screen.findByRole("heading", { name: "Alert center" })).toBeInTheDocument();
     expect(await screen.findByRole("complementary", { name: "Selected alert details" })).toHaveTextContent("Related packets");
     expect(screen.getByText("TLS metadata indicates a weak protocol fingerprint.")).toBeInTheDocument();
+    const language = screen.getByRole("group", { name: "Response language" });
+    expect(within(language).getByRole("button", { name: "English" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(within(language).getByRole("button", { name: "Chinese" }));
+    expect(within(language).getByRole("button", { name: "Chinese" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("filters the traffic table by protocol", async () => {
@@ -70,7 +74,7 @@ describe("modern IDS frontend", () => {
     expect(await screen.findByRole("button", { name: "Start monitoring" })).toBeInTheDocument();
   });
 
-  it("defaults to the system theme and exposes session-only LLM settings", async () => {
+  it("defaults to the system theme and keeps the persisted LLM key masked", async () => {
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
       value: () => ({ matches: true, addEventListener: () => undefined, removeEventListener: () => undefined }),
@@ -80,7 +84,8 @@ describe("modern IDS frontend", () => {
     expect(document.querySelector(".app-shell")).toHaveAttribute("data-theme", "dark");
     fireEvent.click(within(screen.getByRole("navigation", { name: "Primary navigation" })).getByRole("button", { name: "Settings" }));
     expect(await screen.findByRole("heading", { name: "LLM defense guidance" })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Stored only for this browser session")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Enter API key")).toHaveAttribute("type", "password");
+    expect(screen.queryByTitle("Show API key")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^System$/ })).toHaveClass("selected");
   });
 

@@ -70,8 +70,8 @@ export type ThemePreference = "system" | "light" | "dark";
 
 export interface LlmSettings {
   baseUrl: string;
-  apiKey: string;
   model: string;
+  apiKeyConfigured: boolean;
 }
 
 export interface SecurityCheck {
@@ -95,12 +95,20 @@ export interface SystemHealthSnapshot {
     hostname: string;
     platform: string;
     cpuPercent: number;
+    gpuPercent: number | null;
+    gpuName: string;
     logicalProcessors: number;
     memoryUsedBytes: number;
     memoryTotalBytes: number;
     diskUsedBytes: number;
     diskTotalBytes: number;
     diskFreeBytes: number;
+  };
+  resourceMonitor?: {
+    state: "running" | "stopped";
+    lastSample: Record<string, unknown>;
+    lastError: string;
+    alertsAdded: number;
   };
   engine: {
     apiVersion: number;
@@ -123,6 +131,17 @@ export interface SystemHealthSnapshot {
     severity: Severity;
     hits: number;
   }[];
+}
+
+export interface EventTimelineRecord {
+  id: string;
+  timestamp: string;
+  kind: "alert" | "packet" | "system";
+  severity?: Severity;
+  headline: string;
+  detail: string;
+  source: string;
+  destination?: string;
 }
 
 export interface IntegrityStatus {
@@ -283,7 +302,15 @@ export interface RuntimeSettings {
   minimumAlertSeverity: Severity;
   securityEventMonitorEnabled: boolean;
   securityEventPollSeconds: number;
+  llmBaseUrl: string;
+  llmModel: string;
+  llmApiKeyConfigured: boolean;
 }
+
+export type RuntimeSettingsUpdate = Partial<RuntimeSettings> & {
+  llmApiKey?: string;
+  clearLlmApiKey?: boolean;
+};
 
 export interface RuleRecord {
   id: string;

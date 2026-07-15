@@ -8,6 +8,7 @@ import type { SystemHealthSnapshot } from "../types";
 interface HealthPoint {
   time: string;
   cpu: number;
+  gpu?: number;
   memory: number;
   packets: number;
   alerts: number;
@@ -31,6 +32,7 @@ export function SystemHealthPage({ refreshVersion }: { refreshVersion: number })
       setHistory((current) => [...current, {
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
         cpu: next.system.cpuPercent,
+        gpu: next.system.gpuPercent ?? undefined,
         memory: Math.round(memoryPercent * 10) / 10,
         packets: next.engine.packetsPerSecond,
         alerts: next.engine.sessionAlerts,
@@ -81,7 +83,7 @@ export function SystemHealthPage({ refreshVersion }: { refreshVersion: number })
         </section>
 
         <section className="analysis-grid">
-          <HealthChart title="CPU and memory" meta="Live samples from this browser session" data={history} keys={[{ key: "cpu", name: "CPU %", color: "#2878d0", fill: "#dcecff" }, { key: "memory", name: "Memory %", color: "#d97706", fill: "#feebc8" }]} />
+          <HealthChart title="CPU, GPU and memory" meta="Live user-mode resource telemetry" data={history} keys={[{ key: "cpu", name: "CPU %", color: "#2878d0", fill: "#dcecff" }, { key: "gpu", name: "GPU %", color: "#8b5cf6", fill: "#ede9fe" }, { key: "memory", name: "Memory %", color: "#d97706", fill: "#feebc8" }]} />
           <HealthChart title="Packet throughput" meta="Current capture session" data={history} keys={[{ key: "packets", name: "Packets/s", color: "#2f8f66", fill: "#d8f3e6" }]} />
         </section>
 
@@ -97,6 +99,8 @@ export function SystemHealthPage({ refreshVersion }: { refreshVersion: number })
                 <HealthRow label="Session alerts" value={snapshot.engine.sessionAlerts.toLocaleString()} />
                 <HealthRow label="Capture state" value={titleCase(snapshot.engine.captureState)} status={snapshot.engine.captureState === "running" ? "ok" : undefined} />
                 <HealthRow label="Database size" value={formatBytes(snapshot.engine.databaseBytes)} />
+                <HealthRow label="GPU telemetry" value={snapshot.system.gpuPercent == null ? "Unavailable" : `${snapshot.system.gpuPercent.toFixed(1)}% - ${snapshot.system.gpuName || "Supported GPU"}`} />
+                <HealthRow label="Resource monitor" value={titleCase(snapshot.resourceMonitor?.state ?? "unavailable")} status={snapshot.resourceMonitor?.state === "running" ? "ok" : undefined} />
               </tbody></table>
             </div>
           </div>

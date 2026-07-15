@@ -99,6 +99,9 @@ class Database:
             ("minimum_alert_severity", "LOW"),
             ("security_event_monitor_enabled", "false"),
             ("security_event_poll_seconds", "5"),
+            ("llm_base_url", "https://api.openai.com/v1"),
+            ("llm_model", "gpt-4.1-mini"),
+            ("llm_api_key_protected", ""),
             ("log_level", "INFO"),
         )
         connection.executemany(

@@ -245,6 +245,11 @@ def test_local_api_updates_rules_and_resets_statistics(tmp_path):
         assert tcp_edge["packets"] == 2
         assert tcp_edge["bytes"] == 160
 
+        with urlopen(f"{base}/api/timeline", timeout=3) as response:
+            timeline_before_reset = json.loads(response.read())
+        assert any(record["kind"] == "packet" for record in timeline_before_reset["records"])
+        assert any(record["kind"] == "alert" for record in timeline_before_reset["records"])
+
         reset_request = Request(f"{base}/api/statistics/reset", data=b"{}", headers={"Content-Type": "application/json"}, method="POST")
         with urlopen(reset_request, timeout=3) as response:
             reset_payload = json.loads(response.read())
@@ -261,6 +266,10 @@ def test_local_api_updates_rules_and_resets_statistics(tmp_path):
         with urlopen(f"{base}/api/topology", timeout=3) as response:
             reset_topology = json.loads(response.read())
         assert reset_topology == {"nodes": [], "edges": []}
+
+        with urlopen(f"{base}/api/timeline", timeout=3) as response:
+            reset_timeline = json.loads(response.read())
+        assert reset_timeline == {"records": []}
 
         with urlopen(f"{base}/api/pcap/status", timeout=3) as response:
             pcap_status = json.loads(response.read())

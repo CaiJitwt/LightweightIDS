@@ -15,22 +15,26 @@ from uuid import uuid4
 from app.constants import DEFAULT_DATABASE_PATH
 from detection.analysis.alert_trend import AlertTrendAnalyzer
 from detection.analysis.host_profile import HostProfileService
-from endpoint_security import EndpointPostureService, FileIntegrityService, ProcessInventoryService, RuntimeHealthService
+from endpoint_security import EndpointPostureService, FileIntegrityService, ProcessInventoryService, ResourceThreatMonitorService, RuntimeHealthService
 from modern_ui.capture_session import CaptureSessionService, default_capture_options, parse_capture_options
 from modern_ui.llm_guidance import LlmGuidanceError, LlmGuidanceService
 from modern_ui.pcap_import import PcapImportService
+from modern_ui.secret_store import WindowsDpapiSecretStore
 from modern_ui.security_event_monitor import SecurityEventMonitorService
 from models import RuleRecord
 from storage.database import Database
 from storage.repositories import AlertRepository, PacketRepository, RuleRepository, SecurityEventRepository, SettingsRepository
 
 
-LOCAL_API_VERSION = 3
+LOCAL_API_VERSION = 5
 LOCAL_API_CAPABILITIES = [
     "capture-v1",
     "endpoint-security-v1",
     "system-health-v1",
     "topology-v1",
+    "llm-guidance-v1",
+    "timeline-v1",
+    "resource-monitor-v1",
 ]
 
 
@@ -56,22 +60,26 @@ class LocalApiServer(ThreadingHTTPServer):
         self.process_inventory = ProcessInventoryService()
         self.file_integrity = FileIntegrityService(database.path.parent / "endpoint_security")
         self.runtime_health = RuntimeHealthService(database.path.parent)
+        self.resource_monitor = ResourceThreatMonitorService(database, self.runtime_health.collect)
         self.security_events = SecurityEventRepository(database)
         self.security_event_monitor = SecurityEventMonitorService(
             database,
             poll_seconds=self.settings.get_int("security_event_poll_seconds", 5),
         )
         self.llm_guidance = LlmGuidanceService()
+        self.secret_store = WindowsDpapiSecretStore()
         if self.settings.get_bool("security_event_monitor_enabled", False):
             try:
                 self.security_event_monitor.start()
             except RuntimeError:
                 pass
+        self.resource_monitor.start()
 
     def server_close(self) -> None:
         self.capture_service.shutdown()
         self.pcap_import.shutdown()
         self.security_event_monitor.shutdown()
+        self.resource_monitor.shutdown()
         super().server_close()
 
 
@@ -154,6 +162,9 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 self._send_json(self.server.pcap_import.status())
             elif parsed.path == "/api/dashboard":
                 self._send_json(self._dashboard_payload())
+            elif parsed.path == "/api/timeline":
+                query = parse_qs(parsed.query)
+                self._send_json(self._event_timeline_payload(min(_positive_int(query.get("limit", ["500"])[0], 500), 2_000)))
             elif parsed.path == "/api/topology":
                 self._send_json(self._topology_payload())
             elif parsed.path == "/api/packets":
@@ -319,7 +330,28 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/security/events/refresh":
                 self._send_json(self.server.security_event_monitor.refresh_once())
             elif parsed.path == "/api/llm/defense-guidance":
-                self._send_json(self.server.llm_guidance.generate(payload))
+                alert = payload.get("alert")
+                if not isinstance(alert, dict):
+                    raise LlmGuidanceError("alert must be a JSON object")
+                language = payload.get("language", "en")
+                if language not in {"en", "zh"}:
+                    raise LlmGuidanceError("language must be en or zh")
+                protected_key = self.server.settings.get("llm_api_key_protected")
+                if not protected_key:
+                    raise LlmGuidanceError("Save an API key in Settings before requesting guidance.")
+                self._send_json(
+                    self.server.llm_guidance.generate(
+                        {
+                            "settings": {
+                                "baseUrl": self.server.settings.get("llm_base_url", "https://api.openai.com/v1"),
+                                "apiKey": self.server.secret_store.unprotect(protected_key),
+                                "model": self.server.settings.get("llm_model", "gpt-4.1-mini"),
+                            },
+                            "alert": alert,
+                            "language": language,
+                        }
+                    )
+                )
             else:
                 self._send_error(HTTPStatus.NOT_FOUND, "Endpoint not found.")
         except ValueError as exc:
@@ -358,19 +390,41 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             else:
                 self.server.security_event_monitor.stop()
             values["security_event_monitor_enabled"] = "true" if enabled else "false"
+        if "llmBaseUrl" in payload:
+            base_url = _setting_text(payload, "llmBaseUrl", 1_000).rstrip("/")
+            parsed_url = urlparse(base_url)
+            if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+                raise ValueError("llmBaseUrl must be a valid http or https URL")
+            values["llm_base_url"] = base_url
+        if "llmModel" in payload:
+            values["llm_model"] = _setting_text(payload, "llmModel", 200)
+        if "llmApiKey" in payload and payload.get("clearLlmApiKey") is True:
+            raise ValueError("llmApiKey and clearLlmApiKey cannot be used together")
+        if "llmApiKey" in payload:
+            api_key = _setting_text(payload, "llmApiKey", 1_000)
+            values["llm_api_key_protected"] = self.server.secret_store.protect(api_key)
+        if "clearLlmApiKey" in payload:
+            clear_key = payload["clearLlmApiKey"]
+            if not isinstance(clear_key, bool):
+                raise ValueError("clearLlmApiKey must be a boolean")
+            if clear_key:
+                values["llm_api_key_protected"] = ""
         self.server.settings.set_many(values)
 
     def _update_rule(self, rule_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         current = next((record for record in self.server.rules.list_all() if record.id == rule_id), None)
         if current is None:
             raise ValueError("Rule not found.")
+        threshold = max(1, _optional_int(payload, "threshold", current.threshold))
+        if rule_id in {"SUSTAINED_CPU_LOAD", "SUSTAINED_GPU_LOAD"}:
+            threshold = min(100, threshold)
         updated = RuleRecord(
             id=current.id,
             name=current.name,
             category=current.category,
             severity=current.severity,
             enabled=_optional_bool(payload, "enabled", current.enabled),
-            threshold=max(1, _optional_int(payload, "threshold", current.threshold)),
+            threshold=threshold,
             time_window=max(0, _optional_int(payload, "timeWindow", current.time_window)),
             description=current.description,
         )
@@ -383,6 +437,7 @@ class LocalApiHandler(BaseHTTPRequestHandler):
         if self.server.pcap_import.status().get("state") == "importing":
             raise RuntimeError("Wait for the PCAP import to finish before resetting statistics.")
         security_monitor_running = self.server.security_event_monitor.status().get("state") == "running"
+        self.server.resource_monitor.stop()
         if security_monitor_running:
             self.server.security_event_monitor.stop()
         with self.server.database.connect() as connection:
@@ -396,6 +451,8 @@ class LocalApiHandler(BaseHTTPRequestHandler):
         self.server.capture_service.reset_statistics()
         self.server.pcap_import.reset_statistics()
         self.server.security_event_monitor.reset_statistics()
+        self.server.resource_monitor.reset_statistics()
+        self.server.resource_monitor.start()
         if security_monitor_running:
             self.server.security_event_monitor.start()
 
@@ -442,6 +499,49 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             "highRiskHosts": [_host_payload(host) for host in hosts[:4]],
             "recentAlerts": [_alert_payload(alert) for alert in recent_alerts[:4]],
         }
+
+    def _event_timeline_payload(self, limit: int) -> dict[str, Any]:
+        records: list[dict[str, Any]] = []
+        for alert in self.server.alerts.list_all(limit=limit):
+            records.append(
+                {
+                    "id": f"alert-{alert.id}",
+                    "timestamp": alert.timestamp,
+                    "kind": "alert",
+                    "severity": alert.severity,
+                    "headline": alert.rule_name,
+                    "detail": alert.description,
+                    "source": _endpoint(alert.src_ip, alert.src_port),
+                    "destination": _endpoint(alert.dst_ip, alert.dst_port) if alert.dst_ip else "",
+                }
+            )
+        for packet in self.server.packets.list_recent(limit=limit):
+            records.append(
+                {
+                    "id": f"packet-{packet.id}",
+                    "timestamp": packet.timestamp,
+                    "kind": "packet",
+                    "headline": f"{packet.protocol} {packet.raw_summary}".strip()[:240],
+                    "detail": f"{_endpoint(packet.src_ip, packet.src_port)} -> {_endpoint(packet.dst_ip, packet.dst_port)} - {packet.length} bytes",
+                    "source": _endpoint(packet.src_ip, packet.src_port),
+                    "destination": _endpoint(packet.dst_ip, packet.dst_port),
+                }
+            )
+        for event in self.server.security_events.list_all(limit=limit):
+            records.append(
+                {
+                    "id": f"system-{event.id}",
+                    "timestamp": event.timestamp,
+                    "kind": "system",
+                    "severity": event.severity,
+                    "headline": event.summary or f"Windows event {event.event_id}",
+                    "detail": f"{event.channel} - {event.provider}".strip(" -"),
+                    "source": event.computer or event.user or "local host",
+                    "destination": "",
+                }
+            )
+        records.sort(key=lambda record: str(record["timestamp"]), reverse=True)
+        return {"records": records[:limit]}
 
     def _topology_payload(self) -> dict[str, Any]:
         connections = self.server.packets.topology_connections(limit=250)
@@ -507,6 +607,7 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             database_bytes = 0
         return {
             "system": self.server.runtime_health.collect(),
+            "resourceMonitor": self.server.resource_monitor.status(),
             "engine": {
                 "apiVersion": LOCAL_API_VERSION,
                 "uptimeSeconds": max(0, int(monotonic() - self.server.started_at)),
@@ -770,6 +871,9 @@ def _settings_payload(settings: SettingsRepository) -> dict[str, Any]:
         "minimumAlertSeverity": settings.get("minimum_alert_severity", "LOW").upper(),
         "securityEventMonitorEnabled": settings.get_bool("security_event_monitor_enabled", False),
         "securityEventPollSeconds": settings.get_int("security_event_poll_seconds", 5),
+        "llmBaseUrl": settings.get("llm_base_url", "https://api.openai.com/v1"),
+        "llmModel": settings.get("llm_model", "gpt-4.1-mini"),
+        "llmApiKeyConfigured": bool(settings.get("llm_api_key_protected")),
     }
 
 
@@ -831,6 +935,15 @@ def _setting_integer(payload: dict[str, Any], key: str) -> int:
         return int(payload[key])
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError(f"{key} must be an integer") from exc
+
+
+def _setting_text(payload: dict[str, Any], key: str, maximum: int) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{key} is required")
+    if len(value) > maximum:
+        raise ValueError(f"{key} is too long")
+    return value.strip()
 
 
 def _bool_setting(payload: dict[str, Any], key: str) -> str:
