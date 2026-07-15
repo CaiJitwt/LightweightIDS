@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import secrets
 import shutil
 import subprocess
 import sys
@@ -29,7 +30,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--database", type=Path, default=DEFAULT_DATABASE_PATH)
     parser.add_argument("--no-browser", action="store_true", help="Do not open the frontend in the default browser.")
     parser.add_argument("--skip-install", action="store_true", help="Do not install missing frontend dependencies.")
+    parser.add_argument("--bind", default="127.0.0.1", help="Bind address (default: 127.0.0.1). Use 0.0.0.0 to allow remote access.")
     args = parser.parse_args(argv)
+
+    api_key = ""
+    if args.bind not in {"127.0.0.1", "localhost", "::1"}:
+        api_key = secrets.token_hex(16)
+        print(f"Remote access enabled. API key required: {api_key}")
+        print("Clients must include header: X-API-Key: " + api_key)
 
     api_server: LocalApiServer | None = None
     api_thread: Thread | None = None
@@ -48,10 +56,10 @@ def main(argv: list[str] | None = None) -> int:
         else:
             database = Database(args.database)
             database.initialize()
-            api_server = LocalApiServer(("127.0.0.1", 8787), database)
+            api_server = LocalApiServer((args.bind, 8787), database, api_key=api_key)
             api_thread = Thread(target=api_server.serve_forever, kwargs={"poll_interval": 0.25}, daemon=True)
             api_thread.start()
-            print(f"Local API started at {API_URL}")
+            print(f"Local API started at http://{args.bind}:8787")
 
         if _http_ready(FRONTEND_URL, b'id="root"'):
             print(f"Reusing modern frontend at {FRONTEND_URL}")

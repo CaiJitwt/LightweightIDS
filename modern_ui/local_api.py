@@ -35,8 +35,13 @@ LOCAL_API_CAPABILITIES = [
 
 
 class LocalApiServer(ThreadingHTTPServer):
-    def __init__(self, address: tuple[str, int], database: Database) -> None:
+    def __init__(self, address: tuple[str, int], database: Database, *, api_key: str = "") -> None:
         super().__init__(address, LocalApiHandler)
+        self.api_key = api_key
+        self.rate_limits: dict[str, list[float]] = {}
+        self.rate_limit_max = 30
+        self.rate_limit_window = 1.0
+        self.upload_max_bytes = 50 * 1024 * 1024
         self.capture_service = CaptureSessionService(database)
         self.database = database
         self.started_at = monotonic()
@@ -74,12 +79,56 @@ class LocalApiHandler(BaseHTTPRequestHandler):
     server: LocalApiServer
     protocol_version = "HTTP/1.1"
 
+    def _deny(self, status: int, message: str) -> None:
+        self.send_response(status)
+        self._send_cors_headers()
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"error": message}).encode())
+
+    def _check_access(self) -> bool:
+        if not self.server.api_key:
+            return True
+        client = self.client_address[0]
+        if client in ("127.0.0.1", "::1", "localhost"):
+            return True
+        expected = self.server.api_key
+        provided = self.headers.get("X-API-Key", "")
+        if not provided or provided != expected:
+            self._deny(HTTPStatus.FORBIDDEN, "API key required. Include X-API-Key header.")
+            return False
+        return True
+
+    def _check_rate_limit(self) -> bool:
+        if not self.server.api_key:
+            return True
+        client = self.client_address[0]
+        if client in ("127.0.0.1", "::1", "localhost"):
+            return True
+        now = monotonic()
+        window = self.server.rate_limit_window
+        entries = self.server.rate_limits.setdefault(client, [])
+        entries[:] = [t for t in entries if now - t < window]
+        entries.append(now)
+        if len(entries) > self.server.rate_limit_max:
+            self._deny(HTTPStatus.TOO_MANY_REQUESTS, "Rate limit exceeded")
+            return False
+        return True
+
+    def _check_upload_size(self, length: int) -> bool:
+        if length > self.server.upload_max_bytes:
+            self._deny(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, f"Payload exceeds {self.server.upload_max_bytes // 1024 // 1024}MB limit")
+            return False
+        return True
+
     def do_OPTIONS(self) -> None:  # noqa: N802
         self.send_response(HTTPStatus.NO_CONTENT)
         self._send_cors_headers()
         self.end_headers()
 
     def do_GET(self) -> None:  # noqa: N802
+        if not self._check_access() or not self._check_rate_limit():
+            return
         parsed = urlparse(self.path)
         try:
             if parsed.path == "/api/health":
@@ -211,6 +260,11 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc))
 
     def do_POST(self) -> None:  # noqa: N802
+        if not self._check_access() or not self._check_rate_limit():
+            return
+        content_length = int(self.headers.get("Content-Length", 0))
+        if not self._check_upload_size(content_length):
+            return
         try:
             parsed = urlparse(self.path)
             if parsed.path == "/api/pcap/import":
