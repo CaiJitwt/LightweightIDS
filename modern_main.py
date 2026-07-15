@@ -22,6 +22,13 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 FRONTEND_ROOT = PROJECT_ROOT / "modern_frontend"
 API_URL = "http://127.0.0.1:8787"
 FRONTEND_URL = "http://127.0.0.1:4173"
+REQUIRED_API_CAPABILITIES = {
+    "endpoint-security-v1",
+    "system-health-v1",
+    "topology-v1",
+    "timeline-v1",
+    "resource-monitor-v1",
+}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -145,8 +152,9 @@ def _api_compatibility_error(payload: dict[str, object], database_path: Path) ->
     if payload.get("apiVersion") != LOCAL_API_VERSION:
         return f"expected API v{LOCAL_API_VERSION}, received {payload.get('apiVersion', 'unknown')}"
     capabilities = payload.get("capabilities")
-    required = {"endpoint-security-v1", "system-health-v1", "topology-v1"}
-    if not isinstance(capabilities, list) or not required.issubset({str(item) for item in capabilities}):
+    if not isinstance(capabilities, list) or not REQUIRED_API_CAPABILITIES.issubset(
+        {str(item) for item in capabilities}
+    ):
         return "required endpoint-security capabilities are missing"
     configured_database = payload.get("database")
     try:
