@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from detection.rule_base import RuleBase
-from detection.rules.payload_utils import packet_text
+from detection.rules.payload_utils import has_inspectable_payload, packet_text
 from models import AlertRecord, PacketRecord
 
 
@@ -59,8 +59,10 @@ class WebAttackRule(RuleBase):
     def process(self, packet: PacketRecord) -> list[AlertRecord]:
         if packet.protocol not in {"HTTP", "HTTPS", "TCP"}:
             return []
-
-        text = packet_text(packet)
+        if not has_inspectable_payload(packet):
+            return []
+        if packet.protocol == "TCP" and not (packet.http_method or packet.http_host or packet.http_path):
+            return []
         matches = [name for name, pattern in self.REGEX_PATTERNS if pattern.search(text)]
         if not matches:
             return []
