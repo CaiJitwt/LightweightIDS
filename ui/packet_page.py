@@ -776,7 +776,7 @@ class PacketPage(QWidget):
             return str(path.parent)
         return ""
 
-    def shutdown(self, timeout_ms: int = 12_000) -> bool:
+    def shutdown(self, timeout_ms: int = 3_000) -> bool:
         workers: list[QThread] = []
         if self.import_worker and self.import_worker.isRunning():
             self.import_worker.requestInterruption()
