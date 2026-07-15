@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from contextlib import contextmanager
 from collections.abc import Iterator
 from pathlib import Path
@@ -8,21 +9,30 @@ from typing import Iterable
 
 from storage.migrations import DEFAULT_RULES, SCHEMA_SQL
 
+_POOL_SIZE = 4
+
 
 class Database:
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
         if not self.path.is_absolute():
             self.path = Path.cwd() / self.path
+        self._pool: list[sqlite3.Connection] = []
+        self._pool_lock = threading.Lock()
+        self._initialized = False
 
-    @contextmanager
-    def connect(self) -> Iterator[sqlite3.Connection]:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+    def _create_connection(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=10.0)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA busy_timeout = 10000")
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA synchronous = NORMAL")
+        return connection
+
+    @contextmanager
+    def connect(self) -> Iterator[sqlite3.Connection]:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        connection = self._acquire()
         try:
             yield connection
             connection.commit()
@@ -30,7 +40,30 @@ class Database:
             connection.rollback()
             raise
         finally:
-            connection.close()
+            self._release(connection)
+
+    def _acquire(self) -> sqlite3.Connection:
+        with self._pool_lock:
+            if self._pool:
+                return self._pool.pop()
+        return self._create_connection()
+
+    def _release(self, connection: sqlite3.Connection) -> None:
+        try:
+            connection.execute("ROLLBACK")
+        except Exception:
+            pass
+        with self._pool_lock:
+            if len(self._pool) < _POOL_SIZE:
+                self._pool.append(connection)
+            else:
+                connection.close()
+
+    def shutdown(self) -> None:
+        with self._pool_lock:
+            for connection in self._pool:
+                connection.close()
+            self._pool.clear()
 
     def initialize(self) -> None:
         with self.connect() as connection:
