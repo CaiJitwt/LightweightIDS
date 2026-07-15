@@ -19,18 +19,20 @@ from endpoint_security import EndpointPostureService, FileIntegrityService, Proc
 from modern_ui.capture_session import CaptureSessionService, default_capture_options, parse_capture_options
 from modern_ui.llm_guidance import LlmGuidanceError, LlmGuidanceService
 from modern_ui.pcap_import import PcapImportService
+from modern_ui.secret_store import WindowsDpapiSecretStore
 from modern_ui.security_event_monitor import SecurityEventMonitorService
 from models import RuleRecord
 from storage.database import Database
 from storage.repositories import AlertRepository, PacketRepository, RuleRepository, SecurityEventRepository, SettingsRepository
 
 
-LOCAL_API_VERSION = 3
+LOCAL_API_VERSION = 4
 LOCAL_API_CAPABILITIES = [
     "capture-v1",
     "endpoint-security-v1",
     "system-health-v1",
     "topology-v1",
+    "llm-guidance-v1",
 ]
 
 
@@ -57,6 +59,7 @@ class LocalApiServer(ThreadingHTTPServer):
             poll_seconds=self.settings.get_int("security_event_poll_seconds", 5),
         )
         self.llm_guidance = LlmGuidanceService()
+        self.secret_store = WindowsDpapiSecretStore()
         if self.settings.get_bool("security_event_monitor_enabled", False):
             try:
                 self.security_event_monitor.start()
@@ -265,7 +268,24 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/security/events/refresh":
                 self._send_json(self.server.security_event_monitor.refresh_once())
             elif parsed.path == "/api/llm/defense-guidance":
-                self._send_json(self.server.llm_guidance.generate(payload))
+                alert = payload.get("alert")
+                if not isinstance(alert, dict):
+                    raise LlmGuidanceError("alert must be a JSON object")
+                protected_key = self.server.settings.get("llm_api_key_protected")
+                if not protected_key:
+                    raise LlmGuidanceError("Save an API key in Settings before requesting guidance.")
+                self._send_json(
+                    self.server.llm_guidance.generate(
+                        {
+                            "settings": {
+                                "baseUrl": self.server.settings.get("llm_base_url", "https://api.openai.com/v1"),
+                                "apiKey": self.server.secret_store.unprotect(protected_key),
+                                "model": self.server.settings.get("llm_model", "gpt-4.1-mini"),
+                            },
+                            "alert": alert,
+                        }
+                    )
+                )
             else:
                 self._send_error(HTTPStatus.NOT_FOUND, "Endpoint not found.")
         except ValueError as exc:
@@ -304,6 +324,21 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             else:
                 self.server.security_event_monitor.stop()
             values["security_event_monitor_enabled"] = "true" if enabled else "false"
+        if "llmBaseUrl" in payload:
+            values["llm_base_url"] = _setting_text(payload, "llmBaseUrl", 1_000)
+        if "llmModel" in payload:
+            values["llm_model"] = _setting_text(payload, "llmModel", 200)
+        if "llmApiKey" in payload and payload.get("clearLlmApiKey") is True:
+            raise ValueError("llmApiKey and clearLlmApiKey cannot be used together")
+        if "llmApiKey" in payload:
+            api_key = _setting_text(payload, "llmApiKey", 1_000)
+            values["llm_api_key_protected"] = self.server.secret_store.protect(api_key)
+        if "clearLlmApiKey" in payload:
+            clear_key = payload["clearLlmApiKey"]
+            if not isinstance(clear_key, bool):
+                raise ValueError("clearLlmApiKey must be a boolean")
+            if clear_key:
+                values["llm_api_key_protected"] = ""
         self.server.settings.set_many(values)
 
     def _update_rule(self, rule_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -716,6 +751,9 @@ def _settings_payload(settings: SettingsRepository) -> dict[str, Any]:
         "minimumAlertSeverity": settings.get("minimum_alert_severity", "LOW").upper(),
         "securityEventMonitorEnabled": settings.get_bool("security_event_monitor_enabled", False),
         "securityEventPollSeconds": settings.get_int("security_event_poll_seconds", 5),
+        "llmBaseUrl": settings.get("llm_base_url", "https://api.openai.com/v1"),
+        "llmModel": settings.get("llm_model", "gpt-4.1-mini"),
+        "llmApiKeyConfigured": bool(settings.get("llm_api_key_protected")),
     }
 
 
@@ -777,6 +815,15 @@ def _setting_integer(payload: dict[str, Any], key: str) -> int:
         return int(payload[key])
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError(f"{key} must be an integer") from exc
+
+
+def _setting_text(payload: dict[str, Any], key: str, maximum: int) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{key} is required")
+    if len(value) > maximum:
+        raise ValueError(f"{key} is too long")
+    return value.strip()
 
 
 def _bool_setting(payload: dict[str, Any], key: str) -> str:

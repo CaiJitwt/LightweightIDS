@@ -70,7 +70,7 @@ describe("modern IDS frontend", () => {
     expect(await screen.findByRole("button", { name: "Start monitoring" })).toBeInTheDocument();
   });
 
-  it("defaults to the system theme and exposes session-only LLM settings", async () => {
+  it("defaults to the system theme and keeps the persisted LLM key masked", async () => {
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
       value: () => ({ matches: true, addEventListener: () => undefined, removeEventListener: () => undefined }),
@@ -80,7 +80,8 @@ describe("modern IDS frontend", () => {
     expect(document.querySelector(".app-shell")).toHaveAttribute("data-theme", "dark");
     fireEvent.click(within(screen.getByRole("navigation", { name: "Primary navigation" })).getByRole("button", { name: "Settings" }));
     expect(await screen.findByRole("heading", { name: "LLM defense guidance" })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Stored only for this browser session")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Enter API key")).toHaveAttribute("type", "password");
+    expect(screen.queryByTitle("Show API key")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^System$/ })).toHaveClass("selected");
   });
 

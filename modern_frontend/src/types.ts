@@ -70,8 +70,8 @@ export type ThemePreference = "system" | "light" | "dark";
 
 export interface LlmSettings {
   baseUrl: string;
-  apiKey: string;
   model: string;
+  apiKeyConfigured: boolean;
 }
 
 export interface SecurityCheck {
@@ -283,7 +283,15 @@ export interface RuntimeSettings {
   minimumAlertSeverity: Severity;
   securityEventMonitorEnabled: boolean;
   securityEventPollSeconds: number;
+  llmBaseUrl: string;
+  llmModel: string;
+  llmApiKeyConfigured: boolean;
 }
+
+export type RuntimeSettingsUpdate = Partial<RuntimeSettings> & {
+  llmApiKey?: string;
+  clearLlmApiKey?: boolean;
+};
 
 export interface RuleRecord {
   id: string;

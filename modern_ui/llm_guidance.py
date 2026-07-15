@@ -12,7 +12,7 @@ class LlmGuidanceError(RuntimeError):
 
 
 class LlmGuidanceService:
-    """Call a user-selected OpenAI-compatible endpoint without persisting its key."""
+    """Call a user-selected OpenAI-compatible endpoint with normalized alert metadata."""
 
     def generate(self, payload: dict[str, Any]) -> dict[str, str]:
         settings = payload.get("settings")
