@@ -79,7 +79,8 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(200, self._prefetch_host_data)
 
     def _prefetch_host_data(self) -> None:
-        self.host_explorer_page.service.list_hosts()
+        self.host_explorer_page._do_refresh()
+        self.host_explorer_page._loaded = True
 
     def _build_pages(self) -> None:
         if self.overlay_pet is None:
