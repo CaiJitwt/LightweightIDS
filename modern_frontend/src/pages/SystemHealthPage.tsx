@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { Activity, Cpu, Database, HardDrive, MemoryStick, Network, RefreshCw, Wifi, WifiOff } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Activity, Cpu, HardDrive, MemoryStick, Network, RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { idsApi } from "../api/idsApi";
 
-interface HealthSnapshot {
+import { idsApi } from "../api/idsApi";
+import type { SystemHealthSnapshot } from "../types";
+
+interface HealthPoint {
   time: string;
   cpu: number;
   memory: number;
@@ -11,167 +13,143 @@ interface HealthSnapshot {
   alerts: number;
 }
 
-function generateHealthData(): HealthSnapshot[] {
-  const points: HealthSnapshot[] = [];
-  let cpu = 8 + Math.random() * 12;
-  let mem = 140;
-  for (let h = 0; h < 24; h++) {
-    cpu = Math.max(2, Math.min(45, cpu + (Math.random() - 0.48) * 8));
-    mem = Math.max(60, Math.min(360, mem + (Math.random() - 0.5) * 12));
-    points.push({
-      time: `${String(h).padStart(2, "0")}:00`,
-      cpu: Math.round(cpu * 10) / 10,
-      memory: Math.round(mem),
-      packets: Math.round(800 + Math.random() * 2200),
-      alerts: Math.round(Math.random() * 8),
-    });
-  }
-  return points;
-}
+export function SystemHealthPage({ refreshVersion }: { refreshVersion: number }) {
+  const [snapshot, setSnapshot] = useState<SystemHealthSnapshot | null>(null);
+  const [history, setHistory] = useState<HealthPoint[]>([]);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-const healthData = generateHealthData();
-
-export function SystemHealthPage() {
-  const [connected, setConnected] = useState<boolean | null>(null);
-  const [apiVersion, setApiVersion] = useState("");
-  const [uptime, setUptime] = useState("");
-
-  useEffect(() => {
-    idsApi.settings().then(() => { setConnected(true); }).catch(() => setConnected(false));
-    const tick = () => {
-      const s = Math.floor((Date.now() - Date.now() + 0) / 1000) + 38400;
-      const h = Math.floor(s / 3600);
-      const m = Math.floor((s % 3600) / 60);
-      setUptime(`${h}h ${m}m`);
-      setApiVersion("2.4.1");
-    };
-    tick();
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const next = await idsApi.systemHealth();
+      setSnapshot(next);
+      setError("");
+      const memoryPercent = next.system.memoryTotalBytes
+        ? next.system.memoryUsedBytes * 100 / next.system.memoryTotalBytes
+        : 0;
+      setHistory((current) => [...current, {
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+        cpu: next.system.cpuPercent,
+        memory: Math.round(memoryPercent * 10) / 10,
+        packets: next.engine.packetsPerSecond,
+        alerts: next.engine.sessionAlerts,
+      }].slice(-60));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Local system health is unavailable.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const latest = healthData[healthData.length - 1];
-  const gaugeColor = (val: number, warn: number, crit: number) => (val >= crit ? "#c2413b" : val >= warn ? "#d97706" : "#2f8f66");
+  useEffect(() => {
+    void load();
+    const timer = window.setInterval(() => void load(), 5000);
+    return () => window.clearInterval(timer);
+  }, [load, refreshVersion]);
+
+  const detectors = useMemo(() => snapshot
+    ? [...snapshot.detectors].sort((left, right) => Number(right.enabled) - Number(left.enabled) || right.hits - left.hits)
+    : [], [snapshot]);
+  const memoryPercent = snapshot?.system.memoryTotalBytes
+    ? snapshot.system.memoryUsedBytes * 100 / snapshot.system.memoryTotalBytes
+    : 0;
+  const diskPercent = snapshot?.system.diskTotalBytes
+    ? snapshot.system.diskUsedBytes * 100 / snapshot.system.diskTotalBytes
+    : 0;
 
   return (
-    <div className="page-stack">
+    <div className="page-stack" data-refresh-version={refreshVersion}>
       <div className="health-status-bar">
-        <span className={`health-connection ${connected === true ? "health-online" : connected === false ? "health-offline" : "health-checking"}`}>
-          {connected === true ? <Wifi size={14} /> : connected === false ? <WifiOff size={14} /> : <Activity size={14} />}
-          {connected === true ? "Engine connected" : connected === false ? "Engine offline" : "Checking connection…"}
+        <span className={`health-connection ${snapshot ? "health-online" : error ? "health-offline" : "health-checking"}`}>
+          {snapshot ? <Wifi size={14} /> : error ? <WifiOff size={14} /> : <Activity size={14} />}
+          {snapshot ? `Local host: ${snapshot.system.hostname}` : error ? "Local health API unavailable" : "Reading local host"}
         </span>
-        <span className="health-meta"><strong>API</strong> {apiVersion || "—"}</span>
-        <span className="health-meta"><strong>Uptime</strong> {uptime}</span>
-        <button className="icon-button" type="button" title="Refresh health data">
-          <RefreshCw size={15} />
-        </button>
+        <span className="health-meta"><strong>API</strong> {snapshot ? `v${snapshot.engine.apiVersion}` : "Unknown"}</span>
+        <span className="health-meta"><strong>Uptime</strong> {snapshot ? formatDuration(snapshot.engine.uptimeSeconds) : "Unknown"}</span>
+        <button className="icon-button" type="button" title="Refresh local health data" disabled={loading} onClick={() => void load()}><RefreshCw className={loading ? "spin" : ""} size={15} /></button>
       </div>
 
-      <section className="metric-strip">
-        <GaugeMetric icon={<Cpu size={18} />} label="CPU" value={`${latest.cpu.toFixed(1)}%`} meta={`Peak ${Math.max(...healthData.map((d) => d.cpu)).toFixed(1)}%`} color={gaugeColor(latest.cpu, 30, 60)} />
-        <GaugeMetric icon={<MemoryStick size={18} />} label="Memory" value={`${latest.memory} MB`} meta={`Peak ${Math.max(...healthData.map((d) => d.memory))} MB`} color={gaugeColor(latest.memory, 280, 420)} />
-        <GaugeMetric icon={<HardDrive size={18} />} label="Disk" value="2.8 GB" meta="12.4 GB free" color="#2f8f66" />
-        <GaugeMetric icon={<Network size={18} />} label="Bandwidth" value="1.2 Mbps" meta="Ethernet 3 · 1000 Mbps" color="#2878d0" />
-      </section>
+      {error ? <p className="capture-notice error">{error}. Start this frontend with modern_main.py and stop any older API process using port 8787.</p> : null}
 
-      <section className="analysis-grid">
-        <div className="section-panel">
-          <header className="section-heading"><div><h2>CPU & Memory</h2><p>Last 24 hours</p></div></header>
-          <div className="chart-area">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={healthData} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
-                <XAxis dataKey="time" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval={3} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={{ borderRadius: 6, borderColor: "var(--border)" }} />
-                <Area type="monotone" dataKey="cpu" stroke="#2878d0" fill="#dcecff" strokeWidth={2} isAnimationActive={false} name="CPU %" />
-                <Area type="monotone" dataKey="memory" stroke="#d97706" fill="#feebc8" strokeWidth={2} isAnimationActive={false} name="Memory MB" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-        <div className="section-panel">
-          <header className="section-heading"><div><h2>Packet throughput</h2><p>Packets processed per hour</p></div></header>
-          <div className="chart-area">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={healthData} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
-                <XAxis dataKey="time" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval={3} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={{ borderRadius: 6, borderColor: "var(--border)" }} />
-                <Area type="monotone" dataKey="packets" stroke="#2f8f66" fill="#d8f3e6" strokeWidth={2} isAnimationActive={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </section>
+      {snapshot ? <>
+        <section className="metric-strip">
+          <GaugeMetric icon={<Cpu size={18} />} label="CPU" value={`${snapshot.system.cpuPercent.toFixed(1)}%`} meta={`${snapshot.system.logicalProcessors} logical processors`} color={gaugeColor(snapshot.system.cpuPercent, 70, 90)} />
+          <GaugeMetric icon={<MemoryStick size={18} />} label="Memory" value={`${memoryPercent.toFixed(1)}%`} meta={`${formatBytes(snapshot.system.memoryUsedBytes)} of ${formatBytes(snapshot.system.memoryTotalBytes)}`} color={gaugeColor(memoryPercent, 75, 90)} />
+          <GaugeMetric icon={<HardDrive size={18} />} label="Disk" value={`${diskPercent.toFixed(1)}%`} meta={`${formatBytes(snapshot.system.diskFreeBytes)} free`} color={gaugeColor(diskPercent, 80, 92)} />
+          <GaugeMetric icon={<Network size={18} />} label="Packet rate" value={`${snapshot.engine.packetsPerSecond.toFixed(1)}/s`} meta={`${titleCase(snapshot.engine.captureState)} - ${snapshot.engine.captureInterface}`} color={snapshot.engine.captureState === "running" ? "#2f8f66" : "#2878d0"} />
+        </section>
 
-      <section className="health-details">
-        <div className="section-panel">
-          <header className="section-heading"><div><h2>Engine Diagnostics</h2><p>Runtime metrics</p></div></header>
-          <div className="health-table-wrap">
-            <table className="data-table">
-              <tbody>
-                <HealthRow label="Detection rules loaded" value="34" />
-                <HealthRow label="Rules evaluated (24h)" value="192,810" />
-                <HealthRow label="Alerts generated (24h)" value="47" />
-                <HealthRow label="Packets parsed (24h)" value="28,491" />
-                <HealthRow label="Average detection latency" value="3.2 ms" />
-                <HealthRow label="Database size" value="18.4 MB" />
-                <HealthRow label="Last rule evaluation" value="< 1 second ago" />
-                <HealthRow label="Packet buffer usage" value="14%" status="ok" />
-                <HealthRow label="Alert queue depth" value="29" status="warn" />
-              </tbody>
-            </table>
+        <section className="analysis-grid">
+          <HealthChart title="CPU and memory" meta="Live samples from this browser session" data={history} keys={[{ key: "cpu", name: "CPU %", color: "#2878d0", fill: "#dcecff" }, { key: "memory", name: "Memory %", color: "#d97706", fill: "#feebc8" }]} />
+          <HealthChart title="Packet throughput" meta="Current capture session" data={history} keys={[{ key: "packets", name: "Packets/s", color: "#2f8f66", fill: "#d8f3e6" }]} />
+        </section>
+
+        <section className="health-details">
+          <div className="section-panel">
+            <header className="section-heading"><div><h2>Engine diagnostics</h2><p>{snapshot.system.platform}</p></div></header>
+            <div className="health-table-wrap">
+              <table className="data-table"><tbody>
+                <HealthRow label="Detection rules" value={`${snapshot.engine.activeRules} active / ${snapshot.engine.rulesLoaded} loaded`} />
+                <HealthRow label="Packets stored" value={snapshot.engine.packetsStored.toLocaleString()} />
+                <HealthRow label="Alerts stored" value={snapshot.engine.alertsStored.toLocaleString()} />
+                <HealthRow label="Session packets" value={snapshot.engine.sessionPackets.toLocaleString()} />
+                <HealthRow label="Session alerts" value={snapshot.engine.sessionAlerts.toLocaleString()} />
+                <HealthRow label="Capture state" value={titleCase(snapshot.engine.captureState)} status={snapshot.engine.captureState === "running" ? "ok" : undefined} />
+                <HealthRow label="Database size" value={formatBytes(snapshot.engine.databaseBytes)} />
+              </tbody></table>
+            </div>
           </div>
-        </div>
-        <div className="section-panel">
-          <header className="section-heading"><div><h2>Active Detectors</h2><p>Detection module status</p></div></header>
-          <div className="detector-list">
-            {[
-              { name: "Port Scan Detection", active: true, hits: 284 },
-              { name: "DNS Anomaly Detection", active: true, hits: 91 },
-              { name: "TLS Fingerprint Analysis", active: true, hits: 56 },
-              { name: "Lateral Movement Detection", active: true, hits: 12 },
-              { name: "SMB Exploit Monitor", active: true, hits: 3 },
-              { name: "ARP Spoofing Detection", active: false, hits: 0 },
-              { name: "HTTP Payload Analysis", active: false, hits: 0 },
-            ].map((detector) => (
-              <div key={detector.name} className="detector-row">
-                <span className={`live-dot ${detector.active ? "" : "paused"}`} />
-                <span className="detector-name">
-                  <strong>{detector.name}</strong>
-                  <small>{detector.active ? "Active" : "Disabled"}</small>
-                </span>
+          <div className="section-panel">
+            <header className="section-heading"><div><h2>Active detectors</h2><p>Configured rules and persisted alert hits</p></div></header>
+            <div className="detector-list">
+              {detectors.slice(0, 14).map((detector) => <div key={detector.id} className="detector-row">
+                <span className={`live-dot ${detector.enabled ? "" : "paused"}`} />
+                <span className="detector-name"><strong>{detector.name}</strong><small>{detector.enabled ? `Active - ${detector.severity}` : "Disabled"}</small></span>
                 <span className="detector-hits">{detector.hits.toLocaleString()} hits</span>
-              </div>
-            ))}
+              </div>)}
+              {!detectors.length ? <p className="empty-state">No rule records are available.</p> : null}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </> : !error ? <p className="empty-state">Reading current host and engine status...</p> : null}
     </div>
   );
+}
+
+function HealthChart({ title, meta, data, keys }: { title: string; meta: string; data: HealthPoint[]; keys: { key: keyof HealthPoint; name: string; color: string; fill: string }[] }) {
+  return <div className="section-panel"><header className="section-heading"><div><h2>{title}</h2><p>{meta}</p></div></header><div className="chart-area">
+    {data.length ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" /><XAxis dataKey="time" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} minTickGap={28} /><YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} /><Tooltip contentStyle={{ borderRadius: 6, borderColor: "var(--border)" }} />{keys.map((item) => <Area key={item.key} type="monotone" dataKey={item.key} stroke={item.color} fill={item.fill} strokeWidth={2} isAnimationActive={false} name={item.name} />)}</AreaChart></ResponsiveContainer> : <p className="empty-state">Waiting for the first local sample.</p>}
+  </div></div>;
 }
 
 function GaugeMetric({ icon, label, value, meta, color }: { icon: React.ReactNode; label: string; value: string; meta: string; color: string }) {
-  return (
-    <div className="metric" style={{ borderLeftColor: color }}>
-      <div className="metric-icon">{icon}</div>
-      <div><span>{label}</span><strong>{value}</strong><small>{meta}</small></div>
-    </div>
-  );
+  return <div className="metric" style={{ borderLeftColor: color }}><div className="metric-icon">{icon}</div><div><span>{label}</span><strong>{value}</strong><small>{meta}</small></div></div>;
 }
 
-function HealthRow({ label, value, status }: { label: string; value: string; status?: "ok" | "warn" }) {
-  return (
-    <tr>
-      <td style={{ color: "var(--muted)" }}>{label}</td>
-      <td style={{ textAlign: "right", fontWeight: 600 }}>
-        {value}
-        {status && (
-          <span style={{ marginLeft: 6, color: status === "ok" ? "#2f8f66" : "#d97706" }}>
-            {status === "ok" ? "●" : "●"}
-          </span>
-        )}
-      </td>
-    </tr>
-  );
+function HealthRow({ label, value, status }: { label: string; value: string; status?: "ok" }) {
+  return <tr><td style={{ color: "var(--muted)" }}>{label}</td><td style={{ textAlign: "right", fontWeight: 600 }}>{value}{status ? <span style={{ marginLeft: 6, color: "#2f8f66" }}>Active</span> : null}</td></tr>;
+}
+
+function gaugeColor(value: number, warning: number, critical: number) {
+  return value >= critical ? "#c2413b" : value >= warning ? "#d97706" : "#2f8f66";
+}
+
+function formatBytes(value: number) {
+  if (value < 1024) return `${value} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let size = value / 1024;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) { size /= 1024; unit += 1; }
+  return `${size.toFixed(size >= 10 ? 1 : 2)} ${units[unit]}`;
+}
+
+function formatDuration(seconds: number) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return `${hours}h ${minutes}m`;
+}
+
+function titleCase(value: string) {
+  return value ? `${value[0].toUpperCase()}${value.slice(1)}` : "Unknown";
 }

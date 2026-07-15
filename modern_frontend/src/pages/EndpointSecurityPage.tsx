@@ -6,7 +6,7 @@ import type { IntegrityResult, IntegrityStatus, ProcessRecord, SecurityCheck } f
 
 const emptyIntegrity: IntegrityStatus = { available: false, paths: [], fileCount: 0, createdAt: "" };
 
-export function EndpointSecurityPage() {
+export function EndpointSecurityPage({ refreshVersion }: { refreshVersion: number }) {
   const [checks, setChecks] = useState<SecurityCheck[]>([]);
   const [processes, setProcesses] = useState<ProcessRecord[]>([]);
   const [integrity, setIntegrity] = useState<IntegrityStatus>(emptyIntegrity);
@@ -18,20 +18,24 @@ export function EndpointSecurityPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setNotice("");
-    try {
-      const [posture, processResponse, integrityStatus] = await Promise.all([idsApi.posture(), idsApi.processes(), idsApi.integrityStatus()]);
-      setChecks(posture.checks);
-      setProcesses(processResponse.processes);
-      setIntegrity(integrityStatus);
-      if (integrityStatus.paths.length) setPaths(integrityStatus.paths.join("\n"));
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "The local endpoint-security service is unavailable.");
-    } finally {
-      setLoading(false);
+    const [posture, processResponse, integrityStatus] = await Promise.allSettled([idsApi.posture(), idsApi.processes(), idsApi.integrityStatus()]);
+    const failures: string[] = [];
+    if (posture.status === "fulfilled") setChecks(posture.value.checks);
+    else { setChecks([]); failures.push(`Posture: ${errorMessage(posture.reason)}`); }
+    if (processResponse.status === "fulfilled") setProcesses(processResponse.value.processes);
+    else { setProcesses([]); failures.push(`Processes: ${errorMessage(processResponse.reason)}`); }
+    if (integrityStatus.status === "fulfilled") {
+      setIntegrity(integrityStatus.value);
+      if (integrityStatus.value.paths.length) setPaths(integrityStatus.value.paths.join("\n"));
+    } else {
+      setIntegrity(emptyIntegrity);
+      failures.push(`File integrity: ${errorMessage(integrityStatus.reason)}`);
     }
+    setNotice(failures.join(" "));
+    setLoading(false);
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); }, [load, refreshVersion]);
 
   const createBaseline = async () => {
     const selectedPaths = paths.split(/[\n;]/).map((path) => path.trim()).filter(Boolean);
@@ -61,7 +65,7 @@ export function EndpointSecurityPage() {
   };
 
   const passCount = checks.filter((check) => check.state === "pass").length;
-  return <div className="page-stack endpoint-workspace">
+  return <div className="page-stack endpoint-workspace" data-refresh-version={refreshVersion}>
     <section className="endpoint-toolbar"><div><ShieldCheck size={18} /><span><strong>Endpoint posture</strong><small>Read-only user-mode checks. No driver or system policy changes.</small></span></div><button className="icon-text-button" type="button" onClick={() => void load()} disabled={loading}><RefreshCw className={loading ? "spin" : ""} size={16} />Refresh checks</button></section>
     {notice && <p className="capture-notice error"><TriangleAlert size={15} />{notice}</p>}
     <section className="posture-grid">{checks.length ? checks.map((check) => <article className={`posture-card posture-${check.state}`} key={check.identifier}><header><span className={`posture-dot ${check.state}`} /><strong>{check.title}</strong><small>{check.value}</small></header><p>{check.detail}</p><footer>{check.recommendation}</footer></article>) : <div className="empty-security">Open the local API to collect Windows endpoint checks.</div>}</section>
@@ -71,4 +75,8 @@ export function EndpointSecurityPage() {
       <article className="process-panel"><header className="section-heading"><div><h2>Process inventory</h2><p>Read-only local process metadata</p></div></header><div className="process-list">{processes.slice(0, 12).map((process) => <div key={process.pid}><span><strong>{process.name}</strong><small>PID {process.pid}{process.memory ? ` - ${process.memory}` : ""}</small></span><code>{process.path || "Path unavailable"}</code></div>)}{!processes.length && <p>No process inventory is available.</p>}</div></article>
     </section>
   </div>;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Local collection unavailable.";
 }

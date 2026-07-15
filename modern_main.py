@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 import shutil
@@ -13,7 +14,7 @@ from urllib.request import urlopen
 import webbrowser
 
 from app.constants import DEFAULT_DATABASE_PATH
-from modern_ui.local_api import LocalApiServer
+from modern_ui.local_api import LOCAL_API_VERSION, LocalApiServer
 from storage.database import Database
 
 
@@ -35,7 +36,14 @@ def main(argv: list[str] | None = None) -> int:
     frontend_process: subprocess.Popen[bytes] | None = None
 
     try:
-        if _http_ready(f"{API_URL}/api/health", b"Lightweight IDS local API"):
+        api_health = _read_json(f"{API_URL}/api/health")
+        if api_health is not None:
+            compatibility_error = _api_compatibility_error(api_health, args.database)
+            if compatibility_error:
+                raise RuntimeError(
+                    f"Port 8787 is already serving an incompatible local API: {compatibility_error} "
+                    "Stop the older modern_main.py or modern_ui.local_api process, then start again."
+                )
             print(f"Reusing local API at {API_URL}")
         else:
             database = Database(args.database)
@@ -120,6 +128,34 @@ def _http_ready(url: str, marker: bytes) -> bool:
             return response.status == 200 and marker in response.read(64 * 1024)
     except (OSError, URLError):
         return False
+
+
+def _read_json(url: str) -> dict[str, object] | None:
+    try:
+        with urlopen(url, timeout=0.8) as response:
+            payload = json.loads(response.read(64 * 1024))
+        return payload if response.status == 200 and isinstance(payload, dict) else None
+    except (OSError, URLError, json.JSONDecodeError):
+        return None
+
+
+def _api_compatibility_error(payload: dict[str, object], database_path: Path) -> str:
+    if payload.get("service") != "Lightweight IDS local API":
+        return "the service identity does not match"
+    if payload.get("apiVersion") != LOCAL_API_VERSION:
+        return f"expected API v{LOCAL_API_VERSION}, received {payload.get('apiVersion', 'unknown')}"
+    capabilities = payload.get("capabilities")
+    required = {"endpoint-security-v1", "system-health-v1", "topology-v1"}
+    if not isinstance(capabilities, list) or not required.issubset({str(item) for item in capabilities}):
+        return "required endpoint-security capabilities are missing"
+    configured_database = payload.get("database")
+    try:
+        running_database = Path(str(configured_database)).resolve()
+    except (OSError, TypeError, ValueError):
+        return "the API did not report a valid database path"
+    if running_database != database_path.resolve():
+        return f"it uses {running_database}, not {database_path.resolve()}"
+    return ""
 
 
 def _stop_process(process: subprocess.Popen[bytes] | None) -> None:

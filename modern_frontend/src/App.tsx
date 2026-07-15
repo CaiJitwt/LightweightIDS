@@ -175,7 +175,7 @@ export default function App() {
         </header>
         <div className="page-content">
           <Suspense fallback={<div className="page-loading">Loading view...</div>}>
-            {page === "dashboard" && <DashboardPage refreshVersion={refreshVersion} onOpenAlertCountChange={setOpenAlertCount} onOpenAlerts={() => setPage("alerts")} onOpenHost={(ip) => { setSelectedHostIp(ip); setPage("hosts"); }} />}
+            {page === "dashboard" && <DashboardPage refreshVersion={refreshVersion} onStatisticsReset={() => { setRefreshVersion((value) => value + 1); setAlertBadgeRefresh((value) => value + 1); }} onOpenAlertCountChange={setOpenAlertCount} onOpenAlerts={() => setPage("alerts")} onOpenHost={(ip) => { setSelectedHostIp(ip); setPage("hosts"); }} />}
             {page === "traffic" && <TrafficPage />}
             {page === "hosts" && <HostsPage initialHostIp={selectedHostIp} refreshVersion={refreshVersion} />}
             {page === "alerts" && <AlertsPage llmSettings={llmSettings} refreshVersion={refreshVersion} initialAlertId={selectedAlertId} onAlertsChanged={() => setAlertBadgeRefresh((value) => value + 1)} />}
@@ -184,10 +184,10 @@ export default function App() {
             {page === "rules" && <RulesPage />}
             {page === "reports" && <ReportsPage />}
             {page === "timeline" && <EventTimelinePage />}
-            {page === "topology" && <NetworkTopologyPage />}
+            {page === "topology" && <NetworkTopologyPage refreshVersion={refreshVersion} />}
             {page === "security-events" && <SecurityEventsPage onOpenAlert={(alertId) => { setSelectedAlertId(alertId); setPage("alerts"); }} />}
-            {page === "health" && <SystemHealthPage />}
-            {page === "endpoint" && <EndpointSecurityPage />}
+            {page === "health" && <SystemHealthPage refreshVersion={refreshVersion} />}
+            {page === "endpoint" && <EndpointSecurityPage refreshVersion={refreshVersion} />}
             {page === "settings" && <SettingsPage themePreference={themePreference} onThemePreferenceChange={setThemePreference} fontScale={fontScale} onFontScaleChange={setFontScale} llmSettings={llmSettings} onLlmSettingsChange={setLlmSettings} />}
             {page === "personalization" && <PersonalizationPage state={personalization} onChange={setPersonalization} />}
             {page === "help" && <HelpPage onNavigate={setPage} language={helpLanguage} onLanguageChange={setHelpLanguage} />}
