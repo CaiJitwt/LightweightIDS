@@ -41,7 +41,7 @@ class LocalApiServer(ThreadingHTTPServer):
         self.rate_limits: dict[str, list[float]] = {}
         self.rate_limit_max = 30
         self.rate_limit_window = 1.0
-        self.upload_max_bytes = 50 * 1024 * 1024
+        self.upload_max_bytes = 100 * 1024 * 1024
         self.capture_service = CaptureSessionService(database)
         self.database = database
         self.started_at = monotonic()
