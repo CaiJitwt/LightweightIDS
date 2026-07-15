@@ -36,7 +36,6 @@ class AttackChainAnalyzer:
         "ABNORMAL_OUTBOUND": "c2",
         "TLS_FINGERPRINT": "c2",
         "LATERAL_MOVEMENT": "lateral_movement",
-        "ML_FLOW_ANOMALY": "c2",
     }
     STAGE_BY_TYPE = {
         "C2_HEARTBEAT_SUSPECTED": "c2",
@@ -99,8 +98,6 @@ class AttackChainAnalyzer:
         return stages
 
     def _stage_for(self, alert: AlertRecord) -> str | None:
-        if alert.rule_id == "ML_FLOW_ANOMALY":
-            return self.STAGE_BY_RULE[alert.rule_id]
         return self.STAGE_BY_TYPE.get(alert.alert_type) or self.STAGE_BY_RULE.get(alert.rule_id)
 
     def _risk_score(self, stages: list[str], alerts: list[AlertRecord]) -> int:
