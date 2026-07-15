@@ -60,6 +60,19 @@ def test_local_api_serves_status_and_filter_validation(tmp_path):
     host, port = server.server_address
     base = f"http://{host}:{port}"
     try:
+        with urlopen(f"{base}/api/health", timeout=3) as response:
+            health = json.loads(response.read())
+        assert health["apiVersion"] >= 3
+        assert "endpoint-security-v1" in health["capabilities"]
+        assert health["database"] == str(database.path.resolve())
+
+        with urlopen(f"{base}/api/system/health", timeout=3) as response:
+            system_health = json.loads(response.read())
+        assert system_health["system"]["hostname"]
+        assert system_health["system"]["logicalProcessors"] >= 1
+        assert system_health["engine"]["rulesLoaded"] > 0
+        assert system_health["detectors"]
+
         with urlopen(f"{base}/api/capture/status", timeout=3) as response:
             assert json.loads(response.read())["state"] == "stopped"
         request = Request(
@@ -174,7 +187,13 @@ def test_local_api_updates_rules_and_resets_statistics(tmp_path):
     alerts = AlertRepository(database)
     rules = RuleRepository(database)
     security_events = SecurityEventRepository(database)
-    packets.add(PacketRecord(timestamp="2026-07-14 01:00:00.000", src_ip="10.0.0.2", dst_ip="10.0.0.3", protocol="TCP", length=60))
+    packets.add_many(
+        [
+            PacketRecord(timestamp="2026-07-14 01:00:00.000", src_ip="10.0.0.2", dst_ip="10.0.0.3", protocol="TCP", length=60),
+            PacketRecord(timestamp="2026-07-14 01:00:01.000", src_ip="10.0.0.2", dst_ip="10.0.0.3", protocol="TCP", length=100),
+            PacketRecord(timestamp="2026-07-14 01:00:02.000", src_ip="10.0.0.2", dst_ip="8.8.8.8", protocol="DNS", length=80),
+        ]
+    )
     alerts.add(AlertRecord(timestamp="2026-07-14 01:00:00.000", rule_id="HOST_SCAN", rule_name="Host scan", alert_type="RECONNAISSANCE", severity="HIGH"))
     security_events.add_many(
         [SecurityEventRecord(timestamp="2026-07-14T01:00:00+00:00", channel="System", event_id=7045, record_id=88)]
@@ -216,6 +235,16 @@ def test_local_api_updates_rules_and_resets_statistics(tmp_path):
         assert runtime_rule.threshold == 17
         assert runtime_rule.time_window == 45
 
+        with urlopen(f"{base}/api/topology", timeout=3) as response:
+            topology = json.loads(response.read())
+        assert {node["ip"] for node in topology["nodes"]} == {"10.0.0.2", "10.0.0.3", "8.8.8.8"}
+        assert next(node for node in topology["nodes"] if node["ip"] == "8.8.8.8")["kind"] == "external"
+        tcp_edge = next(edge for edge in topology["edges"] if edge["protocol"] == "TCP")
+        assert tcp_edge["source"] == "10.0.0.2"
+        assert tcp_edge["target"] == "10.0.0.3"
+        assert tcp_edge["packets"] == 2
+        assert tcp_edge["bytes"] == 160
+
         reset_request = Request(f"{base}/api/statistics/reset", data=b"{}", headers={"Content-Type": "application/json"}, method="POST")
         with urlopen(reset_request, timeout=3) as response:
             reset_payload = json.loads(response.read())
@@ -228,6 +257,10 @@ def test_local_api_updates_rules_and_resets_statistics(tmp_path):
         assert alerts.count() == 0
         assert security_events.count() == 0
         assert security_events.cursors()["System"] == 88
+
+        with urlopen(f"{base}/api/topology", timeout=3) as response:
+            reset_topology = json.loads(response.read())
+        assert reset_topology == {"nodes": [], "edges": []}
 
         with urlopen(f"{base}/api/pcap/status", timeout=3) as response:
             pcap_status = json.loads(response.read())
@@ -247,6 +280,37 @@ def test_local_api_updates_rules_and_resets_statistics(tmp_path):
         live_records = server.capture_service.packets_since(0)["records"]
         assert live_records[0]["sequence"] == 1
         assert live_records[0]["id"] == 1
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+
+
+def test_local_api_topology_uses_unsaved_live_capture_window(tmp_path):
+    database = Database(tmp_path / "ids.db")
+    database.initialize()
+    server = LocalApiServer(("127.0.0.1", 0), database)
+    server.capture_service._options = CaptureStartOptions(save_packets=False)
+    server.capture_service._append_packet(
+        PacketRecord(
+            timestamp="2026-07-14 03:00:00.000",
+            src_ip="192.168.1.10",
+            dst_ip="1.1.1.1",
+            protocol="DNS",
+            length=90,
+        )
+    )
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = server.server_address
+    try:
+        with urlopen(f"http://{host}:{port}/api/topology", timeout=3) as response:
+            topology = json.loads(response.read())
+        assert PacketRepository(database).count() == 0
+        assert {node["ip"] for node in topology["nodes"]} == {"192.168.1.10", "1.1.1.1"}
+        assert topology["edges"][0]["protocol"] == "DNS"
+        assert topology["edges"][0]["packets"] == 1
+        assert next(node for node in topology["nodes"] if node["ip"] == "192.168.1.10")["packets"] == 1
     finally:
         server.shutdown()
         server.server_close()

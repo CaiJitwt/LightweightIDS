@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from endpoint_security.posture import EndpointPostureService
+import json
+from types import SimpleNamespace
+
+from endpoint_security.posture import EndpointPostureService, ProcessInventoryService
 
 
 def test_endpoint_posture_is_explicitly_unavailable_off_windows():
@@ -24,3 +27,15 @@ def test_endpoint_posture_normalizes_successful_windows_checks(monkeypatch):
     monkeypatch.setattr(service, "_powershell_json", fake_powershell)
     checks = service.collect()
     assert {check["state"] for check in checks} == {"pass"}
+
+
+def test_process_inventory_uses_non_admin_powershell_metadata(monkeypatch):
+    payload = [{"Id": 42, "ProcessName": "python", "Path": "C:\\Python\\python.exe", "WorkingSet64": 2_097_152}]
+
+    def fake_run(command, **_kwargs):
+        assert command[0] == "powershell"
+        return SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr="")
+
+    monkeypatch.setattr("endpoint_security.posture.subprocess.run", fake_run)
+    records = ProcessInventoryService(is_windows=True).list_processes(10)
+    assert records == [{"pid": 42, "name": "python", "memory": "2.0 MB", "path": "C:\\Python\\python.exe"}]

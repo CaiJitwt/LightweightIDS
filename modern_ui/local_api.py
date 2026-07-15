@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
+import os
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from time import monotonic
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 from uuid import uuid4
@@ -12,7 +15,7 @@ from uuid import uuid4
 from app.constants import DEFAULT_DATABASE_PATH
 from detection.analysis.alert_trend import AlertTrendAnalyzer
 from detection.analysis.host_profile import HostProfileService
-from endpoint_security import EndpointPostureService, FileIntegrityService, ProcessInventoryService
+from endpoint_security import EndpointPostureService, FileIntegrityService, ProcessInventoryService, RuntimeHealthService
 from modern_ui.capture_session import CaptureSessionService, default_capture_options, parse_capture_options
 from modern_ui.llm_guidance import LlmGuidanceError, LlmGuidanceService
 from modern_ui.pcap_import import PcapImportService
@@ -22,11 +25,21 @@ from storage.database import Database
 from storage.repositories import AlertRepository, PacketRepository, RuleRepository, SecurityEventRepository, SettingsRepository
 
 
+LOCAL_API_VERSION = 3
+LOCAL_API_CAPABILITIES = [
+    "capture-v1",
+    "endpoint-security-v1",
+    "system-health-v1",
+    "topology-v1",
+]
+
+
 class LocalApiServer(ThreadingHTTPServer):
     def __init__(self, address: tuple[str, int], database: Database) -> None:
         super().__init__(address, LocalApiHandler)
         self.capture_service = CaptureSessionService(database)
         self.database = database
+        self.started_at = monotonic()
         self.alerts = AlertRepository(database)
         self.packets = PacketRepository(database)
         self.rules = RuleRepository(database)
@@ -37,6 +50,7 @@ class LocalApiServer(ThreadingHTTPServer):
         self.posture_service = EndpointPostureService()
         self.process_inventory = ProcessInventoryService()
         self.file_integrity = FileIntegrityService(database.path.parent / "endpoint_security")
+        self.runtime_health = RuntimeHealthService(database.path.parent)
         self.security_events = SecurityEventRepository(database)
         self.security_event_monitor = SecurityEventMonitorService(
             database,
@@ -69,7 +83,16 @@ class LocalApiHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         try:
             if parsed.path == "/api/health":
-                self._send_json({"ok": True, "service": "Lightweight IDS local API"})
+                self._send_json(
+                    {
+                        "ok": True,
+                        "service": "Lightweight IDS local API",
+                        "apiVersion": LOCAL_API_VERSION,
+                        "capabilities": LOCAL_API_CAPABILITIES,
+                        "database": str(self.server.database.path.resolve()),
+                        "pid": os.getpid(),
+                    }
+                )
             elif parsed.path == "/api/settings":
                 self._send_json(_settings_payload(self.server.settings))
             elif parsed.path == "/api/rules":
@@ -82,6 +105,8 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 self._send_json(self.server.pcap_import.status())
             elif parsed.path == "/api/dashboard":
                 self._send_json(self._dashboard_payload())
+            elif parsed.path == "/api/topology":
+                self._send_json(self._topology_payload())
             elif parsed.path == "/api/packets":
                 query = parse_qs(parsed.query)
                 self._send_json(
@@ -154,6 +179,8 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 self._send_json({"processes": self.server.process_inventory.list_processes(_positive_int(query.get("limit", ["200"])[0], 200))})
             elif parsed.path == "/api/security/integrity/status":
                 self._send_json(self.server.file_integrity.status())
+            elif parsed.path == "/api/system/health":
+                self._send_json(self._system_health_payload())
             elif parsed.path == "/api/security/events/status":
                 self._send_json(self.server.security_event_monitor.status())
             elif parsed.path == "/api/security/events":
@@ -362,6 +389,96 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             "recentAlerts": [_alert_payload(alert) for alert in recent_alerts[:4]],
         }
 
+    def _topology_payload(self) -> dict[str, Any]:
+        connections = self.server.packets.topology_connections(limit=250)
+        if not self.server.capture_service.status().get("savePackets", True):
+            connections = _merge_topology_connections(
+                connections,
+                self.server.capture_service.topology_connections(),
+                limit=250,
+            )
+        host_by_ip = {host.ip: host for host in self.server.host_profiles.list_hosts(limit=1_000)}
+        observed_ips = {
+            str(connection[key])
+            for connection in connections
+            for key in ("source", "target")
+        }
+        packet_activity: dict[str, int] = {ip: 0 for ip in observed_ips}
+        last_seen: dict[str, str] = {ip: "" for ip in observed_ips}
+        for connection in connections:
+            for key in ("source", "target"):
+                ip = str(connection[key])
+                packet_activity[ip] += int(connection["packets"])
+                last_seen[ip] = max(last_seen[ip], str(connection["last_seen"]))
+        nodes = []
+        for ip in sorted(observed_ips):
+            host = host_by_ip.get(ip)
+            role = str(host.role or "Other") if host else "Other"
+            nodes.append(
+                {
+                    "id": ip,
+                    "label": str(host.display_name or ip) if host else ip,
+                    "ip": ip,
+                    "kind": _topology_kind(ip, role),
+                    "role": role,
+                    "risk": int(host.risk_score or 0) if host else 0,
+                    "importance": int(host.importance or 0) if host else 0,
+                    "packets": packet_activity[ip],
+                    "alerts": int(host.alert_count or 0) if host else 0,
+                    "lastSeen": max(str(host.last_seen or "") if host else "", last_seen[ip]),
+                }
+            )
+        return {
+            "nodes": nodes,
+            "edges": [
+                {
+                    "source": connection["source"],
+                    "target": connection["target"],
+                    "protocol": connection["protocol"],
+                    "packets": connection["packets"],
+                    "bytes": connection["bytes"],
+                    "lastSeen": connection["last_seen"],
+                }
+                for connection in connections
+            ],
+        }
+
+    def _system_health_payload(self) -> dict[str, Any]:
+        rules = self.server.rules.list_all()
+        feedback = self.server.alerts.rule_feedback()
+        capture = self.server.capture_service.status()
+        try:
+            database_bytes = self.server.database.path.stat().st_size
+        except OSError:
+            database_bytes = 0
+        return {
+            "system": self.server.runtime_health.collect(),
+            "engine": {
+                "apiVersion": LOCAL_API_VERSION,
+                "uptimeSeconds": max(0, int(monotonic() - self.server.started_at)),
+                "databaseBytes": database_bytes,
+                "rulesLoaded": len(rules),
+                "activeRules": sum(1 for rule in rules if rule.enabled),
+                "packetsStored": self.server.packets.count(),
+                "alertsStored": self.server.alerts.count(),
+                "captureState": capture["state"],
+                "captureInterface": capture["interface"],
+                "packetsPerSecond": capture["packetsPerSecond"],
+                "sessionPackets": capture["packetTotal"],
+                "sessionAlerts": capture["alertTotal"],
+            },
+            "detectors": [
+                {
+                    "id": rule.id,
+                    "name": rule.name,
+                    "enabled": rule.enabled,
+                    "severity": rule.severity,
+                    "hits": int(feedback.get(rule.id, {}).get("total", 0)),
+                }
+                for rule in rules
+            ],
+        }
+
     def _host_payload(self, host_ip: str) -> dict[str, Any]:
         host = self.server.host_profiles.get_host(host_ip)
         if host is None:
@@ -542,6 +659,40 @@ def _severity_color(severity: str) -> str:
         "LOW": "#2563eb",
         "INFO": "#2f8f66",
     }.get(severity.upper(), "#7a8996")
+
+
+def _topology_kind(ip: str, role: str) -> str:
+    normalized_role = role.strip().lower()
+    if normalized_role == "gateway":
+        return "gateway"
+    if normalized_role in {"server", "database", "domain controller"}:
+        return "server"
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        return "external"
+    if not (address.is_private or address.is_loopback or address.is_link_local):
+        return "external"
+    return "workstation"
+
+
+def _merge_topology_connections(
+    persisted: list[dict[str, object]],
+    live: list[dict[str, object]],
+    *,
+    limit: int,
+) -> list[dict[str, object]]:
+    merged: dict[tuple[str, str, str], dict[str, object]] = {}
+    for connection in [*persisted, *live]:
+        key = (str(connection["source"]), str(connection["target"]), str(connection["protocol"]))
+        item = merged.setdefault(
+            key,
+            {"source": key[0], "target": key[1], "protocol": key[2], "packets": 0, "bytes": 0, "last_seen": ""},
+        )
+        item["packets"] = int(item["packets"]) + int(connection["packets"])
+        item["bytes"] = int(item["bytes"]) + int(connection["bytes"])
+        item["last_seen"] = max(str(item["last_seen"]), str(connection["last_seen"]))
+    return sorted(merged.values(), key=lambda item: (int(item["packets"]), str(item["last_seen"])), reverse=True)[:limit]
 
 
 def _positive_int(value: str, default: int) -> int:

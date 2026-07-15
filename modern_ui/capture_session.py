@@ -176,6 +176,30 @@ class CaptureSessionService:
             records = [record for record in self._recent_alerts if int(record["sequence"]) > sequence]
             return {"records": records[:max(1, min(limit, 250))], "nextSequence": self._sequence}
 
+    def topology_connections(self) -> list[dict[str, object]]:
+        """Aggregate the in-memory capture window when packet persistence is disabled."""
+        with self._lock:
+            records = list(self._recent_packets)
+        aggregated: dict[tuple[str, str, str], dict[str, object]] = {}
+        for record in records:
+            details = record.get("details")
+            if not isinstance(details, dict):
+                continue
+            source = str(details.get("src_ip") or "")
+            target = str(details.get("dst_ip") or "")
+            if not source or not target or source == target:
+                continue
+            protocol = str(details.get("protocol") or "UNKNOWN")
+            key = (source, target, protocol)
+            item = aggregated.setdefault(
+                key,
+                {"source": source, "target": target, "protocol": protocol, "packets": 0, "bytes": 0, "last_seen": ""},
+            )
+            item["packets"] = int(item["packets"]) + 1
+            item["bytes"] = int(item["bytes"]) + int(details.get("length") or 0)
+            item["last_seen"] = max(str(item["last_seen"]), str(details.get("timestamp") or ""))
+        return sorted(aggregated.values(), key=lambda item: (int(item["packets"]), str(item["last_seen"])), reverse=True)
+
     def _run(self) -> None:
         packet_batch: list[PacketRecord] = []
         alert_batch: list[AlertRecord] = []

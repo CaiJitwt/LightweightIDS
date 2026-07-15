@@ -452,6 +452,10 @@ kbd { padding: 2px 5px; border: 1px solid var(--border); border-radius: 3px; bac
 .topology-detail-section h3 { margin: 0; font-size: 11px; }
 .topology-detail-section h3 span { color: var(--muted); font-weight: 400; }
 .topology-detail .detail-grid { border-bottom: 1px solid var(--border); }
+.topology-connection-row { padding: 7px 0; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 2px; font-size: 10px; }
+.topology-connection-row:last-child { border-bottom: 0; }
+.topology-connection-row span, .topology-connection-row small { color: var(--muted); }
+.topology-refresh-error { margin: 6px 0 0; color: var(--danger); font-size: 10px; }
 @media (max-width: 1050px) { .topology-workspace { grid-template-columns: 1fr; } .topology-detail { min-height: 220px; } .topology-canvas-wrap { min-height: 360px; } .topology-canvas { max-height: 420px; } }
 @media (max-width: 760px) { .topology-canvas-wrap { min-height: 300px; } .topology-canvas { max-height: 340px; } .topology-legend { align-items: flex-start; flex-direction: column; } .topology-legend > div { justify-content: flex-start; } }
 
