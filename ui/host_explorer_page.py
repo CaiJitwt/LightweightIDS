@@ -105,6 +105,7 @@ class HostExplorerPage(QWidget):
         splitter.setStretchFactor(1, 3)
         layout.addWidget(splitter, 1)
 
+        self._loaded = False
         self._debounce = QTimer(self)
         self._debounce.setSingleShot(True)
         self._debounce.setInterval(300)
@@ -157,7 +158,9 @@ class HostExplorerPage(QWidget):
         self.render_selected_host()
 
     def showEvent(self, event: object) -> None:
-        self._immediate_refresh()
+        if not self._loaded:
+            self._immediate_refresh()
+            self._loaded = True
         super().showEvent(event)  # type: ignore[arg-type]
 
     def _immediate_refresh(self) -> None:
@@ -174,6 +177,7 @@ class HostExplorerPage(QWidget):
 
     def _render_host_list(self) -> None:
         selected_ip = self.current_host_ip
+        self.host_table.setUpdatesEnabled(False)
         self.host_table.setRowCount(len(self.hosts))
         for row, host in enumerate(self.hosts):
             values = [
@@ -197,6 +201,7 @@ class HostExplorerPage(QWidget):
                 elif column == 4:
                     apply_importance_style(item, host.importance)
                 self.host_table.setItem(row, column, item)
+        self.host_table.setUpdatesEnabled(True)
         if selected_ip:
             self._select_row(selected_ip)
         elif self.hosts:
@@ -243,6 +248,7 @@ class HostExplorerPage(QWidget):
         )
         self.overview_view.setPlainText(text)
         connections = self.service.connections(host.ip)
+        self.connections_table.setUpdatesEnabled(False)
         self.connections_table.setRowCount(len(connections))
         for row, connection in enumerate(connections):
             values = [
@@ -259,10 +265,12 @@ class HostExplorerPage(QWidget):
                 if column in {1, 2}:
                     apply_semantic_style(item, value)
                 self.connections_table.setItem(row, column, item)
+        self.connections_table.setUpdatesEnabled(True)
 
         alerts = self.service.alerts_for_host(host.ip)
         self.alert_table.set_alerts(alerts)
         events = self.service.timeline(host.ip)
+        self.timeline_table.setUpdatesEnabled(False)
         self.timeline_table.setRowCount(len(events))
         for row, event in enumerate(events):
             values = [event.timestamp, event.event_type, event.direction, event.peer_ip, event.severity, event.summary]
@@ -274,6 +282,7 @@ class HostExplorerPage(QWidget):
                 elif column == 2:
                     apply_semantic_style(item, event.direction)
                 self.timeline_table.setItem(row, column, item)
+        self.timeline_table.setUpdatesEnabled(True)
 
     def request_investigation(self) -> None:
         host = self._selected_host()
