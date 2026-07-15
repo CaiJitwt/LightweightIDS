@@ -453,6 +453,8 @@ class PacketPage(QWidget):
 
         self.import_decrypted_button.setToolTip(self._lm.tr("page.packets.decrypted_tooltip"))
         self.capture_filter_input.setToolTip(self._lm.tr("page.packets.bpf_tooltip"))
+        if self._filter_mode != "Custom":
+            self.capture_filter_input.setPlaceholderText(self._lm.tr("page.packets.filter_all_traffic"))
         self.auto_scroll_check.setToolTip(self._lm.tr("page.packets.auto_scroll_tooltip"))
 
         self.auto_scroll_check.setText(self._lm.tr("page.packets.auto_scroll"))
@@ -716,12 +718,12 @@ class PacketPage(QWidget):
         self.capture_filter_input.setReadOnly(mode != "Custom")
         self.capture_filter_input.setText(self.custom_filter_text if mode == "Custom" else preset)
         self.capture_filter_input.setPlaceholderText(
-            "tcp.port == 443 or ip.addr == 192.168.1.10" if mode == "Custom" else "All traffic"
+            "tcp.port == 443 or ip.addr == 192.168.1.10" if mode == "Custom" else self._lm.tr("page.packets.filter_all_traffic")
         )
         self.apply_packet_filter()
 
     def schedule_packet_filter(self, _: str = "") -> None:
-        if self.capture_filter_combo.currentText() == "Custom":
+        if self.capture_filter_combo.currentData() == "Custom":
             self.filter_timer.start()
 
     def apply_packet_filter(self) -> bool:
