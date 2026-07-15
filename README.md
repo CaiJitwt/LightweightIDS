@@ -77,7 +77,7 @@ python modern_main.py --database .\data\custom_ids.db
 
 Press `Ctrl+C` in the launcher terminal to stop services started by that launcher.
 
-The modern Assets and Investigations screens are present, but API v5 does not yet expose their persistence routes. Use the classic desktop for persisted asset, investigation, and evidence management.
+Modern Assets and Investigations create, read, edit, and delete records through local API v6 and persist them in SQLite. The classic desktop additionally supports adding/removing alert evidence snapshots and investigation HTML export.
 
 ## Run The Classic Desktop
 

@@ -50,7 +50,7 @@ npm run dev
 - Traffic Monitor with interface selection, filter validation, live capture controls, pcap import, newest-first packets, and packet details.
 - Host Explorer with packet-derived peers, ports, protocols, alerts, timeline, and asset-aware risk.
 - Alert Center with evidence, status updates, related-packet lists, full packet metadata, and optional LLM guidance.
-- Investigations and Assets interface shells for the planned browser workflow.
+- Investigations and Assets with SQLite-backed create, read, edit, and delete operations.
 - Rule Management for persistent built-in-rule enablement, thresholds, and time windows.
 - Reports and Event Timeline backed by persisted runtime records rather than demo alerts.
 - Network Topology derived from current stored or live packet connections.
@@ -58,9 +58,9 @@ npm run dev
 
 Some pages can render an explicitly labeled offline preview when the local API is unavailable. Editing, capture, persistence, reset, and host-security operations require the local API.
 
-### Current API limitation
+### Analyst workflow persistence
 
-Local API v5 does not yet expose the Assets or Investigations CRUD routes referenced by those two frontend pages. Use the classic PySide6 desktop for persisted asset, investigation, and evidence-snapshot management until those routes are implemented.
+Local API v6 exposes Assets and Investigations CRUD routes under `/api/assets` and `/api/investigations`. Records created or edited in the browser are stored in the shared SQLite database and remain available after restart. Investigation detail responses also include existing evidence snapshots; adding/removing evidence and investigation HTML export remain classic-desktop workflows.
 
 ## Live Capture
 

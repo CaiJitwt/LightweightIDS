@@ -104,7 +104,7 @@ Host Explorer combines IP addresses observed in packets, alerts, baselines, and 
 - alerts involving the host as source or destination;
 - a merged host timeline.
 
-Assets assign a display name, controlled role, importance from 0 to 100, and notes to a unique IP address. Asset importance affects analyst prioritization and host-risk scoring; it does not create a whitelist entry. Persisted asset editing currently requires the classic desktop because local API v5 does not expose the Assets CRUD routes.
+Assets assign a display name, controlled role, importance from 0 to 100, and notes to a unique IP address. Asset importance affects analyst prioritization and host-risk scoring; it does not create a whitelist entry. The modern and classic interfaces both persist asset changes in the shared SQLite database; an asset IP cannot be changed while editing.
 
 ## 7. Rule Management
 
@@ -128,7 +128,7 @@ Offline pcap analysis cannot reject historical traffic. See [Protection Workflow
 
 ## 9. Investigations And Reports
 
-Investigations organize a title, host, status, priority, summary, and notes. Classic investigation evidence is stored as a snapshot, so it remains available after the original alert is deleted or runtime statistics are reset. The modern Investigations screen is present, but its persistence calls are not available in local API v5; use the classic desktop for durable cases and evidence.
+Investigations organize a title, host, status, priority, summary, and notes. The modern interface supports persistent create, read, edit, and delete operations through local API v6. Classic investigation evidence is stored as a snapshot, so it remains available after the original alert is deleted or runtime statistics are reset; evidence add/remove and HTML export remain classic-desktop workflows.
 
 Reports export persisted alert data. The modern Reports page supports HTML, CSV, and JSON output. The classic report workflow also summarizes packet and alert statistics. Empty data after a reset is expected and is not replaced with demo alerts.
 
