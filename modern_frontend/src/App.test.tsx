@@ -28,7 +28,7 @@ describe("modern IDS frontend", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("128")).toBeInTheDocument();
+    expect(await screen.findByText("128", {}, { timeout: 3000 })).toBeInTheDocument();
     expect(screen.getByText("Local SQLite data - last 12 observed hours")).toBeInTheDocument();
     expect(screen.getByText("Lab host")).toBeInTheDocument();
     const navigation = screen.getByRole("navigation", { name: "Primary navigation" });

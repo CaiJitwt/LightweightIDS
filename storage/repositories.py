@@ -270,6 +270,39 @@ class PacketRepository:
             ).fetchall()
         return [(str(row["bucket"]), int(row["total"])) for row in reversed(rows) if row["bucket"]]
 
+    def topology_connections(self, limit: int = 250) -> list[dict[str, object]]:
+        """Aggregate observed directed connections for the network topology view."""
+        bounded_limit = max(1, min(int(limit), 1_000))
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT src_ip, dst_ip,
+                       COALESCE(NULLIF(protocol, ''), 'UNKNOWN') AS protocol,
+                       COUNT(*) AS packet_count,
+                       SUM(COALESCE(length, 0)) AS byte_count,
+                       MAX(timestamp) AS last_seen
+                FROM packets
+                WHERE src_ip IS NOT NULL AND src_ip != ''
+                  AND dst_ip IS NOT NULL AND dst_ip != ''
+                  AND src_ip != dst_ip
+                GROUP BY src_ip, dst_ip, protocol
+                ORDER BY packet_count DESC, last_seen DESC
+                LIMIT ?
+                """,
+                (bounded_limit,),
+            ).fetchall()
+        return [
+            {
+                "source": str(row["src_ip"]),
+                "target": str(row["dst_ip"]),
+                "protocol": str(row["protocol"]),
+                "packets": int(row["packet_count"]),
+                "bytes": int(row["byte_count"] or 0),
+                "last_seen": str(row["last_seen"] or ""),
+            }
+            for row in rows
+        ]
+
     def _from_row(self, row: object) -> PacketRecord:
         return PacketRecord(
             id=row["id"],  # type: ignore[index]

@@ -22,6 +22,7 @@ interface DashboardPageProps {
   onOpenAlerts: () => void;
   onOpenHost: (ip: string) => void;
   onOpenAlertCountChange: (count: number) => void;
+  onStatisticsReset: () => void;
   refreshVersion: number;
 }
 
@@ -48,7 +49,7 @@ const previewSnapshot: DashboardSnapshot = {
   recentAlerts: alerts,
 };
 
-export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange, refreshVersion }: DashboardPageProps) {
+export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange, onStatisticsReset, refreshVersion }: DashboardPageProps) {
   const [snapshot, setSnapshot] = useState<DashboardSnapshot>(previewSnapshot);
   const [connected, setConnected] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -80,6 +81,7 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
       setSnapshot(result.dashboard);
       setConnected(true);
       onOpenAlertCountChange(result.dashboard.statistics.openAlerts);
+      onStatisticsReset();
       setResetNotice("Packet, alert, and security-event runtime data reset. New activity will start from zero.");
     } catch (error) {
       setResetNotice(error instanceof Error ? error.message : "Statistics could not be reset.");

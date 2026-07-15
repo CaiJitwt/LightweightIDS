@@ -90,6 +90,41 @@ export interface ProcessRecord {
   path: string;
 }
 
+export interface SystemHealthSnapshot {
+  system: {
+    hostname: string;
+    platform: string;
+    cpuPercent: number;
+    logicalProcessors: number;
+    memoryUsedBytes: number;
+    memoryTotalBytes: number;
+    diskUsedBytes: number;
+    diskTotalBytes: number;
+    diskFreeBytes: number;
+  };
+  engine: {
+    apiVersion: number;
+    uptimeSeconds: number;
+    databaseBytes: number;
+    rulesLoaded: number;
+    activeRules: number;
+    packetsStored: number;
+    alertsStored: number;
+    captureState: string;
+    captureInterface: string;
+    packetsPerSecond: number;
+    sessionPackets: number;
+    sessionAlerts: number;
+  };
+  detectors: {
+    id: string;
+    name: string;
+    enabled: boolean;
+    severity: Severity;
+    hits: number;
+  }[];
+}
+
 export interface IntegrityStatus {
   available: boolean;
   paths: string[];
@@ -208,6 +243,35 @@ export interface HostProfile {
   connections: HostConnection[];
   alerts: AlertRecord[];
   timeline: HostTimelineEvent[];
+}
+
+export type TopologyNodeKind = "workstation" | "server" | "gateway" | "external";
+
+export interface TopologyNodeRecord {
+  id: string;
+  label: string;
+  ip: string;
+  kind: TopologyNodeKind;
+  role: string;
+  risk: number;
+  importance: number;
+  packets: number;
+  alerts: number;
+  lastSeen: string;
+}
+
+export interface TopologyEdgeRecord {
+  source: string;
+  target: string;
+  protocol: string;
+  packets: number;
+  bytes: number;
+  lastSeen: string;
+}
+
+export interface TopologySnapshot {
+  nodes: TopologyNodeRecord[];
+  edges: TopologyEdgeRecord[];
 }
 
 export type FontScale = "compact" | "default" | "comfortable";

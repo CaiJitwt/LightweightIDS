@@ -119,12 +119,43 @@ class ProcessInventoryService:
         return self._windows_processes(limit) if self.is_windows else self._portable_processes(limit)
 
     def _windows_processes(self, limit: int) -> list[dict[str, Any]]:
+        powershell_error = ""
+        try:
+            command = (
+                f"Get-Process | Select-Object -First {limit} Id, ProcessName, Path, WorkingSet64 "
+                "| ConvertTo-Json -Compress"
+            )
+            completed = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", command],
+                capture_output=True,
+                text=True,
+                timeout=12,
+                check=False,
+            )
+            if completed.returncode == 0 and completed.stdout.strip():
+                payload = json.loads(completed.stdout)
+                rows = payload if isinstance(payload, list) else [payload]
+                return [
+                    {
+                        "pid": int(row.get("Id", 0)),
+                        "name": str(row.get("ProcessName") or "Unknown"),
+                        "memory": _format_bytes(int(row.get("WorkingSet64") or 0)),
+                        "path": str(row.get("Path") or ""),
+                    }
+                    for row in rows
+                    if isinstance(row, dict) and int(row.get("Id", 0)) >= 0
+                ][:limit]
+            powershell_error = completed.stderr.strip() or completed.stdout.strip()
+        except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, TypeError, ValueError) as exc:
+            powershell_error = str(exc)
+
         try:
             completed = subprocess.run(["tasklist", "/FO", "CSV", "/NH"], capture_output=True, text=True, timeout=10, check=False)
         except (OSError, subprocess.TimeoutExpired) as exc:
-            raise RuntimeError(f"Could not read the Windows process list: {exc}") from exc
+            raise RuntimeError(f"Could not read the Windows process list: {powershell_error or exc}") from exc
         if completed.returncode != 0:
-            raise RuntimeError(completed.stderr.strip() or "Could not read the Windows process list.")
+            message = completed.stderr.strip() or powershell_error or "Could not read the Windows process list."
+            raise RuntimeError(message)
         records = []
         for row in csv.reader(io.StringIO(completed.stdout)):
             if len(row) < 2:
@@ -166,3 +197,11 @@ def _as_bool(value: object) -> bool:
 
 def _unavailable(identifier: str, title: str, exc: Exception) -> dict[str, str]:
     return SecurityCheck(identifier, title, "unavailable", "Unavailable", str(exc), "Verify Windows support and local administrator policy permissions.").to_dict()
+
+
+def _format_bytes(value: int) -> str:
+    if value < 1024:
+        return f"{value} B"
+    if value < 1024 * 1024:
+        return f"{value / 1024:.1f} KB"
+    return f"{value / (1024 * 1024):.1f} MB"
