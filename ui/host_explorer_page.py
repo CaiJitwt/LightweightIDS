@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLineEdit,
@@ -105,12 +105,16 @@ class HostExplorerPage(QWidget):
         splitter.setStretchFactor(1, 3)
         layout.addWidget(splitter, 1)
 
-        self.search_input.textChanged.connect(self.refresh)
-        self.refresh_button.clicked.connect(self.refresh)
+        self._debounce = QTimer(self)
+        self._debounce.setSingleShot(True)
+        self._debounce.setInterval(300)
+        self._debounce.timeout.connect(self._do_refresh)
+        self.search_input.textChanged.connect(lambda: self._debounce.start())
+        self.refresh_button.clicked.connect(self._immediate_refresh)
         self.investigate_button.clicked.connect(self.request_investigation)
         self.host_table.itemSelectionChanged.connect(self.render_selected_host)
         self._lm.locale_changed.connect(self.retranslate_ui)
-        self.refresh()
+        self._immediate_refresh()
 
     def retranslate_ui(self) -> None:
         """Update all user-visible text for the current locale."""
@@ -153,12 +157,23 @@ class HostExplorerPage(QWidget):
         self.render_selected_host()
 
     def showEvent(self, event: object) -> None:
-        self.refresh()
+        self._immediate_refresh()
         super().showEvent(event)  # type: ignore[arg-type]
 
+    def _immediate_refresh(self) -> None:
+        self._debounce.stop()
+        self._do_refresh()
+
+    def _do_refresh(self) -> None:
+        keyword = self.search_input.text().strip()
+        self.hosts = self.service.list_hosts(keyword)
+        self._render_host_list()
+
     def refresh(self) -> None:
+        self._immediate_refresh()
+
+    def _render_host_list(self) -> None:
         selected_ip = self.current_host_ip
-        self.hosts = self.service.list_hosts(self.search_input.text().strip())
         self.host_table.setRowCount(len(self.hosts))
         for row, host in enumerate(self.hosts):
             values = [
@@ -202,6 +217,8 @@ class HostExplorerPage(QWidget):
     def render_selected_host(self) -> None:
         host = self._selected_host()
         if host is None:
+            return
+        if host.ip == self.current_host_ip:
             return
         self.current_host_ip = host.ip
         protocols = self.service.protocol_distribution(host.ip)

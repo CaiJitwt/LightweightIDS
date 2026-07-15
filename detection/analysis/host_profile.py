@@ -20,12 +20,12 @@ class HostProfileService:
         alert_activity = self.hosts.alert_activity()
         assets = {asset.ip: asset for asset in self.assets.list_all()}
         asset_importance = {ip: asset.importance for ip, asset in assets.items()}
-        recent_alerts = self.alerts.list_all(limit=5_000)
+        recent_alerts = self.alerts.list_all(limit=500)
         risks = {
             risk.source_ip: risk
             for risk in self.risk_scorer.score_hosts(
                 recent_alerts,
-                baseline_records=self.baselines.list_all(limit=1_000),
+                baseline_records=self.baselines.list_all(limit=200),
                 asset_importance=asset_importance,
             )
         }
