@@ -45,12 +45,12 @@ class PersonalizationPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setSpacing(14)
 
-        hint = QLabel(self._lm.tr("page.personalization.hint"))
-        hint.setObjectName("PageHint")
-        hint.setWordWrap(True)
+        self.hint_label = QLabel(self._lm.tr("page.personalization.hint"))
+        self.hint_label.setObjectName("PageHint")
+        self.hint_label.setWordWrap(True)
 
-        wallpaper_title = QLabel(self._lm.tr("page.personalization.wallpaper_title"))
-        wallpaper_title.setObjectName("SectionTitle")
+        self.wallpaper_title_label = QLabel(self._lm.tr("page.personalization.wallpaper_title"))
+        self.wallpaper_title_label.setObjectName("SectionTitle")
         wallpaper_form = QFormLayout()
         wallpaper_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
 
@@ -106,8 +106,8 @@ class PersonalizationPage(QWidget):
             if label_item and label_item.widget():
                 self._wallpaper_labels.append(label_item.widget())
 
-        pet_title = QLabel(self._lm.tr("page.personalization.pet_title"))
-        pet_title.setObjectName("SectionTitle")
+        self.pet_title_label = QLabel(self._lm.tr("page.personalization.pet_title"))
+        self.pet_title_label.setObjectName("SectionTitle")
         pet_form = QFormLayout()
         pet_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
 
@@ -162,11 +162,11 @@ class PersonalizationPage(QWidget):
         self.save_status_label = QLabel(self._lm.tr("page.personalization.auto_save"))
         self.save_status_label.setObjectName("PageHint")
 
-        layout.addWidget(hint)
-        layout.addWidget(wallpaper_title)
+        layout.addWidget(self.hint_label)
+        layout.addWidget(self.wallpaper_title_label)
         layout.addLayout(wallpaper_form)
         layout.addSpacing(8)
-        layout.addWidget(pet_title)
+        layout.addWidget(self.pet_title_label)
         layout.addLayout(pet_form)
         layout.addWidget(self.save_status_label)
         layout.addStretch()
@@ -188,6 +188,10 @@ class PersonalizationPage(QWidget):
 
     def retranslate_ui(self) -> None:
         self._retranslating = True
+
+        self.hint_label.setText(self._lm.tr("page.personalization.hint"))
+        self.wallpaper_title_label.setText(self._lm.tr("page.personalization.wallpaper_title"))
+        self.pet_title_label.setText(self._lm.tr("page.personalization.pet_title"))
 
         self.apply_color_button.setText(self._lm.tr("page.personalization.apply_color"))
         self.browse_background_button.setText(self._lm.tr("page.personalization.choose_image"))
