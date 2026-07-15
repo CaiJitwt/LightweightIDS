@@ -1,5 +1,7 @@
 # Modern Frontend and Endpoint Security Implementation Report
 
+> **Status: historical implementation plan.** Paths, API capabilities, and secret-storage behavior have changed. Use the [modern frontend README](../modern_frontend/README.md) and current source code for runtime behavior.
+
 ## Purpose
 
 The React application in `test/modern_frontend` is being upgraded from a mock

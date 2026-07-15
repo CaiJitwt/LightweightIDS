@@ -1,29 +1,60 @@
-# Test Report
+# Test And Verification Guide
+
+[Documentation Index](README.md) | [Project README](../README.md)
 
 ## Scope
 
-The test suite covers packet parsing, protocol identification, database repositories, report generation, built-in rules, custom rules, decrypted HTTP import, flow feature extraction, ML flow anomaly fallback behavior, signature matching and TLS metadata handling.
+The Python test suite covers storage migrations and repositories, packet parsing, filters, pcap/decrypted-HTTP import, built-in and custom rules, attack-chain and host analysis, reports, blocklist behavior, endpoint monitoring, the local API, and selected offscreen PySide6 workflows.
 
-## Merge Validation Focus
+The modern frontend suite covers API-backed views, settings, reset behavior, navigation, and component rendering. Playwright checks the primary dashboard and alert workflow on desktop and mobile viewports.
 
-This merge preserves tests from both branches:
+## Python Tests
 
-- `main` coverage for SQL injection, XSS and expanded Web attack detection.
-- `develop` coverage for phase one/two/three rule sets, signature rules, decrypted HTTP loading, baseline detection, flow anomaly detection and TLS fingerprint metadata.
-- Parser coverage for HTTP extraction, TLS handshake identification, ARP, IPv6, DNS and common protocol naming.
-
-## How To Run
-
-```powershell
-.\.conda\Lightweight-IDS\python.exe -m pytest
-```
-
-If using an activated Python 3.11+ environment:
+From the project root:
 
 ```powershell
 python -m pytest
 ```
 
-## Expected Result
+Use the intended environment's interpreter explicitly when multiple Python installations are present.
 
-All tests should pass in a prepared environment with the project dependencies installed from `requirements.txt`. Optional ML behavior is designed to fall back to a deterministic local detector when scikit-learn is unavailable.
+## Frontend Unit Tests
+
+```powershell
+cd modern_frontend
+npm test
+```
+
+## Production Build
+
+```powershell
+cd modern_frontend
+npm run build
+```
+
+The build runs TypeScript validation before producing `modern_frontend/dist/`.
+
+## Browser Tests
+
+Keep the frontend available at `http://127.0.0.1:4173`, then run:
+
+```powershell
+cd modern_frontend
+npm run test:e2e
+```
+
+## Manual Capture Checks
+
+Automated tests cannot fully reproduce every Npcap adapter and permission combination. Before a release, verify:
+
+1. interface refresh and selection;
+2. empty-filter live capture;
+3. filter validation and immediate table filtering;
+4. pause, resume, and stop behavior;
+5. newest-first packet ordering and packet details;
+6. alert generation and related-packet correlation;
+7. reset behavior across Dashboard, Reports, Event Timeline, topology, and security events.
+
+## Optional Features
+
+GPU telemetry tests use injected samples and do not require an NVIDIA GPU. At runtime, the GPU rule remains inactive when `nvidia-smi` is unavailable. HTTPS payload decryption is intentionally outside the test scope because the application does not provide it.

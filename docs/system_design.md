@@ -1,38 +1,116 @@
-# System Design
+# Lightweight IDS System Design
 
-## Architecture
+[Documentation Index](README.md) | [Project README](../README.md)
 
-Lightweight IDS is a local desktop IDS made of five main layers:
+## 1. System Context
 
-- GUI: PySide6 pages for dashboard, traffic monitoring, alerts, rules, reports and settings.
-- Capture and import: pcap loading, live capture and authorized decrypted HTTP log loading.
-- Parsing: Scapy packet parsing plus decrypted HTTP record conversion into `PacketRecord`.
-- Detection: rule engine, built-in rules, custom rules, signatures, baseline checks and ML-style anomaly scoring.
-- Persistence and reporting: SQLite repositories, schema migrations and HTML/CSV/JSON report output.
+Lightweight IDS is a local, user-mode network and endpoint analysis application. It has two presentation layers over shared Python services and the same default SQLite database:
 
-## Detection Flow
+- the classic PySide6 desktop in `ui/`, started by `main.py`;
+- the React analyst workspace in `modern_frontend/`, connected to `modern_ui/local_api.py` and started together by `modern_main.py`.
 
-1. A pcap file, live packet or authorized decrypted HTTP log is loaded.
-2. Raw traffic is converted into `PacketRecord`.
-3. `DetectionEngine` builds active rules from database rule records and custom rules.
-4. Each rule emits zero or more `AlertRecord` objects.
-5. Noise reduction applies whitelist, asset importance, minimum severity and cooldown filtering.
-6. Packets and alerts are persisted to SQLite and shown in the GUI.
+The modern API binds to `127.0.0.1` and is not intended to be exposed as a remote multi-user service.
 
-## Rule Coverage
+## 2. Major Layers
 
-The merged rule set includes both branches' work:
+| Layer | Main paths | Responsibility |
+| --- | --- | --- |
+| Presentation | `ui/`, `modern_frontend/` | Analyst interaction, tables, charts, navigation, and settings |
+| Local API orchestration | `modern_ui/`, `modern_main.py` | Browser-to-Python boundary, capture/import sessions, API compatibility, protected settings |
+| Capture and import | `capture/`, `modern_ui/capture_session.py`, `modern_ui/pcap_import.py` | Interfaces, filters, live packets, pcap loading, authorized HTTP-log import |
+| Parsing | `parser/` | Convert Scapy packets and authorized HTTP records into `PacketRecord` |
+| Detection and analysis | `detection/` | Built-in/custom rules, engine, noise reduction, attack chains, trends, baselines, host risk |
+| Endpoint security | `endpoint_security/`, `modern_ui/security_event_monitor.py` | Runtime health, Windows events, process inventory, posture, file integrity |
+| Protection | `protection/` | Structured blocklist and optional Windows Firewall enforcement |
+| Persistence | `storage/`, `models/` | SQLite migrations, repositories, and shared records |
+| Reporting | `report/` | Alert reports and durable investigation exports |
 
-- Core network rules: port scan, SYN flood, ICMP flood, sensitive port access and blacklist matches.
-- Application rules: suspicious HTTP, SQL injection, XSS, malicious command and advanced Web attack detection.
-- Advanced Web coverage: path traversal, command injection, SSRF, file inclusion, XXE, SSTI, CRLF injection, LDAP/XPath injection, deserialization, webshell indicators, JNDI probes and sensitive file discovery.
-- Behavior rules: abnormal outbound traffic, lateral movement, host scan, baseline deviation, bandwidth spike and session duration anomaly.
-- ML and signature rules: packet-level anomaly score, flow-level anomaly score, external signatures and TLS fingerprint risk.
+## 3. Packet Analysis Flow
 
-## Data Model
+1. A source produces traffic: live capture, pcap import, deterministic demo pcap, or authorized plaintext HTTP log.
+2. The parser normalizes the source into `PacketRecord` objects.
+3. Packets are persisted when saving is enabled.
+4. `DetectionEngine` loads enabled built-in rules, custom rules, settings, asset importance, and active blocklist entries.
+5. Rules evaluate packets or bounded windows of packet history and emit `AlertRecord` candidates.
+6. Noise reduction applies cooldown, whitelist, minimum severity, asset importance, and related controls.
+7. Accepted alerts are stored in SQLite and become available to Dashboard, Alert Center, Host Explorer, Reports, and Event Timeline.
 
-SQLite stores packets, alerts, built-in rule settings, custom rules, baselines and key-value settings. Baseline records track per-source activity windows including packet counts, connection counts, destination diversity, byte volume and internal-to-external ratio.
+The demo generator follows the same parser and Detection Engine path; it does not insert synthetic alerts directly.
 
-## Authorized Decrypted HTTP Analysis
+## 4. Detection Model
 
-The decrypted HTTP workflow imports local JSONL or CSV records that already contain plaintext HTTP data from an authorized lab or defensive source. The application does not install certificates or perform interception. Imported records are converted into HTTP `PacketRecord` objects so existing SQL injection, XSS, suspicious HTTP, malicious command and advanced Web rules can run offline.
+The rule set covers:
+
+- scans, floods, brute force, sensitive ports, and blacklist matches;
+- suspicious HTTP, SQL injection, XSS, malicious commands, and advanced Web signatures;
+- DNS anomalies, TLS metadata/fingerprint risk, abnormal outbound traffic, and C2-like behavior;
+- lateral movement, SMB administrative-share access, RDP activity, and Windows security events;
+- baseline deviation, flow/packet anomaly scoring, bandwidth spikes, and long sessions;
+- sustained CPU and supported GPU load as endpoint review signals.
+
+Threshold and time-window values are stored with built-in rule records. Runtime monitors reload current rule settings, so persisted changes apply without replacing rule definitions.
+
+No single rule proves compromise. Resource-load, anomaly, and heuristic alerts require analyst validation.
+
+## 5. Analysis Services
+
+- `AttackChainAnalyzer` orders existing rule stages and correlates compatible alert sequences.
+- `HostRiskScorer` combines severity, attack-chain, baseline, and optional asset-importance components into a score capped at 100.
+- `AlertTrendAnalyzer` uses repository time buckets and identifies spikes above historical mean plus two standard deviations.
+- `HostProfileService` merges packet, alert, baseline, and asset records into host, connection, alert, and timeline views.
+
+These services read persisted records and do not bypass the Detection Engine.
+
+## 6. Endpoint And Resource Monitoring
+
+The Windows security-event monitor reads selected event channels and uses cursor records to avoid replaying the complete history on every poll. Relevant events can be linked to generated alerts.
+
+Runtime health reads CPU, memory, disk, platform, and sensor status. NVIDIA GPU utilization is queried through `nvidia-smi` when available. The resource monitor tracks continuous above-threshold time and emits at most one alert per high-load episode until the metric recovers.
+
+Process inventory, posture checks, and file-integrity baselines are user-mode operations. The project does not install a driver or kernel module.
+
+## 7. Persistence Model
+
+SQLite migrations use `CREATE TABLE/INDEX IF NOT EXISTS` and preserve existing databases. Current tables include:
+
+- `packets`, `alerts`, `baselines`;
+- `rules`, `custom_rules`, `settings`;
+- `assets`;
+- `investigations`, `investigation_evidence`;
+- `blocklist_entries`;
+- `security_events`, `security_event_cursors`, `security_event_alert_links`.
+
+Investigation evidence stores an alert snapshot instead of only a foreign-key reference. This keeps analyst evidence after the source alert is deleted or runtime statistics are reset.
+
+## 8. Reset Model
+
+Reset is a coordinated runtime operation:
+
+1. active live capture and pcap import must be stopped;
+2. resource and security-event monitors pause;
+3. packet, alert, baseline, and security-event tables and counters are cleared;
+4. capture/import buffers and monitor statistics are reset;
+5. previously running monitors restart;
+6. frontend views refresh from the empty persisted state.
+
+Assets, investigations, and evidence snapshots remain intact by design.
+
+## 9. Protection Boundary
+
+Blocklist entries are persisted independently from detection alerts. On Windows, `WindowsFirewallEnforcer` uses `netsh advfirewall` to create or remove operating-system rules. The repository records enforcement status and error details.
+
+Only `Active` means the operating system accepted the block. Offline pcap analysis cannot reject past traffic, and unsupported or failed entries must not be presented as enforced.
+
+## 10. LLM Integration
+
+LLM guidance is analyst initiated. The local API builds a bounded prompt from the selected alert and sends it to an OpenAI-compatible endpoint only after explicit action.
+
+Base URL and model are stored in SQLite. On Windows, the API key is protected with current-user DPAPI, never returned in settings responses, and never rendered as plaintext after saving. The language option adds an English or Simplified Chinese response instruction.
+
+LLM output is advisory and does not automatically change rules, firewall policy, or alert status.
+
+## 11. HTTPS Boundary
+
+Raw TLS captures provide endpoint, timing, protocol, handshake, and fingerprint metadata only. The system does not decrypt HTTPS payloads or install interception certificates.
+
+Payload-level Web-rule testing uses authorized plaintext HTTP records exported from a lab proxy or application gateway and imported separately.
