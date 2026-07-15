@@ -325,6 +325,8 @@ class PacketPage(QWidget):
         self.custom_filter_text = ""
         self._filter_mode = "All traffic"
         self.filter_error_message = ""
+        self._last_status_key = "page.packets.status_initial"
+        self._last_status_kwargs: dict[str, object] = {}
         self.filter_timer = QTimer(self)
         self.filter_timer.setSingleShot(True)
         self.filter_timer.setInterval(250)
@@ -401,9 +403,10 @@ class PacketPage(QWidget):
         capture_options.addWidget(self.visible_rows_box)
         capture_options.addWidget(self.auto_scroll_check)
 
-        self.status_label = QLabel(self._lm.tr("page.packets.status_initial"))
+        self.status_label = QLabel()
         self.status_label.setObjectName("PageHint")
         self.status_label.setWordWrap(True)
+        self._set_status("page.packets.status_initial")
         self.packet_table = PacketTable()
 
         layout.addLayout(interface_row, 0)
@@ -430,6 +433,12 @@ class PacketPage(QWidget):
         self.update_capture_filter_mode(self.capture_filter_combo.currentText())
 
         self._lm.locale_changed.connect(self.retranslate_ui)
+
+    def _set_status(self, key: str, **kwargs: object) -> None:
+        """Set status_label text and remember the key for locale-switch retranslation."""
+        self._last_status_key = key
+        self._last_status_kwargs = kwargs
+        self.status_label.setText(self._lm.tr(key, **kwargs))
 
     def retranslate_ui(self) -> None:
         self._retranslating = True
@@ -459,6 +468,10 @@ class PacketPage(QWidget):
         if self.interface_combo.count() > 0:
             self.interface_combo.setItemText(0, self._lm.tr("page.packets.default_interface"))
 
+        # Re-translate dynamic labels
+        self._set_status(self._last_status_key, **self._last_status_kwargs)
+        self._update_filter_status()
+
         self._retranslating = False
 
     def refresh_interfaces(self) -> None:
@@ -467,9 +480,9 @@ class PacketPage(QWidget):
         try:
             for interface in self.interface_manager.list_interfaces():
                 self.interface_combo.addItem(interface, interface)
-            self.status_label.setText(self._lm.tr("page.packets.status_interfaces_ok"))
+            self._set_status("page.packets.status_interfaces_ok")
         except Exception as exc:
-            self.status_label.setText(self._lm.tr("page.packets.status_interfaces_failed", exc=exc))
+            self._set_status("page.packets.status_interfaces_failed", exc=exc)
 
     def select_pcap_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -507,7 +520,7 @@ class PacketPage(QWidget):
         self.saved_alert_count = 0
         self.packet_table.clear_packets()
         self._set_busy(True)
-        self.status_label.setText(self._lm.tr("page.packets.status_importing", filename=Path(path).name))
+        self._set_status("page.packets.status_importing", filename=Path(path).name)
         save_packets = self.settings_repository.get_bool("auto_save_packets", True)
         alert_cooldown = max(0, self.settings_repository.get_int("alert_cooldown_seconds", 10))
 
@@ -544,7 +557,7 @@ class PacketPage(QWidget):
         self.saved_alert_count = 0
         self.packet_table.clear_packets()
         self._set_busy(True)
-        self.status_label.setText(self._lm.tr("page.packets.status_importing_decrypted", filename=Path(path).name))
+        self._set_status("page.packets.status_importing_decrypted", filename=Path(path).name)
         save_packets = self.settings_repository.get_bool("auto_save_packets", True)
         alert_cooldown = max(0, self.settings_repository.get_int("alert_cooldown_seconds", 10))
 
@@ -584,7 +597,7 @@ class PacketPage(QWidget):
         self._update_filter_status()
         detection_label = self._lm.tr("common.enabled") if detection_enabled else self._lm.tr("common.disabled")
         storage_label = self._lm.tr("common.enabled") if save_packets else self._lm.tr("common.disabled")
-        self.status_label.setText(self._lm.tr("page.packets.status_live_started", filter=filter_label, detection=detection_label, storage=storage_label))
+        self._set_status("page.packets.status_live_started", filter=filter_label, detection=detection_label, storage=storage_label)
         self.start_capture_button.setEnabled(False)
         self.stop_capture_button.setEnabled(True)
         self.import_button.setEnabled(False)
@@ -610,7 +623,7 @@ class PacketPage(QWidget):
 
     def stop_live_capture(self) -> None:
         if self.live_worker and self.live_worker.isRunning():
-            self.status_label.setText(self._lm.tr("page.packets.status_stopping"))
+            self._set_status("page.packets.status_stopping")
             self.live_worker.stop_capture()
 
     def handle_processed_batch(
@@ -626,9 +639,7 @@ class PacketPage(QWidget):
         self._pending_saved_alerts += saved_alerts
         if not self._flush_timer.isActive():
             self._flush_timer.start()
-        self.status_label.setText(
-            self._lm.tr("page.packets.status_processed", packets=self.loaded_count, saved_packets=self.saved_packet_count + self._pending_saved_packets, alerts=self.saved_alert_count + self._pending_saved_alerts)
-        )
+        self._set_status("page.packets.status_processed", packets=self.loaded_count, saved_packets=self.saved_packet_count + self._pending_saved_packets, alerts=self.saved_alert_count + self._pending_saved_alerts)
 
     def _flush_pending_batch(self) -> None:
         if not self._pending_packets:
@@ -643,28 +654,23 @@ class PacketPage(QWidget):
 
     def handle_import_failed(self, message: str) -> None:
         self._set_busy(False)
-        self.status_label.setText(self._lm.tr("page.packets.status_import_failed"))
+        self._set_status("page.packets.status_import_failed")
         QMessageBox.critical(self, self._lm.tr("page.packets.dialog.import_failed_title"), message)
 
     def handle_import_finished(self, packet_total: int, alert_total: int, skipped_total: int) -> None:
         self._set_busy(False)
-        self.status_label.setText(
-            self._lm.tr("page.packets.status_import_complete", packets=packet_total, alerts=alert_total, skipped=skipped_total)
-        )
+        self._set_status("page.packets.status_import_complete", packets=packet_total, alerts=alert_total, skipped=skipped_total)
 
     def handle_capture_progress(self, packet_total: int, skipped_total: int, packets_per_second: float) -> None:
         if self.capture_failed_flag:
             return
         self.capture_skipped_count = skipped_total
         self.capture_rate = packets_per_second
-        self.status_label.setText(
-            f"Live capture: {packet_total} packets processed at {packets_per_second:.1f} packets/s; "
-            f"{self.saved_alert_count} alerts saved; {skipped_total} packets skipped."
-        )
+        self._set_status("page.packets.status_live_metrics", packets=packet_total, rate=f"{packets_per_second:.1f}", alerts=self.saved_alert_count, skipped=skipped_total)
 
     def handle_capture_failed(self, message: str) -> None:
         self.capture_failed_flag = True
-        self.status_label.setText(self._lm.tr("page.packets.status_live_failed"))
+        self._set_status("page.packets.status_live_failed")
         QMessageBox.critical(
             self,
             self._lm.tr("page.packets.dialog.live_capture_failed_title"),
@@ -681,9 +687,7 @@ class PacketPage(QWidget):
         self.import_decrypted_button.setEnabled(True)
         self.refresh_interfaces_button.setEnabled(True)
         if not self.capture_failed_flag:
-            self.status_label.setText(
-                self._lm.tr("page.packets.status_live_stopped", packets=self.loaded_count, alerts=self.saved_alert_count, skipped=self.capture_skipped_count)
-            )
+            self._set_status("page.packets.status_live_stopped", packets=self.loaded_count, alerts=self.saved_alert_count, skipped=self.capture_skipped_count)
 
     def clear_packets(self) -> None:
         self.packet_table.clear_packets()
@@ -693,7 +697,7 @@ class PacketPage(QWidget):
         self.saved_alert_count = 0
         self.capture_skipped_count = 0
         self.capture_rate = 0.0
-        self.status_label.setText(self._lm.tr("page.packets.status_cleared"))
+        self._set_status("page.packets.status_cleared")
 
     def _set_busy(self, busy: bool) -> None:
         self.import_button.setEnabled(not busy)
@@ -747,14 +751,14 @@ class PacketPage(QWidget):
 
     def _update_filter_status(self) -> None:
         if self.filter_error_message:
-            self.filter_result_label.setText(f"Invalid filter: {self.filter_error_message}")
+            self.filter_result_label.setText(self._lm.tr("page.packets.filter_invalid", error=self.filter_error_message))
             return
         visible = self.packet_table.rowCount()
         buffered = self.packet_table.buffered_packet_count()
-        text = f"Showing {visible:,} of {buffered:,} packets"
+        text = self._lm.tr("page.packets.filter_showing_packets", visible=visible, buffered=buffered)
         capture_filter_changed = self.packet_filter.capture_filter != self.active_capture_filter
         if self.live_worker and self.live_worker.isRunning() and capture_filter_changed:
-            text += " (capture filter applies after restart)"
+            text += self._lm.tr("page.packets.filter_capture_restart")
         self.filter_result_label.setText(text)
 
     def _default_pcap_dialog_location(self) -> str:
