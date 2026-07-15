@@ -41,7 +41,7 @@ class WebAttackRule(RuleBase):
         ("xxe_entity", re.compile(r"<!ENTITY\s+\w+\s+(SYSTEM|PUBLIC)", re.IGNORECASE)),
         ("xxe_doctype", re.compile(r"<!DOCTYPE\s+\w+\s+\[", re.IGNORECASE)),
         ("ssti_jinja", re.compile(r"\{\{.*?(?:__class__|__bases__|__mro__|__subclasses__|config\.|self\._|request\.|session\[|\d+\s*[\*\+\-\/]\s*\d+).*?\}\}|\{%\s*(?:if|for|block|extends|include|set)\s")),
-        ("ssti_freemarker", re.compile(r"\$\{(?:runtime|class|system|exec|\.getClass|\.getRuntime)\b|<#(?:if|list|assign|include)\s+\w+\.(?:class|get)")),
+        ("ssti_freemarker", re.compile(r"\$\{(?:(?:runtime|class|system|exec|\.getClass|\.getRuntime)\b|\d+\s*[*+\-/]\s*\d+\s*\})|<#(?:if|list|assign|include)\s+\w+\.(?:class|get)")),
         ("ssti_velocity", re.compile(r"#set\s*\(\s*\$\w+\.(?:class|forName|getRuntime)")),
         ("crlf", re.compile(r"%0d%0a|\r\n.*(Content-Length|Set-Cookie|Location):", re.IGNORECASE)),
         ("ldap_inject", re.compile(r"\*\s*\(\s*\||\*\s*\(\s*&|\(\s*objectClass\s*=", re.IGNORECASE)),
