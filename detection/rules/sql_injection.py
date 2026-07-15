@@ -32,7 +32,7 @@ class SqlInjectionRule(RuleBase):
         ("union_select", re.compile(r"UNION\s+(ALL\s+)?SELECT", re.IGNORECASE)),
         ("tautology_quote", re.compile(r"'\s*OR\s+'1'\s*=\s*'1|'\s*OR\s+1\s*=\s*1|'\s*OR\s+'a'\s*=\s*'a", re.IGNORECASE)),
         ("numeric_tautology", re.compile(r"\bOR\s+1\s*=\s*1\b|\bAND\s+1\s*=\s*1\b", re.IGNORECASE)),
-        ("sql_comment", re.compile(r"--\s|--$|/\*.*\*/|#\s*$", re.IGNORECASE)),
+        ("sql_comment", re.compile(r"(?:'|%27|%22)\s*--\s|/\*!|OR\s+\d+=\d+\s*--|UNION\s+SELECT.*--", re.IGNORECASE)),
         ("drop_table", re.compile(r"\bDROP\s+TABLE\b", re.IGNORECASE)),
         ("alter_table", re.compile(r"\bALTER\s+TABLE\b", re.IGNORECASE)),
         ("truncate_table", re.compile(r"\bTRUNCATE\s+TABLE\b", re.IGNORECASE)),

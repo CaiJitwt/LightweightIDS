@@ -270,7 +270,7 @@ class LiveCaptureWorker(QThread):
         self.capture = LiveCapture(
             interface=self.interface,
             packet_callback=handle_raw_packet,
-            idle_callback=lambda: flush_batch(force=True),
+            idle_callback=lambda: None if self.capture._stop_event.is_set() else flush_batch(force=True),
             capture_filter=self.capture_filter,
         )
         try:
@@ -278,12 +278,7 @@ class LiveCaptureWorker(QThread):
         except Exception as exc:
             self.capture_failed.emit(str(exc))
         finally:
-            try:
-                flush_batch(force=True)
-            except Exception as exc:
-                self.capture_failed.emit(str(exc))
-            finally:
-                self.capture_stopped.emit()
+            self.capture_stopped.emit()
 
     def stop_capture(self) -> None:
         if self.capture:
@@ -333,6 +328,13 @@ class PacketPage(QWidget):
         self.filter_timer = QTimer(self)
         self.filter_timer.setSingleShot(True)
         self.filter_timer.setInterval(250)
+
+        self._pending_packets: list[PacketRecord] = []
+        self._pending_saved_packets = 0
+        self._pending_saved_alerts = 0
+        self._flush_timer = QTimer(self)
+        self._flush_timer.setInterval(1000)
+        self._flush_timer.timeout.connect(self._flush_pending_batch)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
@@ -619,13 +621,25 @@ class PacketPage(QWidget):
         saved_alerts: int,
     ) -> None:
         self.loaded_count += len(packets)
-        self.packet_table.add_packets(packets)
-        self._update_filter_status()
-        self.saved_packet_count += saved_packets
-        self.saved_alert_count += saved_alerts
+        self._pending_packets.extend(packets)
+        self._pending_saved_packets += saved_packets
+        self._pending_saved_alerts += saved_alerts
+        if not self._flush_timer.isActive():
+            self._flush_timer.start()
         self.status_label.setText(
-            self._lm.tr("page.packets.status_processed", packets=self.loaded_count, saved_packets=self.saved_packet_count, alerts=self.saved_alert_count)
+            self._lm.tr("page.packets.status_processed", packets=self.loaded_count, saved_packets=self.saved_packet_count + self._pending_saved_packets, alerts=self.saved_alert_count + self._pending_saved_alerts)
         )
+
+    def _flush_pending_batch(self) -> None:
+        if not self._pending_packets:
+            return
+        self.packet_table.add_packets(self._pending_packets)
+        self._update_filter_status()
+        self.saved_packet_count += self._pending_saved_packets
+        self.saved_alert_count += self._pending_saved_alerts
+        self._pending_packets.clear()
+        self._pending_saved_packets = 0
+        self._pending_saved_alerts = 0
 
     def handle_import_failed(self, message: str) -> None:
         self._set_busy(False)
@@ -658,6 +672,8 @@ class PacketPage(QWidget):
         )
 
     def handle_capture_stopped(self) -> None:
+        self._flush_timer.stop()
+        self._flush_pending_batch()
         self.start_capture_button.setEnabled(True)
         self.stop_capture_button.setEnabled(False)
         self.import_button.setEnabled(True)

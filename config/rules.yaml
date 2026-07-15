@@ -140,7 +140,7 @@ rules:
     category: behavior
     severity: HIGH
     enabled: true
-    threshold: 80
+    threshold: 92
     time_window: 60
     description: Uses flow-level features with IsolationForest or a lightweight fallback model to detect anomalous host behavior.
   - id: SIGNATURE_MATCH
@@ -164,7 +164,7 @@ rules:
     category: behavior
     severity: HIGH
     enabled: true
-    threshold: 4
+    threshold: 8
     time_window: 60
     description: Detects hosts whose byte volume sharply exceeds their historical baseline.
   - id: SESSION_DURATION_ANOMALY

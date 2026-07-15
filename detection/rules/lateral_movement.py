@@ -25,7 +25,7 @@ class LateralMovementRule(RuleBase):
     time_window = 60
 
     LATERAL_PORTS = {22, 135, 139, 445, 3389, 5985, 5986}
-    ADMIN_SHARE_MARKERS = ("\\\\admin$", "\\admin$", "admin$", "\\\\c$", "\\c$", " c$")
+    ADMIN_SHARE_MARKERS = ("\\\\admin$", "\\admin$", "\\\\c$", "\\c$")
 
     def __init__(self, **kwargs: object) -> None:
         super().__init__(**kwargs)  # type: ignore[arg-type]
@@ -106,6 +106,8 @@ class LateralMovementRule(RuleBase):
         )
 
     def _contains_admin_share(self, packet: PacketRecord) -> bool:
+        if packet.dst_port != 445 and packet.src_port != 445:
+            return False
         text = packet_text(packet).replace("/", "\\")
         return any(marker in text for marker in self.ADMIN_SHARE_MARKERS)
 
