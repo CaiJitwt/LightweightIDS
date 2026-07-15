@@ -31,7 +31,7 @@ class LiveCapture:
                 filter=self.capture_filter or None,
                 prn=self.packet_callback,
                 store=False,
-                timeout=1,
+                timeout=0.2,
                 stop_filter=lambda _: self._stop_event.is_set(),
             )
             if self.idle_callback:

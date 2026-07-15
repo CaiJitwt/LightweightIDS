@@ -278,12 +278,8 @@ class LiveCaptureWorker(QThread):
         except Exception as exc:
             self.capture_failed.emit(str(exc))
         finally:
-            try:
-                flush_batch(force=True)
-            except Exception as exc:
-                self.capture_failed.emit(str(exc))
-            finally:
-                self.capture_stopped.emit()
+            flush_batch(force=True)
+            self.capture_stopped.emit()
 
     def stop_capture(self) -> None:
         if self.capture:
