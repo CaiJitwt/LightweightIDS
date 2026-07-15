@@ -76,6 +76,7 @@ class AlertPage(QWidget):
         self.ignore_button = QPushButton(self._lm.tr("page.alerts.ignore"))
         self.delete_button = QPushButton(self._lm.tr("page.alerts.delete"))
         self.investigate_button = QPushButton(self._lm.tr("page.alerts.investigate"))
+        self.analyze_button = QPushButton(self._lm.tr("page.alerts.analyze"))
         self.export_button = QPushButton(self._lm.tr("page.alerts.export_csv"))
         self.result_label = QLabel()
         self.result_label.setObjectName("PageHint")

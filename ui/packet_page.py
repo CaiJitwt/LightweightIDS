@@ -352,6 +352,10 @@ class PacketPage(QWidget):
         self.clear_button = QPushButton(self._lm.tr("page.packets.clear_table"))
         self.stop_capture_button.setEnabled(False)
 
+        interface_row.addWidget(self.interface_combo, 1)
+        interface_row.addWidget(self.refresh_interfaces_button)
+
+        toolbar = QHBoxLayout()
         toolbar.addWidget(self.import_button)
         toolbar.addWidget(self.demo_button)
         toolbar.addWidget(self.import_decrypted_button)

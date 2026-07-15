@@ -246,3 +246,13 @@ class SettingsPage(QWidget):
         )
         logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
         self.status_label.setText(self._lm.tr("page.settings.saved_msg"))
+
+    def _load_llm_settings(self) -> None:
+        provider = self.settings_repository.get("llm_provider", "ollama")
+        index = self.llm_provider.findText(provider)
+        if index >= 0:
+            self.llm_provider.setCurrentIndex(index)
+        self.llm_api_url.setText(self.settings_repository.get("llm_api_url", ""))
+        self.llm_model.setText(self.settings_repository.get("llm_model", ""))
+        enabled = self.settings_repository.get_bool("llm_enabled", True)
+        self.llm_enabled.setChecked(enabled)
