@@ -115,6 +115,8 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
+    localStorage.removeItem("ids-prototype-llm");
+    sessionStorage.removeItem("ids-prototype-llm-api-key");
     idsApi.settings()
       .then((settings) => { if (active) setLlmSettings(llmSettingsFromRuntime(settings)); })
       .catch(() => undefined);

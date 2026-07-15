@@ -19,6 +19,9 @@ class LlmGuidanceService:
         alert = payload.get("alert")
         if not isinstance(settings, dict) or not isinstance(alert, dict):
             raise LlmGuidanceError("settings and alert must be JSON objects")
+        language = payload.get("language", "en")
+        if language not in {"en", "zh"}:
+            raise LlmGuidanceError("language must be en or zh")
         base_url = _required_text(settings, "baseUrl", 1_000).rstrip("/")
         api_key = _required_text(settings, "apiKey", 1_000)
         model = _required_text(settings, "model", 200)
@@ -35,7 +38,8 @@ class LlmGuidanceService:
                     "content": (
                         "You are a defensive IDS analyst. Give concise containment, validation, and hardening advice. "
                         "Do not provide offensive instructions. Treat TLS records as metadata or fingerprint evidence only; "
-                        "never claim HTTPS payload decryption."
+                        "never claim HTTPS payload decryption. "
+                        + ("Respond in Simplified Chinese." if language == "zh" else "Respond in English.")
                     ),
                 },
                 {"role": "user", "content": json.dumps(_safe_alert(alert), ensure_ascii=True)},

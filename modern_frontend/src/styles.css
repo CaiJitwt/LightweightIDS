@@ -306,6 +306,12 @@ kbd { padding: 2px 5px; border: 1px solid var(--border); border-radius: 3px; bac
 .settings-note { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 9px; background: var(--surface-muted); border: 1px solid var(--border); border-radius: 5px; }
 .defense-advice { display: flex; flex-direction: column; gap: 8px; }
 .defense-advice p { margin: 0; }
+.advice-controls { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.advice-language { display: inline-flex; align-items: center; gap: 3px; padding: 3px; background: var(--surface-muted); border: 1px solid var(--border); border-radius: 5px; }
+.advice-language > span { display: inline-flex; align-items: center; gap: 5px; padding: 0 6px; color: var(--muted); font-size: 10px; font-weight: 700; }
+.advice-language button { min-height: 27px; padding: 0 8px; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 4px; font-size: 10px; font-weight: 700; }
+.advice-language button.selected { color: var(--accent); background: var(--surface); border-color: var(--border-strong); }
+.advice-language button:disabled { cursor: wait; opacity: .7; }
 .advice-button { width: fit-content; color: #ffffff; background: #246aa2; border-color: #1c5c90; }
 .advice-button:disabled { cursor: wait; opacity: .72; }
 .advice-error { color: #a1292a !important; }

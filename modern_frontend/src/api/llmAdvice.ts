@@ -1,6 +1,8 @@
 import type { AlertRecord, LlmSettings } from "../types";
 
-export async function generateDefenseAdvice(settings: LlmSettings, alert: AlertRecord): Promise<string> {
+export type DefenseAdviceLanguage = "en" | "zh";
+
+export async function generateDefenseAdvice(settings: LlmSettings, alert: AlertRecord, language: DefenseAdviceLanguage): Promise<string> {
   if (!settings.baseUrl.trim() || !settings.model.trim() || !settings.apiKeyConfigured) {
     throw new Error("Save a Base URL, API key, and model in Settings before requesting guidance.");
   }
@@ -8,6 +10,7 @@ export async function generateDefenseAdvice(settings: LlmSettings, alert: AlertR
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      language,
       alert: {
         rule: alert.ruleName,
         ruleId: alert.ruleId,

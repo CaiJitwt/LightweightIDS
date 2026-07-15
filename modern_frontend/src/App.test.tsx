@@ -45,6 +45,10 @@ describe("modern IDS frontend", () => {
     expect(await screen.findByRole("heading", { name: "Alert center" })).toBeInTheDocument();
     expect(await screen.findByRole("complementary", { name: "Selected alert details" })).toHaveTextContent("Related packets");
     expect(screen.getByText("TLS metadata indicates a weak protocol fingerprint.")).toBeInTheDocument();
+    const language = screen.getByRole("group", { name: "Response language" });
+    expect(within(language).getByRole("button", { name: "English" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(within(language).getByRole("button", { name: "Chinese" }));
+    expect(within(language).getByRole("button", { name: "Chinese" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("filters the traffic table by protocol", async () => {

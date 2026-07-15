@@ -271,6 +271,9 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 alert = payload.get("alert")
                 if not isinstance(alert, dict):
                     raise LlmGuidanceError("alert must be a JSON object")
+                language = payload.get("language", "en")
+                if language not in {"en", "zh"}:
+                    raise LlmGuidanceError("language must be en or zh")
                 protected_key = self.server.settings.get("llm_api_key_protected")
                 if not protected_key:
                     raise LlmGuidanceError("Save an API key in Settings before requesting guidance.")
@@ -283,6 +286,7 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                                 "model": self.server.settings.get("llm_model", "gpt-4.1-mini"),
                             },
                             "alert": alert,
+                            "language": language,
                         }
                     )
                 )
@@ -325,7 +329,11 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 self.server.security_event_monitor.stop()
             values["security_event_monitor_enabled"] = "true" if enabled else "false"
         if "llmBaseUrl" in payload:
-            values["llm_base_url"] = _setting_text(payload, "llmBaseUrl", 1_000)
+            base_url = _setting_text(payload, "llmBaseUrl", 1_000).rstrip("/")
+            parsed_url = urlparse(base_url)
+            if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+                raise ValueError("llmBaseUrl must be a valid http or https URL")
+            values["llm_base_url"] = base_url
         if "llmModel" in payload:
             values["llm_model"] = _setting_text(payload, "llmModel", 200)
         if "llmApiKey" in payload and payload.get("clearLlmApiKey") is True:
