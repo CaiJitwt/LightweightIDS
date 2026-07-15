@@ -10,7 +10,7 @@ from ui.styles import configure_responsive_table
 
 
 class PacketTable(QTableWidget):
-    MAX_VISIBLE_ROWS = 500
+    MAX_VISIBLE_ROWS = 300
     MAX_BUFFERED_PACKETS = 2_000
 
     def __init__(self, _lm: LocaleManager | None = None) -> None:
