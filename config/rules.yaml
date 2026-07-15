@@ -138,7 +138,7 @@ rules:
   - id: ML_FLOW_ANOMALY
     name: ML flow anomaly
     category: behavior
-    severity: HIGH
+    severity: MEDIUM
     enabled: true
     threshold: 92
     time_window: 60
