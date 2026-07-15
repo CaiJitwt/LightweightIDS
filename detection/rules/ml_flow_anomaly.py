@@ -46,7 +46,7 @@ class MlFlowAnomalyRule(RuleBase):
             self.create_alert(
                 packet,
                 alert_type="ML_ANOMALY",
-                severity="CRITICAL" if result.score >= 95 else self.severity,
+                severity=self.severity,
                 description="Flow-level anomaly model assigned a high risk score to this host flow.",
                 evidence=(
                     f"score={result.score:.1f}; backend={result.backend}; "
