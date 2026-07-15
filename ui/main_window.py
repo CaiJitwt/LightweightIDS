@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -75,6 +75,11 @@ class MainWindow(QMainWindow):
         status_bar = QStatusBar()
         status_bar.showMessage(self._lm.tr("app.status.ready", path=str(self.database.path)))
         self.setStatusBar(status_bar)
+
+        QTimer.singleShot(200, self._prefetch_host_data)
+
+    def _prefetch_host_data(self) -> None:
+        self.host_explorer_page.service.list_hosts()
 
     def _build_pages(self) -> None:
         if self.overlay_pet is None:
