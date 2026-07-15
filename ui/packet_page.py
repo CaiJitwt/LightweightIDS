@@ -517,6 +517,11 @@ class PacketPage(QWidget):
             QMessageBox.information(self, "Import in progress", "A pcap file is already being imported. Please wait.")
             return
 
+        file_path = Path(path)
+        if file_path.exists() and file_path.stat().st_size > 100 * 1024 * 1024:
+            QMessageBox.warning(self, "File too large", "The selected file exceeds the 100 MB size limit.")
+            return
+
         self.loaded_count = 0
         self.saved_packet_count = 0
         self.saved_alert_count = 0
