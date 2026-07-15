@@ -63,6 +63,7 @@ class WebAttackRule(RuleBase):
             return []
         if packet.protocol == "TCP" and not (packet.http_method or packet.http_host or packet.http_path):
             return []
+        text = packet_text(packet)
         matches = [name for name, pattern in self.REGEX_PATTERNS if pattern.search(text)]
         if not matches:
             return []
