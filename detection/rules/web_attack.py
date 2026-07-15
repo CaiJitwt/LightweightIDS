@@ -14,6 +14,7 @@ class WebAttackRule(RuleBase):
     severity = "HIGH"
     threshold = 1
     time_window = 0
+    protocols = {"HTTP", "HTTPS"}
 
     REGEX_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         ("path_traversal_dot", re.compile(r"\.\./|\.\.\\")),

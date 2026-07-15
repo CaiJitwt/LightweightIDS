@@ -16,6 +16,7 @@ class RuleBase(ABC):
     enabled: bool = True
     threshold: int = 1
     time_window: int = 0
+    protocols: set[str] | None = None
 
     def __init__(
         self,

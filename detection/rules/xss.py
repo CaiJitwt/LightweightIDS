@@ -14,6 +14,7 @@ class XssRule(RuleBase):
     severity = "HIGH"
     threshold = 1
     time_window = 0
+    protocols = {"HTTP", "HTTPS"}
 
     KEYWORDS = [
         "<script",

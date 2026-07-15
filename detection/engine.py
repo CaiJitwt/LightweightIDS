@@ -47,6 +47,17 @@ class DetectionEngine:
             minimum_severity=minimum_severity,
         )
         self._last_alert_at: dict[tuple[str, str | None, str | None], float] = {}
+        self._build_rule_index()
+
+    def _build_rule_index(self) -> None:
+        self._rules_all: list[RuleBase] = []
+        self._rules_by_proto: dict[str, list[RuleBase]] = {}
+        for rule in self.rules:
+            if rule.protocols:
+                for proto in rule.protocols:
+                    self._rules_by_proto.setdefault(proto, []).append(rule)
+            else:
+                self._rules_all.append(rule)
 
     @classmethod
     def with_default_rules(cls, alert_cooldown_seconds: int = 10) -> "DetectionEngine":
@@ -138,10 +149,15 @@ class DetectionEngine:
 
     def add_rule(self, rule: RuleBase) -> None:
         self.rules.append(rule)
+        self._build_rule_index()
 
     def process_packet(self, packet: PacketRecord) -> list[AlertRecord]:
         alerts: list[AlertRecord] = []
-        for rule in self.rules:
+        candidates = list(self._rules_all)
+        proto_rules = self._rules_by_proto.get(packet.protocol)
+        if proto_rules:
+            candidates.extend(proto_rules)
+        for rule in candidates:
             if not rule.enabled:
                 continue
             for alert in rule.process(packet):
