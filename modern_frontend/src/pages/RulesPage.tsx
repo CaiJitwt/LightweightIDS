@@ -36,11 +36,12 @@ export function RulesPage() {
             <tbody>
               {records.map((rule) => {
                 const guidance = RULE_GUIDANCE[rule.id] ?? FALLBACK_RULE_GUIDANCE;
+                const resourceLoadRule = rule.id === "SUSTAINED_CPU_LOAD" || rule.id === "SUSTAINED_GPU_LOAD";
                 return <tr key={rule.id}>
                   <td><div className="rule-identity"><strong>{rule.name}</strong><span className="rule-category" data-category={rule.category}>{rule.category}</span></div></td>
                   <td><SeverityBadge severity={rule.severity} /></td>
                   <td><label className="switch"><input aria-label={`Enable ${rule.name}`} type="checkbox" checked={rule.enabled} onChange={(event) => void update(rule, { enabled: event.target.checked })} /><span /></label></td>
-                  <td><input className="table-input" aria-label={`${rule.name} threshold`} type="number" min="1" value={rule.threshold} onChange={(event) => void update(rule, { threshold: Math.max(1, Number(event.target.value) || 1) })} /></td>
+                  <td><input className="table-input" aria-label={`${rule.name} threshold`} type="number" min="1" max={resourceLoadRule ? 100 : undefined} value={rule.threshold} onChange={(event) => void update(rule, { threshold: resourceLoadRule ? Math.max(1, Math.min(100, Number(event.target.value) || 1)) : Math.max(1, Number(event.target.value) || 1) })} /></td>
                   <td><input className="table-input" aria-label={`${rule.name} window`} type="number" min="0" value={rule.timeWindow} onChange={(event) => void update(rule, { timeWindow: Math.max(0, Number(event.target.value) || 0) })} /></td>
                   <td className="rule-guidance-cell">
                     <p><strong>Method</strong>{guidance.method}</p>

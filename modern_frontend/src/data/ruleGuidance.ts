@@ -147,6 +147,16 @@ export const RULE_GUIDANCE: Record<string, RuleGuidance> = {
     threshold: "Remote session events required before an alert is generated.",
     window: "Rolling remote-session observation period in seconds.",
   },
+  SUSTAINED_CPU_LOAD: {
+    method: "Samples local CPU utilization and alerts only when it remains continuously high.",
+    threshold: "CPU utilization percentage from 1 to 100 (default: 90).",
+    window: "Continuous high-load duration in seconds before alerting (default: 300).",
+  },
+  SUSTAINED_GPU_LOAD: {
+    method: "Samples supported GPU utilization telemetry and alerts only when it remains continuously high.",
+    threshold: "GPU utilization percentage from 1 to 100 (default: 90).",
+    window: "Continuous high-load duration in seconds before alerting (default: 300).",
+  },
 };
 
 export const FALLBACK_RULE_GUIDANCE: RuleGuidance = {

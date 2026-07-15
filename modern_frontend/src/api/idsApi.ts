@@ -5,6 +5,7 @@ import type {
   CaptureStartOptions,
   CaptureStatus,
   DashboardSnapshot,
+  EventTimelineRecord,
   HostProfile,
   HostRecord,
   IntegrityResult,
@@ -66,6 +67,7 @@ export const idsApi = {
   validateFilter: (filterExpression: string) => request<{ expression: string; bpf: string }>("/api/capture/validate-filter", { method: "POST", body: JSON.stringify({ filterExpression }) }),
   packets: (after: number) => request<{ records: PacketRecord[]; nextSequence: number }>(`/api/packets?after=${after}&limit=250`),
   dashboard: () => request<DashboardSnapshot>("/api/dashboard"),
+  timeline: () => request<{ records: EventTimelineRecord[] }>("/api/timeline?limit=500"),
   topology: () => request<TopologySnapshot>("/api/topology"),
   resetStatistics: () => request<{ reset: boolean; dashboard: DashboardSnapshot }>("/api/statistics/reset", { method: "POST", body: "{}" }),
   alerts: (filters: { query?: string; severity?: string; limit?: number } = {}) => {

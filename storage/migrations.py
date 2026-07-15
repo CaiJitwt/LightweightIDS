@@ -226,4 +226,6 @@ DEFAULT_RULES = [
     ("POWERSHELL_SUSPICIOUS", "Suspicious PowerShell activity", "host", "HIGH", 1, 3, 0, "Detects suspicious indicators in PowerShell operational events."),
     ("SECURITY_CONTROL_TAMPER", "Security control tampering", "host", "CRITICAL", 1, 1, 0, "Detects security-log clearing and protection-disable events."),
     ("RDP_LATERAL_ACTIVITY", "RDP lateral activity", "host", "HIGH", 1, 3, 300, "Detects repeated remote interactive logons from the same source."),
+    ("SUSTAINED_CPU_LOAD", "Sustained CPU load", "endpoint", "MEDIUM", 1, 90, 300, "Flags CPU utilization that remains above the configured percentage for the configured window; this is a review signal, not proof of malware."),
+    ("SUSTAINED_GPU_LOAD", "Sustained GPU load", "endpoint", "MEDIUM", 1, 90, 300, "Flags supported GPU telemetry that remains above the configured percentage for the configured window; this is a review signal, not proof of malware."),
 ]

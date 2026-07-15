@@ -186,8 +186,8 @@ export default function App() {
             {page === "investigations" && <InvestigationsPage />}
             {page === "assets" && <AssetsPage />}
             {page === "rules" && <RulesPage />}
-            {page === "reports" && <ReportsPage />}
-            {page === "timeline" && <EventTimelinePage />}
+            {page === "reports" && <ReportsPage refreshVersion={refreshVersion} />}
+            {page === "timeline" && <EventTimelinePage refreshVersion={refreshVersion} />}
             {page === "topology" && <NetworkTopologyPage refreshVersion={refreshVersion} />}
             {page === "security-events" && <SecurityEventsPage onOpenAlert={(alertId) => { setSelectedAlertId(alertId); setPage("alerts"); }} />}
             {page === "health" && <SystemHealthPage refreshVersion={refreshVersion} />}

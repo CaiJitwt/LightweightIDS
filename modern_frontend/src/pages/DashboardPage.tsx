@@ -7,6 +7,9 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Line,
+  LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -72,6 +75,13 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
 
   const captureLive = snapshot.capture.state === "running";
   const dataLabel = connected ? "Local SQLite data" : "Offline preview";
+  const detectionRateTrend = snapshot.trend.map((point) => ({
+    ...point,
+    detectionRate: point.packets > 0 ? Math.round(point.alerts * 10000 / point.packets) / 10 : 0,
+  }));
+  const averageDetectionRate = detectionRateTrend.length
+    ? detectionRateTrend.reduce((total, point) => total + point.detectionRate, 0) / detectionRateTrend.length
+    : 0;
   const resetStatistics = async () => {
     if (!window.confirm("Delete all packet, alert, and security-event runtime data and start from zero? Assets, investigations, and evidence snapshots will be preserved.")) return;
     setResetting(true);
@@ -134,6 +144,22 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
               </BarChart>
             </ResponsiveContainer> : <EmptyState text="No alerts have been stored yet." />}
           </div>
+        </div>
+      </section>
+
+      <section className="section-panel detection-rate-panel">
+        <SectionHeading title="Detection rate trend" meta="Alerts per 1,000 stored packets by observed hour" />
+        <div className="chart-area" aria-label="Detection rate trend chart">
+          {detectionRateTrend.length ? <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={detectionRateTrend} margin={{ top: 10, right: 18, left: -18, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
+              <XAxis dataKey="time" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+              <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+              <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}`, "Alerts / 1k packets"]} contentStyle={{ borderRadius: 6, borderColor: "var(--border)" }} />
+              <ReferenceLine y={averageDetectionRate} stroke="#d97706" strokeDasharray="5 4" label={{ value: "Average", position: "insideTopRight", fill: "#9a5b08", fontSize: 10 }} />
+              <Line type="monotone" dataKey="detectionRate" stroke="#2f8f66" strokeWidth={2.5} dot={{ r: 3, fill: "#2f8f66" }} activeDot={{ r: 5 }} isAnimationActive={false} />
+            </LineChart>
+          </ResponsiveContainer> : <EmptyState text="No packet and alert trend is available yet." />}
         </div>
       </section>
 
