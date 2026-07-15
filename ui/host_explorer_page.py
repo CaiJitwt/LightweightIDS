@@ -199,9 +199,7 @@ class HostExplorerPage(QWidget):
                 self.host_table.setItem(row, column, item)
         if selected_ip:
             self._select_row(selected_ip)
-        elif self.hosts:
-            self.host_table.selectRow(0)
-        else:
+        elif not self.hosts:
             self.current_host_ip = ""
             self.overview_view.clear()
             self.connections_table.setRowCount(0)
