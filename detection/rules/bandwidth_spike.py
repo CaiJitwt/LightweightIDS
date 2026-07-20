@@ -9,11 +9,11 @@ class BandwidthSpikeRule(RuleBase):
     rule_id = "BANDWIDTH_SPIKE"
     name = "Bandwidth spike"
     category = "behavior"
-    severity = "HIGH"
-    threshold = 4
+    severity = "MEDIUM"
+    threshold = 8
     time_window = 60
 
-    def __init__(self, *, min_history: int = 5, min_extra_bytes: int = 4000, **kwargs: object) -> None:
+    def __init__(self, *, min_history: int = 5, min_extra_bytes: int = 102_400, **kwargs: object) -> None:
         super().__init__(**kwargs)  # type: ignore[arg-type]
         self.min_history = min_history
         self.min_extra_bytes = min_extra_bytes
