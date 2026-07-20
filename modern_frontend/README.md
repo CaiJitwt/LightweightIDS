@@ -62,7 +62,7 @@ Some pages can render an explicitly labeled offline preview when the local API i
 
 ### Analyst workflow persistence
 
-Local API v6 exposes Assets and Investigations CRUD routes under `/api/assets` and `/api/investigations`. Records created or edited in the browser are stored in the shared SQLite database and remain available after restart. Investigation detail responses also include existing evidence snapshots; adding/removing evidence and investigation HTML export remain classic-desktop workflows.
+Local API v8 exposes Assets and Investigations CRUD routes under `/api/assets` and `/api/investigations`. Records created or edited in the browser are stored in the shared SQLite database and remain available after restart. Investigation detail responses also include existing evidence snapshots; adding/removing evidence and investigation HTML export remain classic-desktop workflows.
 
 ## Live Capture
 
@@ -93,7 +93,7 @@ Assets, investigations, and investigation evidence snapshots are preserved.
 
 ## Personalization
 
-Theme preference can follow the operating system or use an explicit light/dark mode. Font size, accent, wallpaper, overlay image, position, size, and opacity are remembered in browser local storage. The overlay is non-interactive and does not intercept primary workspace actions.
+Theme preference can follow the operating system or use an explicit light/dark mode. Theme, font size, accent, surface styling, wallpaper, overlay image, position, size, and opacity are persisted through the local API. Configuration is stored in the shared SQLite database, while uploaded images are stored under `<database directory>/personalization/modern` (`data/personalization/modern` by default). Browser storage remains a temporary offline cache and is migrated when the local API is available. The overlay is non-interactive and does not intercept primary workspace actions.
 
 ## Security Boundary
 
