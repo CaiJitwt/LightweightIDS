@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
 
@@ -16,14 +17,18 @@ def configure_logging(config: dict[str, Any] | None = None) -> None:
         log_file = Path.cwd() / log_file
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
-    logging.basicConfig(
-        level=getattr(logging, level_name, logging.INFO),
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        handlers=[
-            logging.FileHandler(log_file, encoding="utf-8"),
-            logging.StreamHandler(),
-        ],
+    file_handler = RotatingFileHandler(
+        log_file, encoding="utf-8", maxBytes=5 * 1024 * 1024, backupCount=2
     )
+    file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.setLevel(getattr(logging, level_name, logging.INFO))
+    root.addHandler(file_handler)
+    root.addHandler(stream_handler)
 
 
 def get_logger(name: str) -> logging.Logger:
