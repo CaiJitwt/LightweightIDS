@@ -86,7 +86,7 @@ const pageMeta: Record<PageKey, { title: string; subtitle: string }> = {
   help: { title: "Help center", subtitle: "Product guidance, analyst workflow and quick navigation" },
 };
 
-const defaultPersonalization: PersonalizationState = { accent: "#2677bd", background: "", petImage: "", petPosition: "bottom-right", petSize: 96, petOpacity: 85 };
+const defaultPersonalization: PersonalizationState = { accent: "#2677bd", background: "", backgroundPosition: "center", backgroundSize: "cover", backgroundOpacity: 100, petImage: "", petPosition: "bottom-right", petSize: 96, petOpacity: 85 };
 
 export default function App() {
   const [page, setPage] = useState<PageKey>("dashboard");
@@ -152,7 +152,13 @@ export default function App() {
     : pageMeta[page];
 
   return (
-    <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}${personalization.background ? " has-wallpaper" : ""}`} data-theme={theme} data-font-scale={fontScale} style={{ "--accent": personalization.accent, "--wallpaper": personalization.background ? `url(${personalization.background})` : undefined } as React.CSSProperties}>
+    <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}${personalization.background ? " has-wallpaper" : ""}`} data-theme={theme} data-font-scale={fontScale} style={{
+      "--accent": personalization.accent,
+      "--wallpaper": personalization.background ? `url(${personalization.background})` : undefined,
+      "--wallpaper-position": personalization.backgroundPosition,
+      "--wallpaper-size": personalization.backgroundSize === "stretch" ? "100% 100%" : personalization.backgroundSize,
+      "--wallpaper-opacity": personalization.backgroundOpacity / 100,
+    } as React.CSSProperties}>
       {personalization.background && <div className="workspace-wallpaper" />}
       <aside className="sidebar">
         <div className="brand-block"><span className="brand-mark"><Shield size={20} /></span><span className="brand-copy"><strong>Lightweight IDS</strong><small>Analyst console</small></span></div>

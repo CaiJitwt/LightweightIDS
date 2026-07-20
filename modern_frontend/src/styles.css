@@ -35,9 +35,10 @@ button { cursor: pointer; }
   position: fixed;
   inset: 0;
   background-image: var(--wallpaper);
-  background-size: cover;
-  background-position: center;
+  background-size: var(--wallpaper-size, cover);
+  background-position: var(--wallpaper-position, center);
   background-repeat: no-repeat;
+  opacity: var(--wallpaper-opacity, 1);
   z-index: 0;
   pointer-events: none;
 }
