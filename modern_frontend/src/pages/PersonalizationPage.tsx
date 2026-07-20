@@ -1,5 +1,7 @@
-import { useRef } from "react";
-import { ImagePlus, Palette, PawPrint, RotateCcw } from "lucide-react";
+import { useRef, useState } from "react";
+import { AlertTriangle, ImagePlus, Palette, PawPrint, RotateCcw } from "lucide-react";
+
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 export interface PersonalizationState {
   accent: string;
@@ -10,18 +12,24 @@ export interface PersonalizationState {
   petOpacity: number;
 }
 
-export function PersonalizationPage({ state, onChange }: { state: PersonalizationState; onChange: (next: PersonalizationState) => void }) {
+export function PersonalizationPage({ state, onChange, storageWarning }: { state: PersonalizationState; onChange: (next: PersonalizationState) => void; storageWarning?: boolean }) {
   const backgroundPicker = useRef<HTMLInputElement>(null);
   const petPicker = useRef<HTMLInputElement>(null);
+  const [warning, setWarning] = useState("");
   const readImage = (event: React.ChangeEvent<HTMLInputElement>, key: "background" | "petImage") => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    if (file.size > MAX_IMAGE_BYTES) {
+      setWarning(`"${file.name}" is ${(file.size / 1024 / 1024).toFixed(1)} MB. Images larger than 2 MB may not persist after a page reload.`);
+    } else {
+      setWarning("");
+    }
     const reader = new FileReader();
     reader.onload = () => onChange({ ...state, [key]: String(reader.result) });
     reader.readAsDataURL(file);
   };
-  const reset = () => onChange({ accent: "#2677bd", background: "", petImage: "", petPosition: "bottom-right", petSize: 96, petOpacity: 85 });
+  const reset = () => { setWarning(""); onChange({ accent: "#2677bd", background: "", petImage: "", petPosition: "bottom-right", petSize: 96, petOpacity: 85 }); };
   return <div className="page-stack settings-workspace">
     <section className="settings-section"><header className="section-heading"><div><h2>Workspace appearance</h2><p>Saved locally for this modern frontend profile</p></div><Palette size={17} /></header><div className="settings-body">
       <div className="setting-row"><div><strong>Accent color</strong><small>Used for navigation and interactive emphasis.</small></div><label className="color-picker"><input aria-label="Accent color" type="color" value={state.accent} onChange={(event) => onChange({ ...state, accent: event.target.value })} /><code>{state.accent}</code></label></div>
@@ -32,6 +40,8 @@ export function PersonalizationPage({ state, onChange }: { state: Personalizatio
       <div className="setting-row"><div><strong>Position</strong></div><select className="plain-select" aria-label="Pet position" value={state.petPosition} onChange={(event) => onChange({ ...state, petPosition: event.target.value as PersonalizationState["petPosition"] })}><option value="bottom-right">Bottom right</option><option value="bottom-left">Bottom left</option><option value="top-right">Top right</option><option value="top-left">Top left</option></select></div>
       <Range label="Size" value={state.petSize} min={48} max={220} suffix="px" onChange={(value) => onChange({ ...state, petSize: value })} /><Range label="Opacity" value={state.petOpacity} min={20} max={100} suffix="%" onChange={(value) => onChange({ ...state, petOpacity: value })} />
     </div></section>
+    {warning && <div className="storage-warning" role="alert"><AlertTriangle size={15} />{warning}</div>}
+    {storageWarning && !warning && <div className="storage-warning" role="alert"><AlertTriangle size={15} />Browser storage is full — wallpaper and pet image may not persist after a page reload. Clear older images to free space.</div>}
     <button className="icon-text-button reset-personalization" type="button" onClick={reset}><RotateCcw size={15} />Reset personalization</button>
   </div>;
 }

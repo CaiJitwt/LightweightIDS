@@ -100,6 +100,7 @@ export default function App() {
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [selectedHostIp, setSelectedHostIp] = useState<string | undefined>();
   const [personalization, setPersonalization] = useState<PersonalizationState>(readPersonalization);
+  const [storageWarning, setStorageWarning] = useState(false);
   const [helpLanguage, setHelpLanguage] = useState<HelpLanguage>(readHelpLanguage);
   const [openAlertCount, setOpenAlertCount] = useState(0);
   const [alertBadgeRefresh, setAlertBadgeRefresh] = useState(0);
@@ -124,7 +125,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    try { localStorage.setItem("ids-prototype-personalization", JSON.stringify(personalization)); } catch { /* Browser storage can reject large image data. */ }
+    try { localStorage.setItem("ids-prototype-personalization", JSON.stringify(personalization)); setStorageWarning(false); }
+    catch { setStorageWarning(true); }
   }, [personalization]);
 
   useEffect(() => localStorage.setItem("ids-help-language", helpLanguage), [helpLanguage]);
@@ -194,7 +196,7 @@ export default function App() {
             {page === "health" && <SystemHealthPage refreshVersion={refreshVersion} />}
             {page === "endpoint" && <EndpointSecurityPage refreshVersion={refreshVersion} />}
             {page === "settings" && <SettingsPage themePreference={themePreference} onThemePreferenceChange={setThemePreference} fontScale={fontScale} onFontScaleChange={setFontScale} llmSettings={llmSettings} onLlmSettingsChange={setLlmSettings} />}
-            {page === "personalization" && <PersonalizationPage state={personalization} onChange={setPersonalization} />}
+            {page === "personalization" && <PersonalizationPage state={personalization} onChange={setPersonalization} storageWarning={storageWarning} />}
             {page === "help" && <HelpPage onNavigate={setPage} language={helpLanguage} onLanguageChange={setHelpLanguage} />}
           </Suspense>
         </div>
