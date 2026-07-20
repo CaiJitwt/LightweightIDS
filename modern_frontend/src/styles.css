@@ -499,6 +499,8 @@ kbd { padding: 2px 5px; border: 1px solid var(--border); border-radius: 3px; bac
 .detector-hits { min-width: 62px; color: var(--muted); font-family: inherit; font-size: 10px; font-variant-numeric: tabular-nums; text-align: right; }
 
 /* Rule management */
+.page-note { display: flex; align-items: center; gap: 6px; margin: 0 12px; font-size: 12px; color: #665e53; }
+.page-note > svg { flex: none; }
 .rule-tuning-note { display: flex; align-items: flex-start; gap: 9px; margin: 10px 12px 0; padding: 10px 11px; color: #215a85; background: #eaf4fb; border: 1px solid #c4dff1; border-radius: 5px; }
 .rule-tuning-note > svg { flex: none; margin-top: 1px; }
 .rule-tuning-note strong { display: block; font-size: 11px; }
