@@ -17,18 +17,19 @@ python modern_main.py
 The launcher:
 
 1. initializes the selected SQLite database;
-2. starts the local API at `http://127.0.0.1:8787`;
+2. selects an available loopback port and starts the local API;
 3. installs missing npm packages when necessary;
-4. starts Vite at `http://127.0.0.1:4173`;
+4. selects another available loopback port and starts Vite;
 5. opens the browser unless `--no-browser` is used.
 
 ```powershell
 python modern_main.py --no-browser
 python modern_main.py --skip-install
 python modern_main.py --database .\data\custom_ids.db
+python modern_main.py --api-port 8787 --frontend-port 4173
 ```
 
-Press `Ctrl+C` in the launcher terminal to stop services it started. If port `8787` contains an older incompatible API, stop that process before launching the current version.
+Press `Ctrl+C` in the launcher terminal to stop services it started. The launcher prints the selected API and frontend addresses. Pass explicit port options only when stable addresses are required.
 
 ## Development Start
 
@@ -41,6 +42,7 @@ python -m modern_ui.local_api
 # Terminal 2
 cd modern_frontend
 npm install
+$env:VITE_IDS_API_PROXY_TARGET = "http://127.0.0.1:<api-port printed in Terminal 1>"
 npm run dev
 ```
 
@@ -107,9 +109,10 @@ npm test
 npm run build
 ```
 
-For browser checks, keep the frontend running on port `4173`:
+For browser checks, set `PLAYWRIGHT_BASE_URL` to the frontend address printed by the launcher:
 
 ```powershell
+$env:PLAYWRIGHT_BASE_URL = "http://127.0.0.1:<frontend-port>"
 npm run test:e2e
 ```
 

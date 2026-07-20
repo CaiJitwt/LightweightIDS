@@ -14,7 +14,7 @@ python modern_main.py
 
 Use this interface for the browser-based analyst workspace, including richer charts, live capture, pcap import, host analysis, topology, Windows security events, endpoint posture, and optional LLM defense guidance.
 
-The launcher starts a local API on `127.0.0.1:8787` and a frontend on `127.0.0.1:4173`. If the page says `Offline preview`, restart `modern_main.py`; preview data is not persisted project data.
+The launcher selects two available loopback ports, starts the local API and frontend, and prints both addresses. If the page says `Offline preview`, restart `modern_main.py`; preview data is not persisted project data.
 
 ### Classic PySide6 Desktop
 
@@ -164,7 +164,7 @@ Stop older launcher/API processes and restart:
 python modern_main.py
 ```
 
-Only one compatible service can use ports `8787` and `4173` at a time.
+By default the launcher selects available ports automatically. Use `--api-port` and `--frontend-port` only when stable addresses are required.
 
 ### Live capture has no packets
 
