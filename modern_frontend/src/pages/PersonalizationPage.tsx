@@ -18,7 +18,7 @@ export interface PersonalizationState {
 const WALLPAPER_POSITIONS = ["center", "top-left", "top-right", "bottom-left", "bottom-right"] as const;
 const WALLPAPER_SIZES = ["cover", "contain", "stretch", "original"] as const;
 
-export function PersonalizationPage({ state, onChange, storageWarning }: { state: PersonalizationState; onChange: (next: PersonalizationState) => void; storageWarning?: boolean }) {
+export function PersonalizationPage({ state, onChange, storageWarning, persistWarning }: { state: PersonalizationState; onChange: (next: PersonalizationState) => void; storageWarning?: boolean; persistWarning?: boolean }) {
   const backgroundPicker = useRef<HTMLInputElement>(null);
   const petPicker = useRef<HTMLInputElement>(null);
   const [warning, setWarning] = useState("");
@@ -49,6 +49,7 @@ export function PersonalizationPage({ state, onChange, storageWarning }: { state
       <div className="setting-row"><div><strong>Position</strong></div><select className="plain-select" aria-label="Pet position" value={state.petPosition} onChange={(event) => onChange({ ...state, petPosition: event.target.value as PersonalizationState["petPosition"] })}><option value="bottom-right">Bottom right</option><option value="bottom-left">Bottom left</option><option value="top-right">Top right</option><option value="top-left">Top left</option></select></div>
       <Range label="Size" value={state.petSize} min={48} max={220} suffix="px" onChange={(value) => onChange({ ...state, petSize: value })} /><Range label="Opacity" value={state.petOpacity} min={20} max={100} suffix="%" onChange={(value) => onChange({ ...state, petOpacity: value })} />
     </div></section>
+    {persistWarning && <div className="storage-warning" role="alert"><AlertTriangle size={15} />Saved personalization could not be read and has been reset to defaults.</div>}
     {warning && <div className="storage-warning" role="alert"><AlertTriangle size={15} />{warning}</div>}
     {storageWarning && !warning && <div className="storage-warning" role="alert"><AlertTriangle size={15} />Browser storage is full — wallpaper and pet image may not persist after a page reload. Clear older images to free space.</div>}
     <button className="icon-text-button reset-personalization" type="button" onClick={reset}><RotateCcw size={15} />Reset personalization</button>

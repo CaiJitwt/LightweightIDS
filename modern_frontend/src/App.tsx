@@ -99,7 +99,8 @@ export default function App() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [selectedHostIp, setSelectedHostIp] = useState<string | undefined>();
-  const [personalization, setPersonalization] = useState<PersonalizationState>(readPersonalization);
+  const [personalization, setPersonalization] = useState<PersonalizationState>(() => readPersonalization()[0]);
+  const [persistWarning] = useState(() => readPersonalization()[1]);
   const [storageWarning, setStorageWarning] = useState(false);
   const [helpLanguage, setHelpLanguage] = useState<HelpLanguage>(readHelpLanguage);
   const [openAlertCount, setOpenAlertCount] = useState(0);
@@ -202,7 +203,7 @@ export default function App() {
             {page === "health" && <SystemHealthPage refreshVersion={refreshVersion} />}
             {page === "endpoint" && <EndpointSecurityPage refreshVersion={refreshVersion} />}
             {page === "settings" && <SettingsPage themePreference={themePreference} onThemePreferenceChange={setThemePreference} fontScale={fontScale} onFontScaleChange={setFontScale} llmSettings={llmSettings} onLlmSettingsChange={setLlmSettings} />}
-            {page === "personalization" && <PersonalizationPage state={personalization} onChange={setPersonalization} storageWarning={storageWarning} />}
+            {page === "personalization" && <PersonalizationPage state={personalization} onChange={setPersonalization} storageWarning={storageWarning} persistWarning={persistWarning} />}
             {page === "help" && <HelpPage onNavigate={setPage} language={helpLanguage} onLanguageChange={setHelpLanguage} />}
           </Suspense>
         </div>
@@ -212,9 +213,11 @@ export default function App() {
   );
 }
 
-function readPersonalization(): PersonalizationState {
-  try { return { ...defaultPersonalization, ...JSON.parse(localStorage.getItem("ids-prototype-personalization") ?? "{}") }; }
-  catch { return defaultPersonalization; }
+function readPersonalization(): [PersonalizationState, boolean] {
+  const raw = localStorage.getItem("ids-prototype-personalization");
+  if (!raw) return [defaultPersonalization, false];
+  try { return [{ ...defaultPersonalization, ...JSON.parse(raw) }, false]; }
+  catch { return [defaultPersonalization, true]; }
 }
 
 function readThemePreference(): ThemePreference {
