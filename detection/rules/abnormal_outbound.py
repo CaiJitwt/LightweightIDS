@@ -89,6 +89,13 @@ class AbnormalOutboundRule(RuleBase):
         now = self.packet_time(packet)
         key = (packet.src_ip or "", packet.dst_ip or "", packet.dst_port, packet.protocol)
         hits = self._hits[key]
+
+        # Skip heartbeat detection on common ports — 10 s keepalives to 443/80/853
+        # are overwhelmingly legitimate cloud services, not C2 beacons.
+        if packet.dst_port in self.COMMON_OUTBOUND_PORTS:
+            hits.clear()
+            return None
+
         hits.append(OutboundHit(timestamp=now))
         self._prune(hits, now)
 
