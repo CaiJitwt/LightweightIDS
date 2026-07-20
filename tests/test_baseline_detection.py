@@ -71,18 +71,33 @@ def test_baseline_deviation_rule_alerts_after_normal_baseline_then_spike():
 
 
 def test_bandwidth_spike_rule_alerts_on_byte_volume_spike():
-    rule = BandwidthSpikeRule(threshold=3, time_window=60, min_history=5, min_extra_bytes=2000)
+    rule = BandwidthSpikeRule(
+        threshold=3,
+        time_window=60,
+        min_history=5,
+        min_extra_bytes=2000,
+        min_absolute_bytes=10_000,
+    )
     alerts = []
 
-    for second in range(6):
-        alerts.extend(rule.process(packet(second=second, length=200)))
+    for window in range(6):
+        alerts.extend(rule.process(packet(second=window * 65, length=200)))
 
     assert alerts == []
 
-    for second in range(10, 14):
+    for second in range(400, 404):
         alerts.extend(rule.process(packet(second=second, length=3000)))
 
     assert any(alert.alert_type == "BANDWIDTH_SPIKE" for alert in alerts)
+
+
+def test_bandwidth_spike_rule_ignores_tiny_baseline_fluctuations():
+    rule = BandwidthSpikeRule(threshold=3, time_window=60, min_history=5, min_extra_bytes=1000)
+
+    for window in range(6):
+        assert rule.process(packet(second=window * 65, length=200)) == []
+
+    assert rule.process(packet(second=400, length=6000)) == []
 
 
 def test_session_duration_anomaly_rule_uses_approximate_flow_duration():

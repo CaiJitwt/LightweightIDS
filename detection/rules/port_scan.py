@@ -4,6 +4,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass
 
 from detection.rule_base import RuleBase
+from detection.traffic_direction import is_connection_probe
 from models import AlertRecord, PacketRecord
 
 
@@ -18,7 +19,7 @@ class PortScanRule(RuleBase):
     name = "Port scan detection"
     category = "scan"
     severity = "HIGH"
-    threshold = 20
+    threshold = 30
     time_window = 10
 
     def __init__(self, **kwargs: object) -> None:
@@ -29,6 +30,8 @@ class PortScanRule(RuleBase):
         if not packet.src_ip or not packet.dst_ip or packet.dst_port is None:
             return []
         if packet.protocol not in {"TCP", "UDP", "HTTP", "DNS"}:
+            return []
+        if not is_connection_probe(packet):
             return []
 
         now = self.packet_time(packet)

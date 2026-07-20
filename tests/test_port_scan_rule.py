@@ -12,6 +12,7 @@ def make_packet(dst_port: int, second: int) -> PacketRecord:
         src_port=40000 + dst_port,
         dst_port=dst_port,
         protocol="TCP",
+        tcp_flags="S",
     )
 
 
@@ -33,3 +34,19 @@ def test_port_scan_rule_respects_time_window():
     assert rule.process(make_packet(80, 0)) == []
     assert rule.process(make_packet(443, 1)) == []
     assert rule.process(make_packet(22, 5)) == []
+
+
+def test_port_scan_rule_ignores_server_responses_to_ephemeral_client_ports():
+    rule = PortScanRule(threshold=3, time_window=10)
+
+    for index, dst_port in enumerate((50001, 50002, 50003, 50004)):
+        packet = PacketRecord(
+            timestamp=f"2026-01-01 00:00:0{index}.000",
+            src_ip="203.0.113.10",
+            dst_ip="10.0.0.20",
+            src_port=12202,
+            dst_port=dst_port,
+            protocol="TCP",
+            tcp_flags="A",
+        )
+        assert rule.process(packet) == []

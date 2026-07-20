@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import csv
+from concurrent.futures import ThreadPoolExecutor
 import io
 import json
 import os
+import re
 import subprocess
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -37,21 +39,72 @@ class EndpointPostureService:
                     "Run the local analyst service on a supported Windows endpoint.",
                 ).to_dict()
             ]
-        return [self._firewall(), self._defender(), self._uac(), self._bitlocker()]
+        checks = (self._firewall, self._defender, self._uac, self._bitlocker)
+        with ThreadPoolExecutor(max_workers=len(checks), thread_name_prefix="endpoint-posture") as executor:
+            futures = [executor.submit(check) for check in checks]
+            return [future.result() for future in futures]
 
     def _firewall(self) -> dict[str, str]:
         try:
-            profiles = _as_list(self._powershell_json("Get-NetFirewallProfile | Select-Object Name, Enabled | ConvertTo-Json -Compress"))
-            disabled = [str(profile.get("Name", "Unknown")) for profile in profiles if not _as_bool(profile.get("Enabled"))]
+            profile_keys = (
+                ("Domain", r"SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\DomainProfile"),
+                ("Private", r"SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\StandardProfile"),
+                ("Public", r"SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\PublicProfile"),
+            )
+            disabled = [
+                name
+                for name, path in profile_keys
+                if self._registry_dword(path, "EnableFirewall") != 1
+            ]
             if disabled:
                 return SecurityCheck("firewall", "Windows Firewall", "fail", "Profiles disabled", f"Disabled profiles: {', '.join(disabled)}.", "Enable all active Windows Firewall profiles and review policy exceptions.").to_dict()
-            return SecurityCheck("firewall", "Windows Firewall", "pass", "All profiles enabled", "Domain, private, and public profile data was read successfully.", "Keep profile policies centrally managed.").to_dict()
+            return SecurityCheck("firewall", "Windows Firewall", "pass", "All profiles enabled", "Domain, private, and public firewall policy values are enabled.", "Keep profile policies centrally managed.").to_dict()
         except RuntimeError as exc:
             return _unavailable("firewall", "Windows Firewall", exc)
 
     def _defender(self) -> dict[str, str]:
+        service_running = self._service_running("WinDefend")
+        network_service_running = self._service_running("WdNisSvc")
+        if service_running is False:
+            network_detail = (
+                "The network inspection service is also stopped."
+                if network_service_running is False
+                else "The network inspection service state could not be confirmed."
+            )
+            return SecurityCheck(
+                "defender",
+                "Microsoft Defender",
+                "warning",
+                "Inactive or externally managed",
+                f"The Microsoft Defender antivirus service is stopped. {network_detail}",
+                "Confirm that another approved antivirus product is active, or review the Defender service policy.",
+            ).to_dict()
+
+        commands = (
+            (
+                "$status = Get-CimInstance -Namespace 'root/Microsoft/Windows/Defender' "
+                "-ClassName MSFT_MpComputerStatus -OperationTimeoutSec 10; "
+                "if ($null -eq $status) { $result = [pscustomobject]@{Available=$false} } "
+                "else { $result = $status | Select-Object AMServiceEnabled, AntivirusEnabled, "
+                "RealTimeProtectionEnabled, NISEnabled }; "
+                "$result | ConvertTo-Json -Compress"
+            ),
+            (
+                "Get-MpComputerStatus | Select-Object AMServiceEnabled, AntivirusEnabled, "
+                "RealTimeProtectionEnabled, NISEnabled | ConvertTo-Json -Compress"
+            ),
+        )
         try:
-            status = self._powershell_json("Get-MpComputerStatus | Select-Object AMServiceEnabled, AntivirusEnabled, RealTimeProtectionEnabled, NISEnabled | ConvertTo-Json -Compress")
+            status = self._first_powershell_result(commands, "Microsoft Defender")
+            if status.get("Available") is False:
+                return SecurityCheck(
+                    "defender",
+                    "Microsoft Defender",
+                    "unavailable",
+                    "Provider unavailable",
+                    "Windows did not expose the Microsoft Defender status provider.",
+                    "Confirm that Microsoft Defender is installed and not replaced by another endpoint-security product.",
+                ).to_dict()
             realtime = _as_bool(status.get("RealTimeProtectionEnabled"))
             antivirus = _as_bool(status.get("AntivirusEnabled"))
             service = _as_bool(status.get("AMServiceEnabled"))
@@ -66,43 +119,166 @@ class EndpointPostureService:
 
     def _uac(self) -> dict[str, str]:
         try:
-            status = self._powershell_json("Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' -Name EnableLUA | Select-Object EnableLUA | ConvertTo-Json -Compress")
-            enabled = int(status.get("EnableLUA", 0)) == 1
+            enabled = self._registry_dword(
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System",
+                "EnableLUA",
+            ) == 1
             if enabled:
                 return SecurityCheck("uac", "User Account Control", "pass", "Enabled", "EnableLUA is enabled in the local system policy.", "Keep UAC enabled and use standard accounts for routine work.").to_dict()
             return SecurityCheck("uac", "User Account Control", "warning", "Disabled", "EnableLUA is disabled in the local system policy.", "Review the impact of enabling UAC with the system administrator.").to_dict()
-        except (RuntimeError, TypeError, ValueError) as exc:
+        except RuntimeError as exc:
             return _unavailable("uac", "User Account Control", exc)
 
     def _bitlocker(self) -> dict[str, str]:
         try:
-            status = self._powershell_json("Get-BitLockerVolume -MountPoint $env:SystemDrive | Select-Object VolumeStatus, ProtectionStatus | ConvertTo-Json -Compress")
-            protected = str(status.get("ProtectionStatus", "")).lower() == "on"
-            encrypted = str(status.get("VolumeStatus", "")).lower() == "fullyencrypted"
+            drive = os.environ.get("SystemDrive", "C:")
+            completed = self._run_native(["manage-bde.exe", "-status", drive], timeout=10)
+            output = "\n".join(
+                part.strip()
+                for part in (completed.stdout, completed.stderr)
+                if part and part.strip()
+            )
+            normalized = output.casefold()
+            no_volume_markers = (
+                "does not have an associated bitlocker volume",
+                "not a bitlocker volume",
+                "未与 bitlocker 卷关联",
+                "不是 bitlocker 卷",
+            )
+            if any(marker in normalized for marker in no_volume_markers):
+                return SecurityCheck(
+                    "bitlocker",
+                    "BitLocker",
+                    "warning",
+                    "Not configured",
+                    "The system drive is not exposed as a BitLocker-managed volume.",
+                    "Confirm the Windows edition and decide whether system-drive encryption is required.",
+                ).to_dict()
+            if completed.returncode != 0:
+                raise RuntimeError(_compact_message(output or "manage-bde failed."))
+
+            protected = any(
+                marker in normalized
+                for marker in ("protection on", "保护已启用", "保护状态: 已启用")
+            )
+            encrypted = any(
+                marker in normalized
+                for marker in ("fully encrypted", "已完全加密")
+            )
             if protected and encrypted:
                 return SecurityCheck("bitlocker", "BitLocker", "pass", "System drive protected", "System drive encryption and protection are enabled.", "Escrow recovery keys according to the approved policy.").to_dict()
-            return SecurityCheck("bitlocker", "BitLocker", "warning", "Protection incomplete", f"Volume status: {status.get('VolumeStatus', 'unknown')}; protection: {status.get('ProtectionStatus', 'unknown')}.", "Review system-drive encryption requirements with the device owner.").to_dict()
+            protection_off = any(
+                marker in normalized
+                for marker in ("protection off", "保护已关闭", "保护状态: 关闭")
+            )
+            decrypted = any(
+                marker in normalized
+                for marker in ("fully decrypted", "已完全解密")
+            )
+            state_detail = "BitLocker protection is disabled or encryption is incomplete."
+            if not (protection_off or decrypted):
+                state_detail = f"BitLocker returned a status that needs review: {_compact_message(output, 280)}"
+            return SecurityCheck("bitlocker", "BitLocker", "warning", "Protection incomplete", state_detail, "Review system-drive encryption requirements with the device owner.").to_dict()
         except RuntimeError as exc:
             return _unavailable("bitlocker", "BitLocker", exc)
 
-    def _powershell_json(self, command: str) -> dict[str, Any] | list[dict[str, Any]]:
+    def _first_powershell_result(
+        self,
+        commands: tuple[str, ...],
+        label: str,
+    ) -> dict[str, Any]:
+        errors: list[str] = []
+        for command in commands:
+            try:
+                result = self._powershell_json(command)
+                if isinstance(result, dict):
+                    return result
+                errors.append("PowerShell returned an unexpected list.")
+            except RuntimeError as exc:
+                errors.append(_compact_message(str(exc), 260))
+        raise RuntimeError(f"{label} status query failed: {_compact_message(' | '.join(errors), 520)}")
+
+    def _registry_dword(self, path: str, name: str) -> int:
         try:
-            completed = subprocess.run(
-                ["powershell", "-NoProfile", "-NonInteractive", "-Command", command],
+            import winreg
+
+            access = winreg.KEY_READ | getattr(winreg, "KEY_WOW64_64KEY", 0)
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path, 0, access) as key:
+                value, _value_type = winreg.QueryValueEx(key, name)
+            return int(value)
+        except (ImportError, OSError, TypeError, ValueError) as exc:
+            raise RuntimeError(f"Could not read HKLM\\{path}\\{name}: {_compact_message(str(exc))}") from exc
+
+    def _run_native(
+        self,
+        command: list[str],
+        *,
+        timeout: int,
+    ) -> subprocess.CompletedProcess[str]:
+        try:
+            return subprocess.run(
+                command,
                 capture_output=True,
                 text=True,
+                errors="replace",
+                timeout=timeout,
+                check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(f"{command[0]} status query timed out after {timeout} seconds.") from exc
+        except OSError as exc:
+            raise RuntimeError(f"{command[0]} is unavailable: {_compact_message(str(exc))}") from exc
+
+    def _service_running(self, service_name: str) -> bool | None:
+        try:
+            completed = self._run_native(["sc.exe", "query", service_name], timeout=5)
+        except RuntimeError:
+            return None
+        if completed.returncode != 0:
+            return None
+        output = f"{completed.stdout}\n{completed.stderr}"
+        match = re.search(r"(?im)\b(?:STATE|状态)\s*:\s*(\d+)", output)
+        if match is None:
+            return None
+        return int(match.group(1)) == 4
+
+    def _powershell_json(self, command: str) -> dict[str, Any] | list[dict[str, Any]]:
+        script = (
+            "$ProgressPreference='SilentlyContinue'; "
+            "$ErrorActionPreference='Stop'; "
+            "[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new(); "
+            f"{command}"
+        )
+        try:
+            completed = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=12,
                 check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
-        except (OSError, subprocess.TimeoutExpired) as exc:
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError("PowerShell status query timed out after 12 seconds.") from exc
+        except OSError as exc:
             raise RuntimeError(f"PowerShell is unavailable: {exc}") from exc
         if completed.returncode != 0:
             message = completed.stderr.strip() or completed.stdout.strip() or "PowerShell command failed."
-            raise RuntimeError(message)
+            raise RuntimeError(_compact_message(message))
+        output = completed.stdout.strip()
+        if not output:
+            message = completed.stderr.strip()
+            if message:
+                raise RuntimeError(_compact_message(message))
+            raise RuntimeError("PowerShell returned no status data.")
         try:
-            payload = json.loads(completed.stdout.strip())
+            payload = json.loads(output)
         except json.JSONDecodeError as exc:
-            raise RuntimeError("PowerShell did not return valid JSON.") from exc
+            preview = " ".join(output.split())[:240]
+            raise RuntimeError(f"PowerShell did not return valid JSON: {preview}") from exc
         if not isinstance(payload, (dict, list)):
             raise RuntimeError("PowerShell returned an unexpected value.")
         return payload
@@ -196,7 +372,28 @@ def _as_bool(value: object) -> bool:
 
 
 def _unavailable(identifier: str, title: str, exc: Exception) -> dict[str, str]:
-    return SecurityCheck(identifier, title, "unavailable", "Unavailable", str(exc), "Verify Windows support and local administrator policy permissions.").to_dict()
+    recommendation = "Verify Windows support, endpoint-security policy, and local administrator permissions."
+    if os.name == "nt" and not is_process_elevated():
+        recommendation = (
+            "Stop any existing local API on port 8787, then start modern_main.py from an elevated PowerShell."
+        )
+    return SecurityCheck(identifier, title, "unavailable", "Unavailable", _compact_message(str(exc), 520), recommendation).to_dict()
+
+
+def is_process_elevated() -> bool:
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except (AttributeError, OSError):
+        return False
+
+
+def _compact_message(value: str, limit: int = 360) -> str:
+    compact = " ".join(str(value or "").split())
+    return compact if len(compact) <= limit else compact[: limit - 3] + "..."
 
 
 def _format_bytes(value: int) -> str:

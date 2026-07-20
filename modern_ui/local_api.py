@@ -15,7 +15,7 @@ from uuid import uuid4
 from app.constants import DEFAULT_DATABASE_PATH
 from detection.analysis.alert_trend import AlertTrendAnalyzer
 from detection.analysis.host_profile import HostProfileService
-from endpoint_security import EndpointPostureService, FileIntegrityService, ProcessInventoryService, ResourceThreatMonitorService, RuntimeHealthService
+from endpoint_security import EndpointPostureService, FileIntegrityService, ProcessInventoryService, ResourceThreatMonitorService, RuntimeHealthService, is_process_elevated
 from modern_ui.capture_session import CaptureSessionService, default_capture_options, parse_capture_options
 from modern_ui.llm_guidance import LlmGuidanceError, LlmGuidanceService
 from modern_ui.pcap_import import PcapImportService
@@ -27,7 +27,7 @@ from storage.database import Database
 from storage.repositories import AlertRepository, PacketRepository, RuleRepository, SecurityEventRepository, SettingsRepository
 
 
-LOCAL_API_VERSION = 6
+LOCAL_API_VERSION = 7
 LOCAL_API_CAPABILITIES = [
     "capture-v1",
     "endpoint-security-v1",
@@ -59,7 +59,10 @@ class LocalApiServer(ThreadingHTTPServer):
         self.settings = SettingsRepository(database)
         self.host_profiles = HostProfileService(database)
         self.alert_trends = AlertTrendAnalyzer()
-        self.pcap_import = PcapImportService(database)
+        self.pcap_import = PcapImportService(
+            database,
+            activity_callback=self.capture_service.publish_import_batch,
+        )
         self.posture_service = EndpointPostureService()
         self.process_inventory = ProcessInventoryService()
         self.file_integrity = FileIntegrityService(database.path.parent / "endpoint_security")
@@ -152,6 +155,7 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                         "capabilities": LOCAL_API_CAPABILITIES,
                         "database": str(self.server.database.path.resolve()),
                         "pid": os.getpid(),
+                        "elevated": is_process_elevated(),
                     }
                 )
             elif parsed.path == "/api/settings":

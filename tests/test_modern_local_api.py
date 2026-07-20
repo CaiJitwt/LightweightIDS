@@ -35,7 +35,10 @@ class StubSecurityEventCollector:
                     computer="LAB-PC",
                     user="SYSTEM",
                     summary="A service was installed in the system.",
-                    details={"ServiceName": "RemoteUpdate"},
+                    details={
+                        "ServiceName": "RemoteUpdate",
+                        "ImagePath": r"powershell.exe -EncodedCommand SQBFAFgA",
+                    },
                     severity="HIGH",
                 )
             ]
@@ -64,6 +67,7 @@ def test_local_api_serves_status_and_filter_validation(tmp_path):
         with urlopen(f"{base}/api/health", timeout=3) as response:
             health = json.loads(response.read())
         assert health["apiVersion"] >= 3
+        assert isinstance(health["elevated"], bool)
         assert "endpoint-security-v1" in health["capabilities"]
         assert "analyst-workflow-v1" in health["capabilities"]
         assert health["database"] == str(database.path.resolve())
@@ -402,6 +406,17 @@ def test_local_api_imports_a_uploaded_pcap_in_the_background(tmp_path):
         assert status["state"] == "completed", status.get("error")
         assert status["savedPacketTotal"] == 1
         assert PacketRepository(database).count() == 1
+
+        with urlopen(f"{base}/api/packets?after=0&limit=250", timeout=3) as response:
+            activity = json.loads(response.read())
+        assert len(activity["records"]) == 1
+        assert activity["records"][0]["details"]["src_ip"] == "192.0.2.10"
+
+        with urlopen(f"{base}/api/capture/status", timeout=3) as response:
+            capture_status = json.loads(response.read())
+        assert capture_status["packetTotal"] == 1
+        assert capture_status["savedPacketTotal"] == 1
+
     finally:
         server.shutdown()
         server.server_close()

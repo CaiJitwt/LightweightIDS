@@ -12,6 +12,7 @@ def packet(
     second: int,
     src_ip: str = "192.168.1.10",
     dst_ip: str = "192.168.1.20",
+    src_port: int = 50000,
     dst_port: int = 80,
     length: int = 100,
     tcp_flags: str | None = None,
@@ -21,7 +22,7 @@ def packet(
         timestamp=f"2026-01-01 00:{minute:02d}:{sec:02d}.000",
         src_ip=src_ip,
         dst_ip=dst_ip,
-        src_port=50000,
+        src_port=src_port,
         dst_port=dst_port,
         protocol="TCP",
         length=length,
@@ -106,6 +107,48 @@ def test_ml_flow_anomaly_rule_alerts_after_normal_baseline_then_spike(tmp_path):
     assert any(alert.rule_id == "ML_FLOW_ANOMALY" for alert in alerts)
     assert any(alert.alert_type == "ML_ANOMALY" for alert in alerts)
     assert any("score=" in alert.evidence and "top_reasons=" in alert.evidence for alert in alerts)
+
+
+def test_ml_flow_anomaly_rule_ignores_server_response_port_fanout(tmp_path):
+    detector = IsolationForestFlowDetector(
+        model_path=tmp_path / "flow_anomaly.pkl",
+        use_sklearn=False,
+        min_train_samples=3,
+    )
+    rule = MlFlowAnomalyRule(detector=detector, threshold=80, time_window=60)
+
+    alerts = []
+    for index in range(20):
+        alerts.extend(
+            rule.process(
+                packet(
+                    second=index,
+                    src_ip="202.120.2.101",
+                    dst_ip="10.0.0.20",
+                    src_port=53,
+                    dst_port=52000 + index,
+                    length=300,
+                    tcp_flags="A",
+                )
+            )
+        )
+
+    assert alerts == []
+
+
+def test_ml_flow_anomaly_rule_does_not_promote_single_service_retries(tmp_path):
+    detector = IsolationForestFlowDetector(
+        model_path=tmp_path / "flow_anomaly.pkl",
+        use_sklearn=False,
+        min_train_samples=3,
+    )
+    rule = MlFlowAnomalyRule(detector=detector, threshold=80, time_window=60)
+
+    alerts = []
+    for index in range(20):
+        alerts.extend(rule.process(packet(second=index, dst_port=443, length=2000, tcp_flags="S")))
+
+    assert alerts == []
 
 
 def test_detection_engine_registers_ml_flow_rule_from_records():

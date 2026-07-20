@@ -15,6 +15,7 @@ from urllib.request import urlopen
 import webbrowser
 
 from app.constants import DEFAULT_DATABASE_PATH
+from endpoint_security import is_process_elevated
 from modern_ui.local_api import LOCAL_API_VERSION, LocalApiServer
 from storage.database import Database
 
@@ -54,7 +55,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         api_health = _read_json(f"{API_URL}/api/health")
         if api_health is not None:
-            compatibility_error = _api_compatibility_error(api_health, args.database)
+            compatibility_error = _api_compatibility_error(
+                api_health,
+                args.database,
+                require_elevated=is_process_elevated(),
+            )
             if compatibility_error:
                 raise RuntimeError(
                     f"Port 8787 is already serving an incompatible local API: {compatibility_error} "
@@ -155,7 +160,12 @@ def _read_json(url: str) -> dict[str, object] | None:
         return None
 
 
-def _api_compatibility_error(payload: dict[str, object], database_path: Path) -> str:
+def _api_compatibility_error(
+    payload: dict[str, object],
+    database_path: Path,
+    *,
+    require_elevated: bool = False,
+) -> str:
     if payload.get("service") != "Lightweight IDS local API":
         return "the service identity does not match"
     if payload.get("apiVersion") != LOCAL_API_VERSION:
@@ -172,6 +182,8 @@ def _api_compatibility_error(payload: dict[str, object], database_path: Path) ->
         return "the API did not report a valid database path"
     if running_database != database_path.resolve():
         return f"it uses {running_database}, not {database_path.resolve()}"
+    if require_elevated and payload.get("elevated") is not True:
+        return "the existing API process is not elevated, although this launcher is elevated"
     return ""
 
 

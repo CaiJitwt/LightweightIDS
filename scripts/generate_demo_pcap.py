@@ -1,10 +1,40 @@
 from __future__ import annotations
 
+import argparse
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
+import sys
+from typing import Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT = PROJECT_ROOT / "sample_data" / "demo_attack_chain.pcap"
+EXPECTED_DEMO_RULE_IDS = frozenset(
+    {
+        "ABNORMAL_OUTBOUND",
+        "BANDWIDTH_SPIKE",
+        "BASELINE_DEVIATION",
+        "BLACKLIST_IP",
+        "BRUTE_FORCE",
+        "DNS_ANOMALY",
+        "HOST_SCAN",
+        "HTTP_SUSPICIOUS",
+        "ICMP_FLOOD",
+        "LATERAL_MOVEMENT",
+        "MALICIOUS_COMMAND",
+        "ML_ANOMALY",
+        "ML_FLOW_ANOMALY",
+        "PORT_SCAN",
+        "SENSITIVE_PORT",
+        "SESSION_DURATION_ANOMALY",
+        "SIGNATURE_MATCH",
+        "SQL_INJECTION",
+        "SYN_FLOOD",
+        "TLS_FINGERPRINT",
+        "WEB_ATTACK",
+        "XSS",
+    }
+)
 
 
 def generate_demo_pcap(output_path: str | Path = DEFAULT_OUTPUT) -> Path:
@@ -47,37 +77,46 @@ def generate_demo_pcap(output_path: str | Path = DEFAULT_OUTPUT) -> Path:
     # Needed by BASELINE_DEVIATION, BANDWIDTH_SPIKE, SESSION_DURATION_ANOMALY
     # ============================================================
 
-    # Build baseline history from a separate host (so it stays small and clean)
+    # Build baseline history from a separate host (so it stays small and clean).
     for window in range(10):
         w_start = window * 65.0
         for i in range(2):
             add(IP(src=baseline_host, dst=target) / TCP(sport=30000 + i, dport=80, flags="PA") /
                 Raw(load=http_payload("GET", "/api/status", "demo.internal")), w_start + i * 0.5)
-            add(IP(src=baseline_host, dst=internal_peer) / TCP(sport=30000 + i, dport=443, flags="PA") /
+            add(IP(src=baseline_host, dst=internal_peer) / TCP(sport=30000 + i, dport=8080, flags="PA") /
                 Raw(load=http_payload("GET", "/health", "demo.internal")), w_start + i * 0.5 + 0.2)
 
-    # Short single-packet sessions for SESSION_DURATION baseline on session_host
+    # Short TCP administration sessions establish a duration baseline.
     for i in range(5):
-        add(IP(src=session_host, dst=target) / TCP(sport=31000 + i, dport=8000 + i, flags="PA") /
-            Raw(load=http_payload("GET", "/short", "demo.internal")), i * 65.0 + 0.8)
+        session_target = f"10.0.2.{20 + i}"
+        started = i * 65.0 + 0.8
+        add(IP(src=session_host, dst=session_target) / TCP(sport=31000 + i, dport=22, flags="PA") /
+            Raw(load=b"SSH-2.0-demo-client"), started)
+        add(IP(src=session_host, dst=session_target) / TCP(sport=31000 + i, dport=22, flags="PA") /
+            Raw(load=b"SSH demo session close"), started + 5.0)
 
     # ============================================================
     # Phase 1: Reconnaissance
     # ============================================================
-    ph1 = 400.0
+    ph1 = 700.0
 
     # Host scan -> HOST_SCAN (threshold=30)
     for i in range(35):
         add(IP(src=attacker, dst=f"10.0.1.{20 + i}") / TCP(sport=41000 + i, dport=80, flags="S"), ph1 + i * 0.2)
 
-    # Port scan -> PORT_SCAN (threshold=20) + SENSITIVE_PORT
-    for i, port in enumerate([21, 22, 23, 25, 53, 80, 135, 139, 443, 445, 1433, 1521, 3306, 3389, 5432, 6379, 8080, 8443, 9200, 27017, 4444, 5555, 6667, 9001, 31337]):
+    # Port scan -> PORT_SCAN (threshold=30) + SENSITIVE_PORT.
+    scan_ports = [
+        21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 389, 443, 445, 993,
+        995, 1433, 1521, 2049, 3306, 3389, 5432, 5900, 5985, 5986, 6379, 8080,
+        8443, 9001, 9200, 11211, 27017, 31337, 4444, 5555,
+    ]
+    for i, port in enumerate(scan_ports):
         add(IP(src=attacker, dst=target) / TCP(sport=42000 + i, dport=port, flags="S"), ph1 + 8.0 + i * 0.3)
 
     # ============================================================
     # Phase 2: Brute Force
     # ============================================================
-    ph2 = 420.0
+    ph2 = 725.0
 
     for i in range(15):
         add(IP(src=attacker, dst=target) / TCP(sport=43000 + i, dport=22, flags="S"), ph2 + i * 0.5)
@@ -88,7 +127,7 @@ def generate_demo_pcap(output_path: str | Path = DEFAULT_OUTPUT) -> Path:
     # ============================================================
     # Phase 3: Exploit (Web Attacks)
     # ============================================================
-    ph3 = 435.0
+    ph3 = 740.0
 
     # SQL injection -> SQL_INJECTION
     add(IP(src=attacker, dst=target) / TCP(sport=45100, dport=80, flags="PA") /
@@ -130,7 +169,7 @@ def generate_demo_pcap(output_path: str | Path = DEFAULT_OUTPUT) -> Path:
     # ============================================================
     # Phase 4: Command Execution
     # ============================================================
-    ph4 = 446.0
+    ph4 = 751.0
 
     add(IP(src=attacker, dst=target) / TCP(sport=45200, dport=80, flags="PA") /
         Raw(load=http_payload("POST", "/exec", "demo.internal", "cmd=whoami")), ph4)
@@ -156,9 +195,10 @@ def generate_demo_pcap(output_path: str | Path = DEFAULT_OUTPUT) -> Path:
     # ============================================================
     # Phase 5: C2 Communication
     # ============================================================
-    ph5 = 455.0
+    ph5 = 760.0
 
-    # TLS weak -> TLS_FINGERPRINT
+    # TLS metadata exists only to exercise TLS_FINGERPRINT. All payload-based
+    # attack demonstrations use plaintext HTTP and do not imply HTTPS decryption.
     add(IP(src=attacker, dst=external_c2) / TCP(sport=45300, dport=443, flags="PA") /
         Raw(load=b"\x16\x03\x01\x00\x90client hello; version=tlsv1.0; cipher=RC4-MD5; self_signed=true; sni=evil-c2.com"), ph5)
 
@@ -187,14 +227,15 @@ def generate_demo_pcap(output_path: str | Path = DEFAULT_OUTPUT) -> Path:
     for i in range(5):
         add(IP(src=attacker, dst=external_c2) / TCP(sport=45700 + i, dport=31337, flags="S"), ph5 + 62.0 + i * 4.0)
 
-    # C2 beacon keywords -> SIGNATURE_MATCH
-    add(IP(src=attacker, dst=external_c2) / TCP(sport=45800, dport=443, flags="PA") /
-        Raw(load=b"beacon checkin; cobaltstrike implant"), ph5 + 85.0)
+    # Plaintext HTTP C2 beacon keywords -> SIGNATURE_MATCH.
+    add(IP(src=attacker, dst=external_c2) / TCP(sport=45800, dport=8080, flags="PA") /
+        Raw(load=http_payload("POST", "/beacon/checkin", "c2.demo.invalid",
+                              "agent=cobaltstrike&action=beacon")), ph5 + 85.0)
 
     # ============================================================
     # Phase 6: Lateral Movement
     # ============================================================
-    ph6 = 550.0
+    ph6 = 860.0
 
     for i in range(6):
         add(IP(src=attacker, dst=f"10.0.1.{60 + i}") / TCP(sport=46000 + i, dport=445, flags="PA") /
@@ -206,7 +247,7 @@ def generate_demo_pcap(output_path: str | Path = DEFAULT_OUTPUT) -> Path:
     # ============================================================
     # Phase 7: Flooding
     # ============================================================
-    ph7 = 565.0
+    ph7 = 880.0
 
     for i in range(105):
         add(IP(src=attacker, dst=target) / TCP(sport=47000 + i, dport=80, flags="S"), ph7 + i * 0.08)
@@ -217,35 +258,31 @@ def generate_demo_pcap(output_path: str | Path = DEFAULT_OUTPUT) -> Path:
     # ============================================================
     # Phase 8: Anomalies + Blacklist
     # ============================================================
-    ph8 = 580.0
+    ph8 = 905.0
 
     # Blacklisted IP -> BLACKLIST_IP
     add(IP(src=attacker, dst=blacklisted) / TCP(sport=48000, dport=80, flags="S"), ph8)
-    add(IP(src=blacklisted, dst=target) / TCP(sport=48001, dport=443, flags="S"), ph8 + 1.0)
+    add(IP(src=blacklisted, dst=target) / TCP(sport=48001, dport=8080, flags="S"), ph8 + 1.0)
 
-    # Huge data spike from baseline_host: triggers BANDWIDTH_SPIKE + BASELINE_DEVIATION
-    huge_data = b"Z" * 9500
-    for i in range(25):
+    # A >1 MiB spike triggers BANDWIDTH_SPIKE + BASELINE_DEVIATION.
+    huge_data = b"Z" * 32_000
+    for i in range(40):
         add(IP(src=baseline_host, dst=target) / TCP(sport=48100 + i, dport=80, flags="PA") /
-            Raw(load=huge_data), ph8 + 3.0 + i * 0.3)
+            Raw(load=huge_data), ph8 + 3.0 + i * 0.2)
     # Also spike on different ports/ips for unique_dst_ports/ips deviation
     for i in range(8):
         add(IP(src=baseline_host, dst=f"10.0.1.{100 + i}") / TCP(sport=48200 + i, dport=9000 + i, flags="PA") /
-            Raw(load=huge_data), ph8 + 12.0 + i * 0.3)
+            Raw(load=b"Z" * 9500), ph8 + 12.0 + i * 0.3)
 
     # ML_ANOMALY: large + risky port + length spike from attacker
     for i in range(8):
         add(IP(src=attacker, dst=external_c2) / TCP(sport=48200 + i, dport=4444, flags="PA") /
             Raw(load=b"X" * 9500), ph8 + 8.0 + i * 0.3)
 
-    # SESSION_DURATION_ANOMALY: prolonged session from session_host
+    # SESSION_DURATION_ANOMALY: prolonged TCP administration session.
     for i in range(6):
-        add(IP(src=session_host, dst=target) / TCP(sport=48300, dport=9090, flags="PA") /
-            Raw(load=http_payload("GET", "/api/long-poll", "demo.internal")), ph8 + 20.0 + i * 150.0)
-
-    # ============================================================
-    # Write pcap
-    # ============================================================
+        add(IP(src=session_host, dst=target) / TCP(sport=48300, dport=22, flags="PA") /
+            Raw(load=b"SSH prolonged administration session"), ph8 + 20.0 + i * 150.0)
 
     # ============================================================
     # Write pcap
@@ -254,6 +291,52 @@ def generate_demo_pcap(output_path: str | Path = DEFAULT_OUTPUT) -> Path:
     return output
 
 
+def verify_demo_pcap(path: str | Path) -> Counter[str]:
+    project_root = str(PROJECT_ROOT)
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+
+    from capture.pcap_loader import PcapLoader
+    from detection.engine import DetectionEngine
+    from parser.packet_parser import PacketParser
+
+    parser = PacketParser()
+    engine = DetectionEngine.with_default_rules(alert_cooldown_seconds=0)
+    counts: Counter[str] = Counter()
+    for packet in PcapLoader().load(path):
+        for alert in engine.process_packet(parser.parse(packet)):
+            counts[alert.rule_id] += 1
+    return counts
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Generate a deterministic plaintext-HTTP IDS attack demonstration PCAP."
+    )
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="Destination .pcap path.")
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="Run the generated PCAP through PacketParser and DetectionEngine.",
+    )
+    args = parser.parse_args(argv)
+
+    path = generate_demo_pcap(args.output)
+    print(f"Generated demo PCAP: {path}")
+    if not args.verify:
+        return 0
+
+    counts = verify_demo_pcap(path)
+    print("Detected rules:")
+    for rule_id in sorted(counts):
+        print(f"  {rule_id}: {counts[rule_id]}")
+    missing = EXPECTED_DEMO_RULE_IDS - counts.keys()
+    if missing:
+        print(f"Missing expected rules: {', '.join(sorted(missing))}")
+        return 1
+    print(f"Verified all {len(EXPECTED_DEMO_RULE_IDS)} expected network rules.")
+    return 0
+
+
 if __name__ == "__main__":
-    path = generate_demo_pcap()
-    print(path)
+    raise SystemExit(main())

@@ -25,7 +25,7 @@ const filterPresets = [
   { label: "Web and DNS", value: "http or https or tls or dns" },
 ];
 
-export function TrafficPage() {
+export function TrafficPage({ onDataChanged }: { onDataChanged?: () => void }) {
   const [status, setStatus] = useState<CaptureStatus>(emptyStatus);
   const [serviceReady, setServiceReady] = useState(false);
   const [interfaces, setInterfaces] = useState<string[]>([]);
@@ -41,6 +41,7 @@ export function TrafficPage() {
   const [pcapImport, setPcapImport] = useState<PcapImportStatus>(emptyPcapImport);
   const cursor = useRef(0);
   const pcapPicker = useRef<HTMLInputElement>(null);
+  const notifiedImport = useRef("");
 
   const poll = useCallback(async () => {
     try {
@@ -74,6 +75,18 @@ export function TrafficPage() {
     const timer = window.setInterval(() => void poll(), 750);
     return () => window.clearInterval(timer);
   }, [poll]);
+
+  useEffect(() => {
+    if (pcapImport.state === "importing") {
+      notifiedImport.current = "";
+      return;
+    }
+    if (pcapImport.state !== "completed") return;
+    const key = `${pcapImport.filename}:${pcapImport.savedPacketTotal}:${pcapImport.savedAlertTotal}`;
+    if (notifiedImport.current === key) return;
+    notifiedImport.current = key;
+    onDataChanged?.();
+  }, [onDataChanged, pcapImport]);
 
   const displayedPackets = serviceReady ? livePackets : demoPackets;
   const visiblePackets = useMemo(() => displayedPackets.filter((packet) => {
@@ -178,7 +191,7 @@ export function TrafficPage() {
       <section className="filter-row">
         <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter addresses, protocol or summary" /></label>
         <label className="select-box"><Filter size={15} /><select aria-label="Protocol" value={protocol} onChange={(event) => setProtocol(event.target.value)}><option>All protocols</option><option>TLS</option><option>TCP</option><option>DNS</option><option>MDNS</option></select></label>
-        <span className="result-count">{visiblePackets.length} packets shown{serviceReady ? " from this session" : " from demo data"}</span>
+        <span className="result-count">{visiblePackets.length} packets shown{serviceReady ? " from live and imported activity" : " from demo data"}</span>
       </section>
       <div className="master-detail traffic-packet-workspace">
         <section className="table-panel traffic-packet-table">

@@ -165,7 +165,7 @@ export default function App() {
     <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}${personalization.background ? " has-wallpaper" : ""}`} data-theme={theme} data-font-scale={fontScale} style={{
       "--accent": personalization.accent,
     } as React.CSSProperties}>
-      {personalization.background && <div className="workspace-wallpaper" style={{ backgroundImage: `url(${personalization.background})`, backgroundSize: personalization.backgroundSize === "stretch" ? "100% 100%" : personalization.backgroundSize, backgroundPosition: personalization.backgroundPosition, opacity: personalization.backgroundOpacity / 100 }} />}
+      {personalization.background && <div className="workspace-wallpaper" data-testid="workspace-wallpaper" style={{ backgroundImage: `url(${personalization.background})`, backgroundSize: personalization.backgroundSize === "stretch" ? "100% 100%" : personalization.backgroundSize === "original" ? "auto" : personalization.backgroundSize, backgroundPosition: personalization.backgroundPosition, opacity: personalization.backgroundOpacity / 100 }} />}
       <aside className="sidebar">
         <div className="brand-block"><span className="brand-mark"><Shield size={20} /></span><span className="brand-copy"><strong>Lightweight IDS</strong><small>Analyst console</small></span></div>
         <nav className="primary-nav" aria-label="Primary navigation">
@@ -195,7 +195,7 @@ export default function App() {
         <div className="page-content">
           <Suspense fallback={<div className="page-loading">Loading view...</div>}>
             {page === "dashboard" && <DashboardPage refreshVersion={refreshVersion} onStatisticsReset={() => { setRefreshVersion((value) => value + 1); setAlertBadgeRefresh((value) => value + 1); }} onOpenAlertCountChange={setOpenAlertCount} onOpenAlerts={() => setPage("alerts")} onOpenHost={(ip) => { setSelectedHostIp(ip); setPage("hosts"); }} />}
-            {page === "traffic" && <TrafficPage />}
+            {page === "traffic" && <TrafficPage onDataChanged={() => { setRefreshVersion((value) => value + 1); setAlertBadgeRefresh((value) => value + 1); }} />}
             {page === "hosts" && <HostsPage initialHostIp={selectedHostIp} refreshVersion={refreshVersion} />}
             {page === "alerts" && <AlertsPage llmSettings={llmSettings} refreshVersion={refreshVersion} initialAlertId={selectedAlertId} onAlertsChanged={() => setAlertBadgeRefresh((value) => value + 1)} />}
             {page === "investigations" && <InvestigationsPage />}

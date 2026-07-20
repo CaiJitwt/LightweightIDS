@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from threading import RLock, Thread
-from typing import Any
+from typing import Any, Callable
 
 from capture.pcap_loader import PcapLoader
 from detection.engine import DetectionEngine
@@ -19,8 +19,16 @@ class PcapImportService:
 
     ALLOWED_EXTENSIONS = {".pcap", ".pcapng", ".cap"}
 
-    def __init__(self, database: Database) -> None:
+    def __init__(
+        self,
+        database: Database,
+        activity_callback: Callable[
+            [list[PacketRecord], list[AlertRecord], int, int],
+            None,
+        ] | None = None,
+    ) -> None:
         self.database = database
+        self.activity_callback = activity_callback
         self._lock = RLock()
         self._thread: Thread | None = None
         self._state = "idle"
@@ -110,9 +118,18 @@ class PcapImportService:
                     return
                 packets_to_save = packet_batch if save_packets else []
                 saved_packets, saved_alerts = repository.add_batch(packets_to_save, alert_batch)
+                published_packets = list(packet_batch)
+                published_alerts = list(alert_batch)
                 with self._lock:
                     self._saved_packet_total += saved_packets
                     self._saved_alert_total += saved_alerts
+                if self.activity_callback is not None:
+                    self.activity_callback(
+                        published_packets,
+                        published_alerts,
+                        saved_packets,
+                        saved_alerts,
+                    )
                 packet_batch.clear()
                 alert_batch.clear()
 

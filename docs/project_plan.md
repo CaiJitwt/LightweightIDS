@@ -1,5 +1,7 @@
 # Lightweight IDS Project Plan
 
+> **Status: historical planning record.** Feature lists in this document may be outdated. Use the [project README](../README.md) and user manual for the current application.
+
 ## Project Goal
 
 Lightweight IDS is a course-oriented desktop intrusion detection system. Its goal is to help students understand IDS data flow and detection logic through local traffic import, live capture, rule-based detection, alert management, statistics and report export.

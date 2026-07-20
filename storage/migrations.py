@@ -198,7 +198,7 @@ CREATE INDEX IF NOT EXISTS idx_security_event_links_event ON security_event_aler
 """
 
 DEFAULT_RULES = [
-    ("PORT_SCAN", "Port scan detection", "scan", "HIGH", 1, 20, 10, "Detects one source IP accessing many ports on the same target in a short time window."),
+    ("PORT_SCAN", "Port scan detection", "scan", "HIGH", 1, 30, 10, "Detects connection attempts from one source IP to many ports on the same target in a short time window."),
     ("SYN_FLOOD", "SYN flood detection", "flood", "HIGH", 1, 100, 10, "Detects a high volume of TCP SYN requests in a short time window."),
     ("ICMP_FLOOD", "ICMP flood detection", "flood", "MEDIUM", 1, 50, 10, "Detects a high volume of ICMP packets in a short time window."),
     ("SENSITIVE_PORT", "Sensitive port access", "policy", "MEDIUM", 1, 1, 0, "Detects access to common sensitive service ports."),
@@ -215,15 +215,15 @@ DEFAULT_RULES = [
     ("TLS_FINGERPRINT", "TLS fingerprint risk", "tls", "HIGH", 1, 1, 0, "Detects weak TLS versions, weak ciphers and suspicious certificate indicators in TLS metadata."),
     ("ML_ANOMALY", "ML anomaly score", "behavior", "MEDIUM", 1, 80, 0, "Uses a lightweight anomaly score based on packet size, protocol and port features."),
     ("WEB_ATTACK", "Web attack detection (advanced)", "web", "HIGH", 1, 1, 0, "Detects traversal, command injection, SSRF, file inclusion, XXE, SSTI, deserialization, webshell and sensitive file discovery."),
-    ("ML_FLOW_ANOMALY", "ML flow anomaly", "behavior", "HIGH", 1, 80, 60, "Uses flow-level features with IsolationForest or a lightweight fallback model to detect anomalous host behavior."),
+    ("ML_FLOW_ANOMALY", "ML flow anomaly", "behavior", "HIGH", 1, 95, 60, "Uses flow-level features with IsolationForest or a lightweight fallback model and requires an actionable traffic pattern."),
     ("SIGNATURE_MATCH", "External signature match", "signature", "HIGH", 1, 1, 0, "Detects packets matching the external defensive signature library."),
     ("BASELINE_DEVIATION", "Baseline deviation", "behavior", "HIGH", 1, 3, 60, "Detects hosts whose activity exceeds historical packet, destination, port or byte baselines."),
-    ("BANDWIDTH_SPIKE", "Bandwidth spike", "behavior", "HIGH", 1, 4, 60, "Detects hosts whose byte volume sharply exceeds their historical baseline."),
+    ("BANDWIDTH_SPIKE", "Bandwidth spike", "behavior", "HIGH", 1, 8, 60, "Detects substantial host byte volume that sharply exceeds its historical baseline."),
     ("SESSION_DURATION_ANOMALY", "Session duration anomaly", "behavior", "MEDIUM", 1, 3, 600, "Detects sessions that last much longer than the host historical average."),
     ("WINDOWS_LOGON_FAILURE", "Windows logon failure burst", "host", "HIGH", 1, 5, 120, "Detects repeated Windows authentication failures from the same source or account."),
-    ("WINDOWS_PERSISTENCE", "Windows persistence change", "host", "HIGH", 1, 1, 0, "Detects service and scheduled-task creation or modification events."),
+    ("WINDOWS_PERSISTENCE", "Windows persistence change", "host", "HIGH", 1, 1, 0, "Detects service and scheduled-task changes that contain high-risk execution indicators."),
     ("WINDOWS_PRIVILEGE_CHANGE", "Windows privilege change", "host", "HIGH", 1, 1, 0, "Detects account creation and privileged group membership changes."),
-    ("POWERSHELL_SUSPICIOUS", "Suspicious PowerShell activity", "host", "HIGH", 1, 3, 0, "Detects suspicious indicators in PowerShell operational events."),
+    ("POWERSHELL_SUSPICIOUS", "Suspicious PowerShell activity", "host", "HIGH", 1, 4, 0, "Detects high-risk PowerShell commands, evasion, credential tooling, or download-and-execute behavior."),
     ("SECURITY_CONTROL_TAMPER", "Security control tampering", "host", "CRITICAL", 1, 1, 0, "Detects security-log clearing and protection-disable events."),
     ("RDP_LATERAL_ACTIVITY", "RDP lateral activity", "host", "HIGH", 1, 3, 300, "Detects repeated remote interactive logons from the same source."),
     ("SUSTAINED_CPU_LOAD", "Sustained CPU load", "endpoint", "MEDIUM", 1, 90, 300, "Flags CPU utilization that remains above the configured percentage for the configured window; this is a review signal, not proof of malware."),

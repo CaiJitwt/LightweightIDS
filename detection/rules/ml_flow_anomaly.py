@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from detection.features import FlowFeatureExtractor
+from detection.features import FlowFeature, FlowFeatureExtractor
 from detection.ml import DEFAULT_MODEL_PATH, IsolationForestFlowDetector
 from detection.rule_base import RuleBase
+from detection.traffic_direction import is_likely_server_response
 from models import AlertRecord, PacketRecord
 
 
@@ -10,8 +11,8 @@ class MlFlowAnomalyRule(RuleBase):
     rule_id = "ML_FLOW_ANOMALY"
     name = "ML flow anomaly"
     category = "behavior"
-    severity = "MEDIUM"
-    threshold = 92
+    severity = "HIGH"
+    threshold = 95
     time_window = 60
 
     def __init__(
@@ -31,6 +32,9 @@ class MlFlowAnomalyRule(RuleBase):
         self._alerted_windows: set[tuple[str, str, float]] = set()
 
     def process(self, packet: PacketRecord) -> list[AlertRecord]:
+        if is_likely_server_response(packet):
+            return []
+
         feature = self.extractor.observe(packet)
 
         # Feed completed windows into the baseline so it learns normal behaviour
@@ -44,7 +48,7 @@ class MlFlowAnomalyRule(RuleBase):
         self._prune_alerted_windows(feature.window_start)
         if result.score < self.threshold or window_key in self._alerted_windows:
             return []
-        if not self._has_actionable_reason(result.reasons, result.score):
+        if not self._has_actionable_reason(feature, result.reasons, result.score):
             return []
 
         reasons = result.reasons or ["flow behavior differs from local baseline"]
@@ -72,20 +76,26 @@ class MlFlowAnomalyRule(RuleBase):
         self.detector.reset()
         self._alerted_windows.clear()
 
-    def _has_actionable_reason(self, reasons: list[str], score: float) -> bool:
-        independent_signals = (
-            "unique_dst_ports",
-            "unique_dst_ips",
-            "many_dst_ports",
-            "many_dst_ips",
-            "syn_count",
-            "sensitive_port_count",
-            "dns_query_count",
-            "icmp_count",
+    def _has_actionable_reason(self, feature: FlowFeature, reasons: list[str], score: float) -> bool:
+        # A high model score alone is noisy during baseline warm-up. Require a
+        # concrete behavior pattern before promoting it to an IDS alert.
+        port_spread = feature.unique_dst_ports
+        syn_count = feature.syn_count
+        sensitive_count = feature.sensitive_port_count
+        icmp_count = feature.icmp_count
+        packet_count = feature.packet_count
+        byte_count = feature.byte_count
+
+        scan_pattern = port_spread >= 8 and syn_count >= 4
+        sensitive_service_sweep = port_spread >= 4 and sensitive_count >= 4 and syn_count >= 3
+        icmp_burst = icmp_count >= 50
+        mature_model_outlier = (
+            score >= 98
+            and packet_count >= 50
+            and byte_count >= 1_048_576
+            and any(reason.startswith("isolation_forest_score") for reason in reasons)
         )
-        if any(reason.startswith(independent_signals) for reason in reasons):
-            return True
-        return score >= 95 and any(reason.startswith("isolation_forest_score") for reason in reasons)
+        return scan_pattern or sensitive_service_sweep or icmp_burst or mature_model_outlier
 
     def _prune_alerted_windows(self, current_window: float) -> None:
         oldest = current_window - self.time_window * 2

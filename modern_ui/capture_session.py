@@ -169,12 +169,34 @@ class CaptureSessionService:
     def packets_since(self, sequence: int, limit: int = 250) -> dict[str, Any]:
         with self._lock:
             records = [record for record in self._recent_packets if int(record["sequence"]) > sequence]
-            return {"records": records[:max(1, min(limit, 500))], "nextSequence": self._sequence}
+            page = records[:max(1, min(limit, 500))]
+            next_sequence = int(page[-1]["sequence"]) if page else self._sequence
+            return {"records": page, "nextSequence": next_sequence}
 
     def alerts_since(self, sequence: int, limit: int = 100) -> dict[str, Any]:
         with self._lock:
             records = [record for record in self._recent_alerts if int(record["sequence"]) > sequence]
-            return {"records": records[:max(1, min(limit, 250))], "nextSequence": self._sequence}
+            page = records[:max(1, min(limit, 250))]
+            next_sequence = int(page[-1]["sequence"]) if page else self._sequence
+            return {"records": page, "nextSequence": next_sequence}
+
+    def publish_import_batch(
+        self,
+        packets: list[PacketRecord],
+        alerts: list[AlertRecord],
+        saved_packets: int,
+        saved_alerts: int,
+    ) -> None:
+        """Publish imported activity through the same bounded feed as live capture."""
+        with self._lock:
+            self._packet_total += len(packets)
+            self._alert_total += len(alerts)
+            self._saved_packet_total += saved_packets
+            self._saved_alert_total += saved_alerts
+            for packet in packets:
+                self._append_packet(packet)
+            for alert in alerts:
+                self._append_alert(alert)
 
     def topology_connections(self) -> list[dict[str, object]]:
         """Aggregate the in-memory capture window when packet persistence is disabled."""
