@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sqlite3
 import json
 from dataclasses import asdict, replace
@@ -10,8 +11,12 @@ from models import AlertRecord, BaselineRecord, CustomRuleRecord, PacketRecord, 
 from storage.database import Database
 from storage.migrations import DEFAULT_RULES
 
+_VALID_TABLE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
 
 def _insert_record_batch(connection: sqlite3.Connection, table: str, records: list[object]) -> int:
+    if not _VALID_TABLE.match(table):
+        raise ValueError(f"Invalid table name: {table}")
     if not records:
         return 0
     rows = []

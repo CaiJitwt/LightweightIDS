@@ -52,6 +52,8 @@ class WindowsEventCollector:
         return result
 
     def _read_channel(self, channel: str, event_ids: tuple[int, ...], cursor: int, limit: int) -> list[dict[str, Any]]:
+        if channel not in CHANNEL_EVENT_IDS:
+            raise ValueError(f"Unknown event log channel: {channel}")
         event_clause = " or ".join(f"EventID={event_id}" for event_id in event_ids)
         if cursor > 0:
             time_or_cursor = f"(EventRecordID > {cursor})"
