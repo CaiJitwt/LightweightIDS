@@ -12,12 +12,6 @@ from storage.migrations import DEFAULT_RULES
 
 
 def _insert_record_batch(connection: sqlite3.Connection, table: str, records: list[object]) -> int:
-    """Insert a batch of dataclass records into the given table.
-
-    The table name and column names are derived from trusted callers and
-    dataclass field names, never from external input.  Values are always
-    passed via parameterized ``?`` placeholders.
-    """
     if not records:
         return 0
     rows = []
