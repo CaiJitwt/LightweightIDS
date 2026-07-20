@@ -30,6 +30,7 @@ REQUIRED_API_CAPABILITIES = {
     "timeline-v1",
     "resource-monitor-v1",
     "analyst-workflow-v1",
+    "personalization-v1",
 }
 
 

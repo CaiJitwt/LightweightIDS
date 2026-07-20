@@ -20,6 +20,7 @@ from endpoint_security import EndpointPostureService, FileIntegrityService, Proc
 from modern_ui.capture_session import CaptureSessionService, default_capture_options, parse_capture_options
 from modern_ui.llm_guidance import LlmGuidanceError, LlmGuidanceService
 from modern_ui.pcap_import import PcapImportService
+from modern_ui.personalization_store import ModernPersonalizationStore
 from modern_ui.secret_store import WindowsDpapiSecretStore
 from modern_ui.security_event_monitor import SecurityEventMonitorService
 from models import AssetRecord, InvestigationRecord, RuleRecord
@@ -28,7 +29,7 @@ from storage.database import Database
 from storage.repositories import AlertRepository, PacketRepository, RuleRepository, SecurityEventRepository, SettingsRepository
 
 
-LOCAL_API_VERSION = 7
+LOCAL_API_VERSION = 8
 LOCAL_API_CAPABILITIES = [
     "capture-v1",
     "endpoint-security-v1",
@@ -38,6 +39,7 @@ LOCAL_API_CAPABILITIES = [
     "timeline-v1",
     "resource-monitor-v1",
     "analyst-workflow-v1",
+    "personalization-v1",
 ]
 
 
@@ -58,6 +60,7 @@ class LocalApiServer(ThreadingHTTPServer):
         self.asset_repository = AssetRepository(database)
         self.investigation_repository = InvestigationRepository(database)
         self.settings = SettingsRepository(database)
+        self.personalization = ModernPersonalizationStore(database)
         self.host_profiles = HostProfileService(database)
         self.alert_trends = AlertTrendAnalyzer()
         self.pcap_import = PcapImportService(
@@ -161,6 +164,11 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 )
             elif parsed.path == "/api/settings":
                 self._send_json(_settings_payload(self.server.settings))
+            elif parsed.path == "/api/personalization":
+                state, persisted = self.server.personalization.load()
+                self._send_json({"state": state, "persisted": persisted})
+            elif parsed.path.startswith("/api/personalization/images/"):
+                self._send_personalization_image(parsed.path.rsplit("/", 1)[-1])
             elif parsed.path == "/api/rules":
                 self._send_json({"records": [_rule_payload(record) for record in self.server.rules.list_all()]})
             elif parsed.path == "/api/assets":
@@ -333,6 +341,17 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/pcap/import":
                 self._send_json(self._receive_pcap_upload(), HTTPStatus.ACCEPTED)
                 return
+            if parsed.path.startswith("/api/personalization/images/"):
+                self._send_json(
+                    self.server.personalization.store_image(
+                        parsed.path.rsplit("/", 1)[-1],
+                        self.headers.get("Content-Type", ""),
+                        self.rfile,
+                        content_length,
+                    ),
+                    HTTPStatus.CREATED,
+                )
+                return
             payload = self._read_json()
             if parsed.path == "/api/assets":
                 asset = _asset_from_payload(payload)
@@ -357,6 +376,8 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/settings":
                 self._update_settings(payload)
                 self._send_json(_settings_payload(self.server.settings))
+            elif parsed.path == "/api/personalization":
+                self._send_json({"state": self.server.personalization.save(payload), "persisted": True})
             elif parsed.path.startswith("/api/rules/"):
                 rule_id = unquote(parsed.path.removeprefix("/api/rules/"))
                 self._send_json({"record": self._update_rule(rule_id, payload)})
@@ -495,6 +516,14 @@ class LocalApiHandler(BaseHTTPRequestHandler):
 
     def _update_settings(self, payload: dict[str, Any]) -> None:
         values: dict[str, str] = {}
+        if "themePreference" in payload:
+            values["modern_theme_preference"] = _setting_choice(
+                payload, "themePreference", {"system", "light", "dark"}
+            )
+        if "fontScale" in payload:
+            values["modern_font_scale"] = _setting_choice(
+                payload, "fontScale", {"compact", "default", "comfortable"}
+            )
         if "autoSavePackets" in payload:
             values["auto_save_packets"] = _bool_setting(payload, "autoSavePackets")
         if "realtimeDetection" in payload:
@@ -825,6 +854,22 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             raise ValueError("JSON body must be an object")
         return payload
 
+    def _send_personalization_image(self, kind: str) -> None:
+        image_path = self.server.personalization.image_path(kind)
+        if image_path is None:
+            self._send_error(HTTPStatus.NOT_FOUND, "Personalization image not found.")
+            return
+        content_types = {".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp"}
+        self.send_response(HTTPStatus.OK)
+        self._send_cors_headers()
+        self.send_header("Content-Type", content_types[image_path.suffix.lower()])
+        self.send_header("Content-Length", str(image_path.stat().st_size))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        with image_path.open("rb") as stream:
+            while chunk := stream.read(1024 * 1024):
+                self.wfile.write(chunk)
+
     def _receive_pcap_upload(self) -> dict[str, Any]:
         content_length = _positive_int(self.headers.get("Content-Length", "0"), 0)
         maximum_bytes = 512 * 1024 * 1024
@@ -1022,6 +1067,8 @@ def _path_list(value: object) -> list[str]:
 
 def _settings_payload(settings: SettingsRepository) -> dict[str, Any]:
     return {
+        "themePreference": settings.get("modern_theme_preference", "system"),
+        "fontScale": settings.get("modern_font_scale", "default"),
         "autoSavePackets": settings.get_bool("auto_save_packets", True),
         "realtimeDetection": settings.get_bool("enable_realtime_detection", True),
         "alertCooldownSeconds": settings.get_int("alert_cooldown_seconds", 10),
@@ -1255,6 +1302,13 @@ def _bool_setting(payload: dict[str, Any], key: str) -> str:
     if not isinstance(value, bool):
         raise ValueError(f"{key} must be a boolean")
     return "true" if value else "false"
+
+
+def _setting_choice(payload: dict[str, Any], key: str, choices: set[str]) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or value not in choices:
+        raise ValueError(f"{key} must be one of: {', '.join(sorted(choices))}")
+    return value
 
 
 def main() -> int:
