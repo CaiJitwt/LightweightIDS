@@ -81,6 +81,13 @@ def test_local_api_serves_status_and_filter_validation(tmp_path):
 
         with urlopen(f"{base}/api/capture/status", timeout=3) as response:
             assert json.loads(response.read())["state"] == "stopped"
+        cors_request = Request(
+            f"{base}/api/health",
+            headers={"Origin": "http://127.0.0.1:45678"},
+            method="OPTIONS",
+        )
+        with urlopen(cors_request, timeout=3) as response:
+            assert response.headers["Access-Control-Allow-Origin"] == "http://127.0.0.1:45678"
         request = Request(
             f"{base}/api/capture/validate-filter",
             data=json.dumps({"filterExpression": "dns"}).encode(),
@@ -154,6 +161,23 @@ def test_local_api_serves_persisted_dashboard_alerts_and_host_profile(tmp_path):
             dashboard = json.loads(response.read())
         assert dashboard["statistics"]["packetTotal"] == 2
         assert dashboard["statistics"]["alertTotal"] == 1
+        assert dashboard["trendBucket"] == "minute"
+        assert dashboard["trend"] == [
+            {
+                "time": "11:59",
+                "bucket": "2026-07-13 11:59",
+                "alerts": 0,
+                "packets": 0,
+                "spike": False,
+            },
+            {
+                "time": "12:00",
+                "bucket": "2026-07-13 12:00",
+                "alerts": 1,
+                "packets": 2,
+                "spike": False,
+            },
+        ]
         assert dashboard["recentAlerts"][0]["source"] == "10.0.0.42:51001"
 
         with urlopen(f"{base}/api/alerts", timeout=3) as response:

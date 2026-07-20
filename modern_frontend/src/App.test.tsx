@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
 
 import App from "./App";
@@ -19,7 +19,11 @@ describe("modern IDS frontend", () => {
       json: async () => ({
         capture: { state: "running", interface: "Loopback", filterExpression: "", savePackets: true, detectionEnabled: true, packetTotal: 0, alertTotal: 0, skippedTotal: 0, savedPacketTotal: 0, savedAlertTotal: 0, packetsPerSecond: 0, error: "", nextSequence: 0 },
         statistics: { packetTotal: 128, alertTotal: 2, openAlerts: 1, highPriorityAlerts: 1, highRiskHosts: 1, lastHourPackets: 16 },
-        trend: [{ time: "12:00", bucket: "2026-07-13 12:00", alerts: 1, packets: 16, spike: false }],
+        trend: [
+          { time: "11:59", bucket: "2026-07-13 11:59", alerts: 0, packets: 0, spike: false },
+          { time: "12:00", bucket: "2026-07-13 12:00", alerts: 1, packets: 16, spike: false },
+        ],
+        trendBucket: "minute",
         severityDistribution: [{ name: "High", value: 2, color: "#e5484d" }],
         highRiskHosts: [{ ip: "10.0.0.42", name: "Lab host", role: "Workstation", risk: 82, importance: 0, packets: 128, alerts: 2, lastSeen: "2026-07-13 12:00" }],
         recentAlerts: [{ id: 7, timestamp: "2026-07-13 12:00", severity: "HIGH", ruleId: "HOST_SCAN", ruleName: "Host scan", source: "10.0.0.42:51000", destination: "10.0.0.10:22", protocol: "TCP", description: "Repeated connections", evidence: "targets=2", status: "unconfirmed" }],
@@ -29,7 +33,7 @@ describe("modern IDS frontend", () => {
     render(<App />);
 
     expect(await screen.findByText("128", {}, { timeout: 3000 })).toBeInTheDocument();
-    expect(screen.getByText("Local SQLite data - last 12 observed hours")).toBeInTheDocument();
+    expect(screen.getByText("Local SQLite data - recent observed minutes")).toBeInTheDocument();
     expect(screen.getByText("Lab host")).toBeInTheDocument();
     const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
     expect(await within(navigation).findByTitle("1 unconfirmed alerts")).toHaveTextContent("1");
@@ -127,5 +131,36 @@ describe("modern IDS frontend", () => {
     fireEvent.click(within(screen.getByRole("navigation", { name: "Primary navigation" })).getByRole("button", { name: "Personalization" }));
     fireEvent.click(await screen.findByTitle("Clear wallpaper"));
     expect(screen.queryByTestId("workspace-wallpaper")).not.toBeInTheDocument();
+  });
+
+  it("applies and updates persisted glass surface controls", async () => {
+    render(<App />);
+
+    const shell = document.querySelector(".app-shell") as HTMLElement;
+    expect(shell.style.getPropertyValue("--component-opacity")).toBe("92%");
+    expect(shell.style.getPropertyValue("--component-blur")).toBe("6px");
+    expect(shell.style.getPropertyValue("--table-opacity")).toBe("94%");
+    expect(shell.style.getPropertyValue("--table-blur")).toBe("4px");
+
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Primary navigation" })).getByRole("button", { name: "Personalization" }));
+    fireEvent.change(await screen.findByLabelText("Component opacity"), { target: { value: "78" } });
+    fireEvent.change(screen.getByLabelText("Component blur"), { target: { value: "12" } });
+    fireEvent.change(screen.getByLabelText("Table opacity"), { target: { value: "82" } });
+    fireEvent.change(screen.getByLabelText("Table blur"), { target: { value: "9" } });
+    fireEvent.change(screen.getByLabelText("Component tint"), { target: { value: "#446688" } });
+
+    expect(shell.style.getPropertyValue("--component-opacity")).toBe("78%");
+    expect(shell.style.getPropertyValue("--component-blur")).toBe("12px");
+    expect(shell.style.getPropertyValue("--component-tint")).toBe("#446688");
+    expect(shell.style.getPropertyValue("--table-opacity")).toBe("82%");
+    expect(shell.style.getPropertyValue("--table-blur")).toBe("9px");
+
+    await waitFor(() => {
+      const saved = JSON.parse(localStorage.getItem("ids-prototype-personalization") ?? "{}");
+      expect(saved.componentOpacity).toBe(78);
+      expect(saved.componentBlur).toBe(12);
+      expect(saved.tableOpacity).toBe(82);
+      expect(saved.tableBlur).toBe(9);
+    });
   });
 });

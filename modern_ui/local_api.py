@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timedelta
 import ipaddress
 import json
 import os
@@ -19,6 +20,7 @@ from endpoint_security import EndpointPostureService, FileIntegrityService, Proc
 from modern_ui.capture_session import CaptureSessionService, default_capture_options, parse_capture_options
 from modern_ui.llm_guidance import LlmGuidanceError, LlmGuidanceService
 from modern_ui.pcap_import import PcapImportService
+from modern_ui.personalization_store import ModernPersonalizationStore
 from modern_ui.secret_store import WindowsDpapiSecretStore
 from modern_ui.security_event_monitor import SecurityEventMonitorService
 from models import AssetRecord, InvestigationRecord, RuleRecord
@@ -27,7 +29,7 @@ from storage.database import Database
 from storage.repositories import AlertRepository, PacketRepository, RuleRepository, SecurityEventRepository, SettingsRepository
 
 
-LOCAL_API_VERSION = 7
+LOCAL_API_VERSION = 8
 LOCAL_API_CAPABILITIES = [
     "capture-v1",
     "endpoint-security-v1",
@@ -37,6 +39,7 @@ LOCAL_API_CAPABILITIES = [
     "timeline-v1",
     "resource-monitor-v1",
     "analyst-workflow-v1",
+    "personalization-v1",
 ]
 
 
@@ -57,6 +60,7 @@ class LocalApiServer(ThreadingHTTPServer):
         self.asset_repository = AssetRepository(database)
         self.investigation_repository = InvestigationRepository(database)
         self.settings = SettingsRepository(database)
+        self.personalization = ModernPersonalizationStore(database)
         self.host_profiles = HostProfileService(database)
         self.alert_trends = AlertTrendAnalyzer()
         self.pcap_import = PcapImportService(
@@ -160,6 +164,11 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 )
             elif parsed.path == "/api/settings":
                 self._send_json(_settings_payload(self.server.settings))
+            elif parsed.path == "/api/personalization":
+                state, persisted = self.server.personalization.load()
+                self._send_json({"state": state, "persisted": persisted})
+            elif parsed.path.startswith("/api/personalization/images/"):
+                self._send_personalization_image(parsed.path.rsplit("/", 1)[-1])
             elif parsed.path == "/api/rules":
                 self._send_json({"records": [_rule_payload(record) for record in self.server.rules.list_all()]})
             elif parsed.path == "/api/assets":
@@ -332,6 +341,17 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/pcap/import":
                 self._send_json(self._receive_pcap_upload(), HTTPStatus.ACCEPTED)
                 return
+            if parsed.path.startswith("/api/personalization/images/"):
+                self._send_json(
+                    self.server.personalization.store_image(
+                        parsed.path.rsplit("/", 1)[-1],
+                        self.headers.get("Content-Type", ""),
+                        self.rfile,
+                        content_length,
+                    ),
+                    HTTPStatus.CREATED,
+                )
+                return
             payload = self._read_json()
             if parsed.path == "/api/assets":
                 asset = _asset_from_payload(payload)
@@ -356,6 +376,8 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/settings":
                 self._update_settings(payload)
                 self._send_json(_settings_payload(self.server.settings))
+            elif parsed.path == "/api/personalization":
+                self._send_json({"state": self.server.personalization.save(payload), "persisted": True})
             elif parsed.path.startswith("/api/rules/"):
                 rule_id = unquote(parsed.path.removeprefix("/api/rules/"))
                 self._send_json({"record": self._update_rule(rule_id, payload)})
@@ -494,6 +516,14 @@ class LocalApiHandler(BaseHTTPRequestHandler):
 
     def _update_settings(self, payload: dict[str, Any]) -> None:
         values: dict[str, str] = {}
+        if "themePreference" in payload:
+            values["modern_theme_preference"] = _setting_choice(
+                payload, "themePreference", {"system", "light", "dark"}
+            )
+        if "fontScale" in payload:
+            values["modern_font_scale"] = _setting_choice(
+                payload, "fontScale", {"compact", "default", "comfortable"}
+            )
         if "autoSavePackets" in payload:
             values["auto_save_packets"] = _bool_setting(payload, "autoSavePackets")
         if "realtimeDetection" in payload:
@@ -589,22 +619,35 @@ class LocalApiHandler(BaseHTTPRequestHandler):
         hosts = self.server.host_profiles.list_hosts(limit=500)
         alert_counts = dict(self.server.alerts.count_by_time_bucket(bucket="hour", limit=12))
         packet_counts = dict(self.server.packets.count_by_time_bucket(bucket="hour", limit=12))
+        last_hour_packets = packet_counts.get(max(packet_counts), 0) if packet_counts else 0
         severity_counts = self.server.alerts.count_by_severity()
         status_counts = self.server.alerts.count_by_status()
         buckets = sorted(set(alert_counts) | set(packet_counts))[-12:]
+        trend_bucket = "hour"
+        if len(buckets) == 1:
+            trend_bucket = "minute"
+            alert_counts = dict(self.server.alerts.count_by_time_bucket(bucket="minute", limit=12))
+            packet_counts = dict(self.server.packets.count_by_time_bucket(bucket="minute", limit=12))
+            buckets = sorted(set(alert_counts) | set(packet_counts))[-12:]
+
+        analyzed_buckets = list(buckets)
+        analyzed_points = {
+            point.bucket: point
+            for point in self.server.alert_trends.analyze(
+                [(bucket, alert_counts.get(bucket, 0)) for bucket in analyzed_buckets]
+            )
+        }
+        if len(buckets) == 1:
+            buckets = [_previous_bucket(buckets[0], trend_bucket), buckets[0]]
         trend = [
             {
                 "time": _bucket_label(bucket),
                 "bucket": bucket,
                 "alerts": alert_counts.get(bucket, 0),
                 "packets": packet_counts.get(bucket, 0),
-                "spike": point.is_spike,
+                "spike": analyzed_points[bucket].is_spike if bucket in analyzed_points else False,
             }
-            for bucket, point in zip(
-                buckets,
-                self.server.alert_trends.analyze([(bucket, alert_counts.get(bucket, 0)) for bucket in buckets]),
-                strict=True,
-            )
+            for bucket in buckets
         ]
         open_alerts = status_counts.get("unconfirmed", 0)
         high_priority = severity_counts.get("HIGH", 0) + severity_counts.get("CRITICAL", 0)
@@ -617,9 +660,10 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 "openAlerts": open_alerts,
                 "highPriorityAlerts": high_priority,
                 "highRiskHosts": len(high_risk),
-                "lastHourPackets": packet_counts.get(buckets[-1], 0) if buckets else 0,
+                "lastHourPackets": last_hour_packets,
             },
             "trend": trend,
+            "trendBucket": trend_bucket,
             "severityDistribution": [
                 {"name": severity.title(), "value": count, "color": _severity_color(severity)}
                 for severity, count in severity_counts.items()
@@ -810,6 +854,22 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             raise ValueError("JSON body must be an object")
         return payload
 
+    def _send_personalization_image(self, kind: str) -> None:
+        image_path = self.server.personalization.image_path(kind)
+        if image_path is None:
+            self._send_error(HTTPStatus.NOT_FOUND, "Personalization image not found.")
+            return
+        content_types = {".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp"}
+        self.send_response(HTTPStatus.OK)
+        self._send_cors_headers()
+        self.send_header("Content-Type", content_types[image_path.suffix.lower()])
+        self.send_header("Content-Length", str(image_path.stat().st_size))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        with image_path.open("rb") as stream:
+            while chunk := stream.read(1024 * 1024):
+                self.wfile.write(chunk)
+
     def _receive_pcap_upload(self) -> dict[str, Any]:
         content_length = _positive_int(self.headers.get("Content-Length", "0"), 0)
         maximum_bytes = 512 * 1024 * 1024
@@ -854,7 +914,12 @@ class LocalApiHandler(BaseHTTPRequestHandler):
 
     def _send_cors_headers(self) -> None:
         origin = self.headers.get("Origin", "")
-        if origin in {"http://127.0.0.1:4173", "http://localhost:4173"}:
+        parsed_origin = urlparse(origin)
+        if parsed_origin.scheme in {"http", "https"} and parsed_origin.hostname in {
+            "127.0.0.1",
+            "localhost",
+            "::1",
+        }:
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -934,6 +999,15 @@ def _bucket_label(bucket: str) -> str:
     return bucket[-5:] if len(bucket) >= 5 and ":" in bucket else bucket
 
 
+def _previous_bucket(bucket: str, granularity: str) -> str:
+    formats = {
+        "minute": ("%Y-%m-%d %H:%M", timedelta(minutes=1)),
+        "hour": ("%Y-%m-%d %H:00", timedelta(hours=1)),
+    }
+    date_format, step = formats[granularity]
+    return (datetime.strptime(bucket, date_format) - step).strftime(date_format)
+
+
 def _severity_color(severity: str) -> str:
     return {
         "CRITICAL": "#b42318",
@@ -993,6 +1067,8 @@ def _path_list(value: object) -> list[str]:
 
 def _settings_payload(settings: SettingsRepository) -> dict[str, Any]:
     return {
+        "themePreference": settings.get("modern_theme_preference", "system"),
+        "fontScale": settings.get("modern_font_scale", "default"),
         "autoSavePackets": settings.get_bool("auto_save_packets", True),
         "realtimeDetection": settings.get_bool("enable_realtime_detection", True),
         "alertCooldownSeconds": settings.get_int("alert_cooldown_seconds", 10),
@@ -1228,19 +1304,29 @@ def _bool_setting(payload: dict[str, Any], key: str) -> str:
     return "true" if value else "false"
 
 
+def _setting_choice(payload: dict[str, Any], key: str, choices: set[str]) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or value not in choices:
+        raise ValueError(f"{key} must be one of: {', '.join(sorted(choices))}")
+    return value
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the Lightweight IDS local API for the React prototype.")
     parser.add_argument("--database", type=Path, default=DEFAULT_DATABASE_PATH)
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8787)
+    parser.add_argument("--port", type=int, default=0, help="Listen port. Use 0 to select an available port automatically.")
     args = parser.parse_args()
     if args.host not in {"127.0.0.1", "localhost", "::1"}:
         parser.error("The local API only supports loopback hosts.")
+    if not 0 <= args.port <= 65535:
+        parser.error("Port must be between 0 and 65535.")
 
     database = Database(args.database)
     database.initialize()
     server = LocalApiServer((args.host, args.port), database)
-    print(f"Lightweight IDS local API listening on http://{args.host}:{args.port}")
+    actual_port = int(server.server_address[1])
+    print(f"Lightweight IDS local API listening on http://{args.host}:{actual_port}")
     try:
         server.serve_forever(poll_interval=0.25)
     except KeyboardInterrupt:

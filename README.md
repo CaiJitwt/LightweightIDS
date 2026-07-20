@@ -65,7 +65,7 @@ From the project root:
 python modern_main.py
 ```
 
-The launcher initializes the database, starts the local API at `http://127.0.0.1:8787`, starts the frontend at `http://127.0.0.1:4173`, and opens the browser.
+The launcher initializes the database, selects available loopback ports for the local API and frontend, prints both addresses, and opens the browser.
 
 Useful options:
 
@@ -73,6 +73,7 @@ Useful options:
 python modern_main.py --no-browser
 python modern_main.py --skip-install
 python modern_main.py --database .\data\custom_ids.db
+python modern_main.py --api-port 8787 --frontend-port 4173
 ```
 
 Press `Ctrl+C` in the launcher terminal to stop services started by that launcher.
@@ -129,7 +130,7 @@ npm run build
 npm run test:e2e
 ```
 
-Keep the frontend running at `http://127.0.0.1:4173` before the Playwright command.
+Set `PLAYWRIGHT_BASE_URL` to the frontend address printed by the launcher before the Playwright command.
 
 ## Documentation
 

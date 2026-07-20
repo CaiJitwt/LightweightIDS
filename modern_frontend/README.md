@@ -17,18 +17,19 @@ python modern_main.py
 The launcher:
 
 1. initializes the selected SQLite database;
-2. starts the local API at `http://127.0.0.1:8787`;
+2. selects an available loopback port and starts the local API;
 3. installs missing npm packages when necessary;
-4. starts Vite at `http://127.0.0.1:4173`;
+4. selects another available loopback port and starts Vite;
 5. opens the browser unless `--no-browser` is used.
 
 ```powershell
 python modern_main.py --no-browser
 python modern_main.py --skip-install
 python modern_main.py --database .\data\custom_ids.db
+python modern_main.py --api-port 8787 --frontend-port 4173
 ```
 
-Press `Ctrl+C` in the launcher terminal to stop services it started. If port `8787` contains an older incompatible API, stop that process before launching the current version.
+Press `Ctrl+C` in the launcher terminal to stop services it started. The launcher prints the selected API and frontend addresses. Pass explicit port options only when stable addresses are required.
 
 ## Development Start
 
@@ -41,6 +42,7 @@ python -m modern_ui.local_api
 # Terminal 2
 cd modern_frontend
 npm install
+$env:VITE_IDS_API_PROXY_TARGET = "http://127.0.0.1:<api-port printed in Terminal 1>"
 npm run dev
 ```
 
@@ -60,7 +62,7 @@ Some pages can render an explicitly labeled offline preview when the local API i
 
 ### Analyst workflow persistence
 
-Local API v6 exposes Assets and Investigations CRUD routes under `/api/assets` and `/api/investigations`. Records created or edited in the browser are stored in the shared SQLite database and remain available after restart. Investigation detail responses also include existing evidence snapshots; adding/removing evidence and investigation HTML export remain classic-desktop workflows.
+Local API v8 exposes Assets and Investigations CRUD routes under `/api/assets` and `/api/investigations`. Records created or edited in the browser are stored in the shared SQLite database and remain available after restart. Investigation detail responses also include existing evidence snapshots; adding/removing evidence and investigation HTML export remain classic-desktop workflows.
 
 ## Live Capture
 
@@ -91,7 +93,7 @@ Assets, investigations, and investigation evidence snapshots are preserved.
 
 ## Personalization
 
-Theme preference can follow the operating system or use an explicit light/dark mode. Font size, accent, wallpaper, overlay image, position, size, and opacity are remembered in browser local storage. The overlay is non-interactive and does not intercept primary workspace actions.
+Theme preference can follow the operating system or use an explicit light/dark mode. Theme, font size, accent, surface styling, wallpaper, overlay image, position, size, and opacity are persisted through the local API. Configuration is stored in the shared SQLite database, while uploaded images are stored under `<database directory>/personalization/modern` (`data/personalization/modern` by default). Browser storage remains a temporary offline cache and is migrated when the local API is available. The overlay is non-interactive and does not intercept primary workspace actions.
 
 ## Security Boundary
 
@@ -107,9 +109,10 @@ npm test
 npm run build
 ```
 
-For browser checks, keep the frontend running on port `4173`:
+For browser checks, set `PLAYWRIGHT_BASE_URL` to the frontend address printed by the launcher:
 
 ```powershell
+$env:PLAYWRIGHT_BASE_URL = "http://127.0.0.1:<frontend-port>"
 npm run test:e2e
 ```
 

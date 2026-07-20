@@ -14,7 +14,7 @@ python modern_main.py
 
 Use this interface for the browser-based analyst workspace, including richer charts, live capture, pcap import, host analysis, topology, Windows security events, endpoint posture, and optional LLM defense guidance.
 
-The launcher starts a local API on `127.0.0.1:8787` and a frontend on `127.0.0.1:4173`. If the page says `Offline preview`, restart `modern_main.py`; preview data is not persisted project data.
+The launcher selects two available loopback ports, starts the local API and frontend, and prints both addresses. If the page says `Offline preview`, restart `modern_main.py`; preview data is not persisted project data.
 
 ### Classic PySide6 Desktop
 
@@ -152,7 +152,7 @@ Settings controls packet persistence, real-time detection, cooldown, minimum ale
 
 The modern LLM panel accepts an OpenAI-compatible Base URL, model, and API key. Base URL and model are stored in SQLite. On Windows, the API key is encrypted for the current user with DPAPI, is never returned to the browser, and is displayed only as a configured/not-configured state. Alert data is sent only when the analyst selects `Generate defense guidance`; the response language can be English or Chinese.
 
-Modern theme, font, wallpaper, and overlay-pet preferences are remembered in browser local storage. The classic desktop copies selected wallpaper and pet files into managed personalization storage and restores them on the next launch.
+Modern theme, font, surface styling, wallpaper, and overlay-pet preferences are persisted through the local API. Configuration is stored in SQLite, and uploaded images are copied to `<database directory>/personalization/modern` (`data/personalization/modern` by default) so they survive browser-port changes and application restarts. Browser storage is retained only as an offline cache. The classic desktop uses its own managed personalization storage.
 
 ## 13. Troubleshooting
 
@@ -164,7 +164,7 @@ Stop older launcher/API processes and restart:
 python modern_main.py
 ```
 
-Only one compatible service can use ports `8787` and `4173` at a time.
+By default the launcher selects available ports automatically. Use `--api-port` and `--frontend-port` only when stable addresses are required.
 
 ### Live capture has no packets
 

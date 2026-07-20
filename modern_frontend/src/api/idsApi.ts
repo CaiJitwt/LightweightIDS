@@ -23,6 +23,7 @@ import type {
   RuntimeSettings,
   RuntimeSettingsUpdate,
 } from "../types";
+import type { PersonalizationState } from "../data/personalizationStore";
 
 const apiBase = import.meta.env.VITE_IDS_API_BASE ?? "";
 
@@ -52,6 +53,22 @@ async function uploadPcap(file: File): Promise<PcapImportStatus> {
   const body = await response.json().catch(() => ({})) as PcapImportStatus & { error?: string };
   if (!response.ok) throw new LocalApiError(body.error ?? `PCAP import failed (${response.status}).`, response.status);
   return body;
+}
+
+async function uploadPersonalizationImage(kind: "background" | "petImage", file: Blob, filename: string) {
+  const response = await fetch(`${apiBase}/api/personalization/images/${kind}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": file.type || "application/octet-stream",
+      "X-Filename": filename,
+    },
+    body: file,
+  });
+  const body = await response.json().catch(() => ({})) as { url?: string; error?: string };
+  if (!response.ok || !body.url) {
+    throw new LocalApiError(body.error ?? `Personalization image upload failed (${response.status}).`, response.status);
+  }
+  return { url: body.url };
 }
 
 export const idsApi = {
@@ -103,6 +120,9 @@ export const idsApi = {
   alertSecurityEvent: (alertId: number) => request<{ record: SecurityEventRecord | null }>(`/api/alerts/${alertId}/security-event`),
   settings: () => request<RuntimeSettings>("/api/settings"),
   saveSettings: (settings: RuntimeSettingsUpdate) => request<RuntimeSettings>("/api/settings", { method: "POST", body: JSON.stringify(settings) }),
+  personalization: () => request<{ state: PersonalizationState; persisted: boolean }>("/api/personalization"),
+  savePersonalization: (state: PersonalizationState) => request<{ state: PersonalizationState; persisted: boolean }>("/api/personalization", { method: "POST", body: JSON.stringify(state) }),
+  uploadPersonalizationImage,
   rules: () => request<{ records: RuleRecord[] }>("/api/rules"),
   updateRule: (id: string, update: Partial<Pick<RuleRecord, "enabled" | "threshold" | "timeWindow">>) => request<{ record: RuleRecord }>(`/api/rules/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(update) }),
   assets: () => request<{ records: AssetRecord[] }>("/api/assets"),

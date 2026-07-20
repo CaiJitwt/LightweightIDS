@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { idsApi } from "../api/idsApi";
 import type { FontScale, LlmSettings, RuntimeSettings, ThemePreference } from "../types";
 
-const fallbackSettings: RuntimeSettings = { autoSavePackets: true, realtimeDetection: true, alertCooldownSeconds: 10, minimumAlertSeverity: "LOW", securityEventMonitorEnabled: false, securityEventPollSeconds: 5, llmBaseUrl: "https://api.openai.com/v1", llmModel: "gpt-4.1-mini", llmApiKeyConfigured: false };
+const fallbackSettings: RuntimeSettings = { themePreference: "system", fontScale: "default", autoSavePackets: true, realtimeDetection: true, alertCooldownSeconds: 10, minimumAlertSeverity: "LOW", securityEventMonitorEnabled: false, securityEventPollSeconds: 5, llmBaseUrl: "https://api.openai.com/v1", llmModel: "gpt-4.1-mini", llmApiKeyConfigured: false };
 
 interface SettingsPageProps {
   themePreference: ThemePreference;
@@ -81,7 +81,7 @@ export function SettingsPage({ themePreference, onThemePreferenceChange, fontSca
             <button type="button" className={themePreference === "light" ? "selected" : ""} onClick={() => onThemePreferenceChange("light")}><Sun size={15} />Light</button>
             <button type="button" className={themePreference === "dark" ? "selected" : ""} onClick={() => onThemePreferenceChange("dark")}><Moon size={15} />Dark</button>
           </div></div>
-          <div className="setting-row"><div><strong>Font size</strong><small>Applies immediately and is remembered in this browser.</small></div><div className="theme-segment" role="group" aria-label="Font size">{(["compact", "default", "comfortable"] as FontScale[]).map((value) => <button type="button" key={value} className={fontScale === value ? "selected" : ""} onClick={() => onFontScaleChange(value)}>{value[0].toUpperCase() + value.slice(1)}</button>)}</div></div>
+          <div className="setting-row"><div><strong>Font size</strong><small>Applies immediately and is saved to the local project profile.</small></div><div className="theme-segment" role="group" aria-label="Font size">{(["compact", "default", "comfortable"] as FontScale[]).map((value) => <button type="button" key={value} className={fontScale === value ? "selected" : ""} onClick={() => onFontScaleChange(value)}>{value[0].toUpperCase() + value.slice(1)}</button>)}</div></div>
         </div>
       </section>
 

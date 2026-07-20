@@ -65,7 +65,7 @@ cd ..
 python modern_main.py
 ```
 
-启动器会初始化数据库，在 `http://127.0.0.1:8787` 启动本地 API，在 `http://127.0.0.1:4173` 启动前端，并自动打开浏览器。
+启动器会初始化数据库，为本地 API 和前端自动选择两个可用的回环端口，输出两个访问地址，并自动打开浏览器。
 
 常用选项：
 
@@ -73,6 +73,7 @@ python modern_main.py
 python modern_main.py --no-browser
 python modern_main.py --skip-install
 python modern_main.py --database .\data\custom_ids.db
+python modern_main.py --api-port 8787 --frontend-port 4173
 ```
 
 在启动器终端按 `Ctrl+C`，可以停止本次启动器创建的服务。
@@ -129,7 +130,7 @@ npm run build
 npm run test:e2e
 ```
 
-运行 Playwright 前，请确保前端正在 `http://127.0.0.1:4173` 运行。
+运行 Playwright 前，请将 `PLAYWRIGHT_BASE_URL` 设置为启动器输出的前端地址。
 
 ## 文档
 

@@ -232,6 +232,7 @@ export interface DashboardSnapshot {
     lastHourPackets: number;
   };
   trend: TrendPoint[];
+  trendBucket?: "minute" | "hour";
   severityDistribution: { name: string; value: number; color: string }[];
   highRiskHosts: HostRecord[];
   recentAlerts: AlertRecord[];
@@ -296,6 +297,8 @@ export interface TopologySnapshot {
 export type FontScale = "compact" | "default" | "comfortable";
 
 export interface RuntimeSettings {
+  themePreference: ThemePreference;
+  fontScale: FontScale;
   autoSavePackets: boolean;
   realtimeDetection: boolean;
   alertCooldownSeconds: number;

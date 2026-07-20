@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { AlertTriangle, ImagePlus, Palette, PawPrint, RotateCcw } from "lucide-react";
+import { AlertTriangle, ImagePlus, Layers3, Palette, PawPrint, RotateCcw, TableProperties } from "lucide-react";
+import { idsApi } from "../api/idsApi";
 import type { PersonalizationState } from "../data/personalizationStore";
 import { defaultPersonalization } from "../data/personalizationStore";
 
@@ -12,37 +13,55 @@ export function PersonalizationPage({ state, onChange, storageWarning, persistWa
   const backgroundPicker = useRef<HTMLInputElement>(null);
   const petPicker = useRef<HTMLInputElement>(null);
   const [warning, setWarning] = useState("");
-  const readImage = (event: React.ChangeEvent<HTMLInputElement>, key: "background" | "petImage") => {
+  const [uploading, setUploading] = useState<"background" | "petImage" | "">("");
+  const readImage = async (event: React.ChangeEvent<HTMLInputElement>, key: "background" | "petImage") => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
     if (file.size > MAX_IMAGE_BYTES) {
-      setWarning(`"${file.name}" is ${(file.size / 1024 / 1024).toFixed(1)} MB. Large images may slow down the page when first loading.`);
-    } else {
-      setWarning("");
+      setWarning(`"${file.name}" exceeds the 50 MB personalization limit.`);
+      return;
     }
-    const reader = new FileReader();
-    reader.onload = () => onChange({ ...state, [key]: String(reader.result) });
-    reader.onerror = () => setWarning(`Could not read "${file.name}". Try a different image file.`);
-    reader.readAsDataURL(file);
+    setWarning("");
+    setUploading(key);
+    try {
+      const uploaded = await idsApi.uploadPersonalizationImage(key, file, file.name);
+      onChange({ ...state, [key]: uploaded.url });
+    } catch (error) {
+      setWarning(error instanceof Error ? error.message : `Could not save "${file.name}".`);
+    } finally {
+      setUploading("");
+    }
   };
   const reset = () => { setWarning(""); onChange(defaultPersonalization); };
   return <div className="page-stack settings-workspace">
     <section className="settings-section"><header className="section-heading"><div><h2>Workspace appearance</h2><p>Saved locally for this modern frontend profile</p></div><Palette size={17} /></header><div className="settings-body">
       <div className="setting-row"><div><strong>Accent color</strong><small>Used for navigation and interactive emphasis.</small></div><label className="color-picker"><input aria-label="Accent color" type="color" value={state.accent} onChange={(event) => onChange({ ...state, accent: event.target.value })} /><code>{state.accent}</code></label></div>
-      <div className="setting-row"><div><strong>Wallpaper</strong><small>Choose an image for the workspace background.</small></div><div className="inline-actions"><input ref={backgroundPicker} className="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => readImage(event, "background")} /><button className="icon-text-button" type="button" onClick={() => backgroundPicker.current?.click()}><ImagePlus size={15} />Choose image</button><button className="icon-button" type="button" title="Clear wallpaper" onClick={() => onChange({ ...state, background: "" })}><RotateCcw size={15} /></button></div></div>
+    </div></section>
+    <section className="settings-section"><header className="section-heading"><div><h2>Component surfaces</h2><p>Glass appearance for panels, cards, controls and navigation</p></div><Layers3 size={17} /></header><div className="settings-body">
+      <div className="setting-row"><div><strong>Surface tint</strong><small>Blended with the active light or dark theme.</small></div><label className="color-picker"><input aria-label="Component tint" type="color" value={state.componentTint} onChange={(event) => onChange({ ...state, componentTint: event.target.value })} /><code>{state.componentTint}</code></label></div>
+      <Range label="Component opacity" value={state.componentOpacity} min={65} max={100} suffix="%" onChange={(value) => onChange({ ...state, componentOpacity: value })} />
+      <Range label="Component blur" value={state.componentBlur} min={0} max={24} suffix="px" onChange={(value) => onChange({ ...state, componentBlur: value })} />
+    </div></section>
+    <section className="settings-section"><header className="section-heading"><div><h2>Table surfaces</h2><p>Independent appearance for data regions and sticky headers</p></div><TableProperties size={17} /></header><div className="settings-body">
+      <div className="setting-row"><div><strong>Table tint</strong><small>Applied without changing severity and status colors.</small></div><label className="color-picker"><input aria-label="Table tint" type="color" value={state.tableTint} onChange={(event) => onChange({ ...state, tableTint: event.target.value })} /><code>{state.tableTint}</code></label></div>
+      <Range label="Table opacity" value={state.tableOpacity} min={65} max={100} suffix="%" onChange={(value) => onChange({ ...state, tableOpacity: value })} />
+      <Range label="Table blur" value={state.tableBlur} min={0} max={24} suffix="px" onChange={(value) => onChange({ ...state, tableBlur: value })} />
+    </div></section>
+    <section className="settings-section"><header className="section-heading"><div><h2>Workspace wallpaper</h2><p>Image placement behind translucent workspace surfaces</p></div><ImagePlus size={17} /></header><div className="settings-body">
+      <div className="setting-row"><div><strong>Wallpaper</strong><small>Choose an image for the workspace background.</small></div><div className="inline-actions"><input ref={backgroundPicker} className="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => void readImage(event, "background")} /><button className="icon-text-button" type="button" disabled={Boolean(uploading)} onClick={() => backgroundPicker.current?.click()}><ImagePlus size={15} />{uploading === "background" ? "Saving..." : "Choose image"}</button><button className="icon-button" type="button" title="Clear wallpaper" onClick={() => onChange({ ...state, background: "" })}><RotateCcw size={15} /></button></div></div>
       <div className="setting-row"><div><strong>Position</strong></div><select className="plain-select" aria-label="Wallpaper position" value={state.backgroundPosition} onChange={(event) => onChange({ ...state, backgroundPosition: event.target.value as PersonalizationState["backgroundPosition"] })}>{WALLPAPER_POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
       <div className="setting-row"><div><strong>Size</strong></div><select className="plain-select" aria-label="Wallpaper size" value={state.backgroundSize} onChange={(event) => onChange({ ...state, backgroundSize: event.target.value as PersonalizationState["backgroundSize"] })}>{WALLPAPER_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
       <Range label="Opacity" value={state.backgroundOpacity} min={10} max={100} suffix="%" onChange={(value) => onChange({ ...state, backgroundOpacity: value })} />
     </div></section>
     <section className="settings-section"><header className="section-heading"><div><h2>Overlay companion</h2><p>Transparent PNG overlay that never blocks analyst interactions</p></div><PawPrint size={17} /></header><div className="settings-body">
-      <div className="setting-row"><div><strong>Pet image</strong><small>Transparent PNG and WebP images are supported.</small></div><div className="inline-actions"><input ref={petPicker} className="visually-hidden" type="file" accept="image/png,image/webp" onChange={(event) => readImage(event, "petImage")} /><button className="icon-text-button" type="button" onClick={() => petPicker.current?.click()}><ImagePlus size={15} />Choose image</button><button className="icon-button" type="button" title="Hide companion" onClick={() => onChange({ ...state, petImage: "" })}><RotateCcw size={15} /></button></div></div>
+      <div className="setting-row"><div><strong>Pet image</strong><small>Transparent PNG and WebP images are supported.</small></div><div className="inline-actions"><input ref={petPicker} className="visually-hidden" type="file" accept="image/png,image/webp" onChange={(event) => void readImage(event, "petImage")} /><button className="icon-text-button" type="button" disabled={Boolean(uploading)} onClick={() => petPicker.current?.click()}><ImagePlus size={15} />{uploading === "petImage" ? "Saving..." : "Choose image"}</button><button className="icon-button" type="button" title="Hide companion" onClick={() => onChange({ ...state, petImage: "" })}><RotateCcw size={15} /></button></div></div>
       <div className="setting-row"><div><strong>Position</strong></div><select className="plain-select" aria-label="Pet position" value={state.petPosition} onChange={(event) => onChange({ ...state, petPosition: event.target.value as PersonalizationState["petPosition"] })}><option value="bottom-right">Bottom right</option><option value="bottom-left">Bottom left</option><option value="top-right">Top right</option><option value="top-left">Top left</option></select></div>
       <Range label="Size" value={state.petSize} min={48} max={220} suffix="px" onChange={(value) => onChange({ ...state, petSize: value })} /><Range label="Opacity" value={state.petOpacity} min={20} max={100} suffix="%" onChange={(value) => onChange({ ...state, petOpacity: value })} />
     </div></section>
     {persistWarning && <div className="storage-warning" role="alert"><AlertTriangle size={15} />Saved personalization could not be read and has been reset to defaults.</div>}
     {warning && <div className="storage-warning" role="alert"><AlertTriangle size={15} />{warning}</div>}
-    {storageWarning && !warning && <div className="storage-warning" role="alert"><AlertTriangle size={15} />Could not save personalization. Free up disk space or clear the saved wallpaper and pet images.</div>}
+    {storageWarning && !warning && <div className="storage-warning" role="alert"><AlertTriangle size={15} />Could not save personalization to the local API. Restart modern_main.py and try again.</div>}
     <button className="icon-text-button reset-personalization" type="button" onClick={reset}><RotateCcw size={15} />Reset personalization</button>
   </div>;
 }
