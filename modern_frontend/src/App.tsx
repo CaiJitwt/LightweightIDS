@@ -86,7 +86,17 @@ const pageMeta: Record<PageKey, { title: string; subtitle: string }> = {
   help: { title: "Help center", subtitle: "Product guidance, analyst workflow and quick navigation" },
 };
 
-const defaultPersonalization: PersonalizationState = { accent: "#2677bd", background: "", petImage: "", petPosition: "bottom-right", petSize: 96, petOpacity: 85 };
+const defaultPersonalization: PersonalizationState = {
+  accent: "#2677bd",
+  background: "",
+  backgroundPosition: "center",
+  backgroundSize: "cover",
+  backgroundOpacity: 35,
+  petImage: "",
+  petPosition: "bottom-right",
+  petSize: 96,
+  petOpacity: 85,
+};
 
 export default function App() {
   const [page, setPage] = useState<PageKey>("dashboard");
@@ -167,6 +177,18 @@ export default function App() {
       </aside>
 
       <main className="workspace">
+        {personalization.background && (
+          <div
+            className="workspace-wallpaper"
+            data-testid="workspace-wallpaper"
+            style={{
+              backgroundImage: `url(${personalization.background})`,
+              backgroundPosition: personalization.backgroundPosition,
+              backgroundSize: personalization.backgroundSize,
+              opacity: personalization.backgroundOpacity / 100,
+            }}
+          />
+        )}
         <header className="topbar">
           <div className="page-heading"><h1>{meta.title}</h1><p>{meta.subtitle}</p></div>
           <div className="topbar-actions">

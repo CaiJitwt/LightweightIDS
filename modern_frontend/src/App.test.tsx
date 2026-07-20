@@ -105,4 +105,27 @@ describe("modern IDS frontend", () => {
     fireEvent.click(within(quickNavigation as HTMLElement).getByRole("button", { name: "仪表盘" }));
     expect(await screen.findByRole("heading", { name: "Security overview" })).toBeInTheDocument();
   });
+
+  it("renders and clears a persisted workspace wallpaper", async () => {
+    localStorage.setItem("ids-prototype-personalization", JSON.stringify({
+      background: "data:image/png;base64,wallpaper",
+      backgroundPosition: "top",
+      backgroundSize: "contain",
+      backgroundOpacity: 60,
+    }));
+
+    render(<App />);
+
+    const wallpaper = screen.getByTestId("workspace-wallpaper");
+    expect(wallpaper).toHaveStyle({
+      backgroundImage: "url(data:image/png;base64,wallpaper)",
+      backgroundPosition: "top",
+      backgroundSize: "contain",
+      opacity: "0.6",
+    });
+
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Primary navigation" })).getByRole("button", { name: "Personalization" }));
+    fireEvent.click(await screen.findByTitle("Clear wallpaper"));
+    expect(screen.queryByTestId("workspace-wallpaper")).not.toBeInTheDocument();
+  });
 });
