@@ -17,7 +17,6 @@ import {
   Search,
   ScrollText,
   Settings,
-  Shield,
   ShieldCheck,
   SlidersHorizontal,
   Sun,
@@ -25,6 +24,7 @@ import {
   Waypoints,
 } from "lucide-react";
 import type { FontScale, LlmSettings, ThemePreference } from "./types";
+import brandMascot from "./assets/anime-brand-icon.png";
 import { loadPersonalization, savePersonalization, defaultPersonalization } from "./data/personalizationStore";
 import type { PersonalizationState } from "./data/personalizationStore";
 import type { HelpLanguage } from "./pages/HelpPage";
@@ -167,7 +167,7 @@ export default function App() {
     } as React.CSSProperties}>
       {personalization.background && <div className="workspace-wallpaper" data-testid="workspace-wallpaper" style={{ backgroundImage: `url(${personalization.background})`, backgroundSize: personalization.backgroundSize === "stretch" ? "100% 100%" : personalization.backgroundSize === "original" ? "auto" : personalization.backgroundSize, backgroundPosition: personalization.backgroundPosition, opacity: personalization.backgroundOpacity / 100 }} />}
       <aside className="sidebar">
-        <div className="brand-block"><span className="brand-mark"><Shield size={20} /></span><span className="brand-copy"><strong>Lightweight IDS</strong><small>Analyst console</small></span></div>
+        <div className="brand-block"><span className="brand-mark"><img src={brandMascot} alt="" /></span><span className="brand-copy"><strong>Lightweight IDS</strong><small>Analyst console</small></span></div>
         <nav className="primary-nav" aria-label="Primary navigation">
           {navItems.map((item) => {
             const Icon = item.icon;
