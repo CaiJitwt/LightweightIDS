@@ -35,7 +35,10 @@ class StubSecurityEventCollector:
                     computer="LAB-PC",
                     user="SYSTEM",
                     summary="A service was installed in the system.",
-                    details={"ServiceName": "RemoteUpdate"},
+                    details={
+                        "ServiceName": "RemoteUpdate",
+                        "ImagePath": r"powershell.exe -EncodedCommand SQBFAFgA",
+                    },
                     severity="HIGH",
                 )
             ]
@@ -402,6 +405,7 @@ def test_local_api_imports_a_uploaded_pcap_in_the_background(tmp_path):
         assert status["state"] == "completed", status.get("error")
         assert status["savedPacketTotal"] == 1
         assert PacketRepository(database).count() == 1
+
     finally:
         server.shutdown()
         server.server_close()

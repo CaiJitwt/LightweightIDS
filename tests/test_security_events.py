@@ -21,6 +21,7 @@ def event(
     user: str = "analyst",
     logon_type: str = "",
     command_line: str = "",
+    details: dict[str, str] | None = None,
 ) -> SecurityEventRecord:
     return SecurityEventRecord(
         timestamp=timestamp,
@@ -34,7 +35,7 @@ def event(
         logon_type=logon_type,
         command_line=command_line,
         summary=f"Test Windows event {event_id}",
-        details={"TargetUserName": user, "IpAddress": source_ip},
+        details=details or {"TargetUserName": user, "IpAddress": source_ip},
         severity="MEDIUM",
     )
 
@@ -82,7 +83,12 @@ def test_security_event_repository_is_idempotent_and_links_alerts(tmp_path):
     database = Database(tmp_path / "ids.db")
     database.initialize()
     repository = SecurityEventRepository(database)
-    record = event(7045, 12, channel="System")
+    record = event(
+        7045,
+        12,
+        channel="System",
+        details={"ServiceName": "Updater", "ImagePath": r"powershell.exe -EncodedCommand SQBFAFgA"},
+    )
 
     inserted = repository.add_many([record, record])
     assert len(inserted) == 1
@@ -140,17 +146,60 @@ def test_security_event_analyzer_applies_thresholds_and_powershell_indicators(tm
     assert powershell_alerts[0].rule_id == "POWERSHELL_SUSPICIOUS"
     assert "encoded-command" in powershell_alerts[0].evidence
 
+    assert analyzer.process(
+        event(
+            4104,
+            22,
+            channel="Microsoft-Windows-PowerShell/Operational",
+            command_line="powershell.exe Get-Process | Sort-Object CPU -Descending",
+        )
+    ) == []
 
-def test_powershell_default_threshold_migrates_once_without_overwriting_later_tuning(tmp_path):
+    defender_disable = analyzer.process(
+        event(
+            4104,
+            23,
+            channel="Microsoft-Windows-PowerShell/Operational",
+            command_line="Set-MpPreference -DisableRealtimeMonitoring $true",
+        )
+    )
+    assert len(defender_disable) == 1
+    assert "defender-disable" in defender_disable[0].evidence
+
+
+def test_generic_service_install_is_retained_as_event_without_alert(tmp_path):
+    database = Database(tmp_path / "ids.db")
+    database.initialize()
+    analyzer = SecurityEventAnalyzer(RuleRepository(database).list_all())
+
+    alerts = analyzer.process(
+        event(
+            7045,
+            30,
+            channel="System",
+            details={"ServiceName": "VendorUpdater", "ImagePath": r"C:\Program Files\Vendor\updater.exe"},
+        )
+    )
+
+    assert alerts == []
+
+
+def test_false_positive_defaults_migrate_once_without_overwriting_later_tuning(tmp_path):
     database = Database(tmp_path / "ids.db")
     database.initialize()
     with database.connect() as connection:
-        connection.execute("UPDATE rules SET threshold = 2 WHERE id = 'POWERSHELL_SUSPICIOUS'")
-        connection.execute("DELETE FROM settings WHERE key = 'migration_powershell_threshold_v3'")
+        connection.execute("UPDATE rules SET threshold = 20 WHERE id = 'PORT_SCAN'")
+        connection.execute("UPDATE rules SET threshold = 80 WHERE id = 'ML_FLOW_ANOMALY'")
+        connection.execute("UPDATE rules SET threshold = 4 WHERE id = 'BANDWIDTH_SPIKE'")
+        connection.execute("UPDATE rules SET threshold = 3 WHERE id = 'POWERSHELL_SUSPICIOUS'")
+        connection.execute("DELETE FROM settings WHERE key = 'migration_false_positive_tuning_v1'")
 
     database.initialize()
-    migrated = next(rule for rule in RuleRepository(database).list_all() if rule.id == "POWERSHELL_SUSPICIOUS")
-    assert migrated.threshold == 3
+    migrated = {rule.id: rule.threshold for rule in RuleRepository(database).list_all()}
+    assert migrated["PORT_SCAN"] == 30
+    assert migrated["ML_FLOW_ANOMALY"] == 95
+    assert migrated["BANDWIDTH_SPIKE"] == 8
+    assert migrated["POWERSHELL_SUSPICIOUS"] == 4
 
     with database.connect() as connection:
         connection.execute("UPDATE rules SET threshold = 2 WHERE id = 'POWERSHELL_SUSPICIOUS'")
@@ -173,7 +222,19 @@ class StubCollector:
 def test_security_event_monitor_persists_new_events_and_preserves_them_after_alert_reset(tmp_path):
     database = Database(tmp_path / "ids.db")
     database.initialize()
-    service = SecurityEventMonitorService(database, collector=StubCollector([event(7045, 44, channel="System")]))  # type: ignore[arg-type]
+    service = SecurityEventMonitorService(
+        database,
+        collector=StubCollector(
+            [
+                event(
+                    7045,
+                    44,
+                    channel="System",
+                    details={"ImagePath": r"C:\Users\Public\update.ps1", "ServiceName": "Updater"},
+                )
+            ]
+        ),
+    )  # type: ignore[arg-type]
 
     first = service.refresh_once()
     second = service.refresh_once()

@@ -112,9 +112,23 @@ class Database:
     def _migrate_rule_defaults(self, connection: sqlite3.Connection) -> None:
         migration_key = "migration_powershell_threshold_v3"
         migrated = connection.execute("SELECT 1 FROM settings WHERE key = ?", (migration_key,)).fetchone()
-        if migrated is not None:
+        if migrated is None:
+            connection.execute(
+                "UPDATE rules SET threshold = 3 WHERE id = 'POWERSHELL_SUSPICIOUS' AND threshold = 2"
+            )
+            connection.execute("INSERT INTO settings (key, value) VALUES (?, 'true')", (migration_key,))
+
+        tuning_key = "migration_false_positive_tuning_v1"
+        tuned = connection.execute("SELECT 1 FROM settings WHERE key = ?", (tuning_key,)).fetchone()
+        if tuned is not None:
             return
-        connection.execute(
-            "UPDATE rules SET threshold = 3 WHERE id = 'POWERSHELL_SUSPICIOUS' AND threshold = 2"
+        connection.executemany(
+            "UPDATE rules SET threshold = ? WHERE id = ? AND threshold = ?",
+            (
+                (30, "PORT_SCAN", 20),
+                (95, "ML_FLOW_ANOMALY", 80),
+                (8, "BANDWIDTH_SPIKE", 4),
+                (4, "POWERSHELL_SUSPICIOUS", 3),
+            ),
         )
-        connection.execute("INSERT INTO settings (key, value) VALUES (?, 'true')", (migration_key,))
+        connection.execute("INSERT INTO settings (key, value) VALUES (?, 'true')", (tuning_key,))

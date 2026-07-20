@@ -16,13 +16,46 @@ HOST_EVENT_RULE_IDS = {
     "RDP_LATERAL_ACTIVITY",
 }
 
-POWERSHELL_INDICATORS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("encoded-command", re.compile(r"(?i)(?:^|\s)-(?:enc|encodedcommand)\b")),
-    ("base64-decode", re.compile(r"(?i)frombase64string\s*\(")),
-    ("download-cradle", re.compile(r"(?i)(?:downloadstring|invoke-webrequest|start-bitstransfer)")),
-    ("expression-execution", re.compile(r"(?i)(?:invoke-expression|\biex\b)")),
-    ("policy-bypass", re.compile(r"(?i)-(?:executionpolicy|ep)\s+bypass\b")),
-    ("credential-tooling", re.compile(r"(?i)(?:invoke-mimikatz|sekurlsa::|lsadump::)")),
+POWERSHELL_INDICATORS: tuple[tuple[str, int, re.Pattern[str]], ...] = (
+    ("encoded-command", 2, re.compile(r"(?i)(?:^|\s)-(?:e(?:nc(?:odedcommand)?)?)\b")),
+    ("base64-decode", 2, re.compile(r"(?i)frombase64string\s*\(")),
+    ("download-cradle", 2, re.compile(r"(?i)(?:downloadstring|downloadfile|invoke-webrequest|\biwr\b|start-bitstransfer)")),
+    ("expression-execution", 2, re.compile(r"(?i)(?:invoke-expression|\biex\b)")),
+    ("policy-bypass", 1, re.compile(r"(?i)-(?:executionpolicy|ep)\s+bypass\b")),
+    ("hidden-window", 1, re.compile(r"(?i)-(?:windowstyle|w)\s+hidden\b")),
+    ("credential-tooling", 5, re.compile(r"(?i)(?:invoke-mimikatz|sekurlsa::|lsadump::|comsvcs\.dll.*minidump)")),
+    ("amsi-bypass", 5, re.compile(r"(?i)(?:amsiutils|amsiinitfailed|amsiscanbuffer)")),
+    (
+        "defender-disable",
+        5,
+        re.compile(
+            r"(?i)(?:set-mppreference\b.*-disablerealtimemonitoring\s+\$?true|"
+            r"add-mppreference\b.*-exclusion(?:path|process|extension))"
+        ),
+    ),
+    (
+        "script-logging-disable",
+        5,
+        re.compile(
+            r"(?i)(?:set-itemproperty|new-itemproperty|reg(?:\.exe)?\s+add).{0,160}"
+            r"(?:scriptblocklogging|modulelogging).{0,80}(?:\b0\b|disabled)"
+        ),
+    ),
+)
+
+POWERSHELL_SEVERE_INDICATORS = {
+    "credential-tooling",
+    "amsi-bypass",
+    "defender-disable",
+    "script-logging-disable",
+}
+
+PERSISTENCE_INDICATORS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("script-interpreter", re.compile(r"(?i)\b(?:powershell|pwsh|cmd|wscript|cscript|mshta)(?:\.exe)?\b")),
+    ("proxy-execution", re.compile(r"(?i)\b(?:rundll32|regsvr32|certutil)(?:\.exe)?\b")),
+    ("encoded-command", re.compile(r"(?i)(?:^|\s)-(?:e(?:nc(?:odedcommand)?)?)\b")),
+    ("user-writable-path", re.compile(r"(?i)\\(?:users\\[^\\]+\\appdata|temp|public|downloads)\\|%temp%|%appdata%")),
+    ("network-path", re.compile(r"\\\\[^\\\s]+\\[^\\\s]+")),
 )
 
 
@@ -48,13 +81,17 @@ class SecurityEventAnalyzer:
                 alerts.append(alert)
 
         if event.event_id in {4697, 4698, 4702, 7045}:
-            alert = self._immediate_alert(
-                "WINDOWS_PERSISTENCE",
-                event,
-                "A Windows service or scheduled task was created or modified.",
-            )
-            if alert:
-                alerts.append(alert)
+            inspected = self._event_text(event)
+            indicators = [name for name, pattern in PERSISTENCE_INDICATORS if pattern.search(inspected)]
+            if indicators:
+                alert = self._immediate_alert(
+                    "WINDOWS_PERSISTENCE",
+                    event,
+                    "A Windows service or scheduled task change contains high-risk execution indicators.",
+                    extra=f"indicators={indicators}",
+                )
+                if alert:
+                    alerts.append(alert)
 
         if event.event_id in {4720, 4728, 4732}:
             alert = self._immediate_alert(
@@ -77,15 +114,17 @@ class SecurityEventAnalyzer:
         if event.event_id in {4103, 4104}:
             rule = self._enabled_rule("POWERSHELL_SUSPICIOUS")
             if rule:
-                inspected = f"{event.command_line} {event.summary}"
-                indicators = [name for name, pattern in POWERSHELL_INDICATORS if pattern.search(inspected)]
-                if len(indicators) >= rule.threshold:
+                inspected = self._event_text(event)
+                matched = [(name, weight) for name, weight, pattern in POWERSHELL_INDICATORS if pattern.search(inspected)]
+                indicators = [name for name, _weight in matched]
+                risk_score = sum(weight for _name, weight in matched)
+                if self._is_high_risk_powershell(indicators, risk_score, rule.threshold):
                     alerts.append(
                         self._create_alert(
                             rule,
                             event,
-                            "PowerShell operational logging contains multiple suspicious execution indicators.",
-                            extra=f"indicators={indicators}",
+                            "PowerShell operational logging contains a high-risk command or execution chain.",
+                            extra=f"risk_score={risk_score}; indicators={indicators}",
                         )
                     )
 
@@ -109,11 +148,35 @@ class SecurityEventAnalyzer:
         rule = self._rules.get(rule_id)
         return rule if rule and rule.enabled else None
 
-    def _immediate_alert(self, rule_id: str, event: SecurityEventRecord, description: str) -> AlertRecord | None:
+    def _immediate_alert(
+        self,
+        rule_id: str,
+        event: SecurityEventRecord,
+        description: str,
+        extra: str = "",
+    ) -> AlertRecord | None:
         rule = self._enabled_rule(rule_id)
         if rule is None:
             return None
-        return self._create_alert(rule, event, description)
+        return self._create_alert(rule, event, description, extra=extra)
+
+    @staticmethod
+    def _event_text(event: SecurityEventRecord) -> str:
+        details = " ".join(f"{key}={value}" for key, value in event.details.items())
+        return f"{event.command_line} {event.process_name} {event.summary} {details}"
+
+    @staticmethod
+    def _is_high_risk_powershell(indicators: list[str], risk_score: int, threshold: int) -> bool:
+        matched = set(indicators)
+        if matched & POWERSHELL_SEVERE_INDICATORS:
+            return True
+        if risk_score < max(1, threshold):
+            return False
+        download_and_execute = {"download-cradle", "expression-execution"} <= matched
+        encoded_payload_chain = "encoded-command" in matched and bool(
+            matched & {"download-cradle", "expression-execution", "base64-decode"}
+        )
+        return download_and_execute or encoded_payload_chain
 
     def _counted_alert(
         self,
