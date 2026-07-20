@@ -869,7 +869,12 @@ class LocalApiHandler(BaseHTTPRequestHandler):
 
     def _send_cors_headers(self) -> None:
         origin = self.headers.get("Origin", "")
-        if origin in {"http://127.0.0.1:4173", "http://localhost:4173"}:
+        parsed_origin = urlparse(origin)
+        if parsed_origin.scheme in {"http", "https"} and parsed_origin.hostname in {
+            "127.0.0.1",
+            "localhost",
+            "::1",
+        }:
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -1256,15 +1261,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run the Lightweight IDS local API for the React prototype.")
     parser.add_argument("--database", type=Path, default=DEFAULT_DATABASE_PATH)
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8787)
+    parser.add_argument("--port", type=int, default=0, help="Listen port. Use 0 to select an available port automatically.")
     args = parser.parse_args()
     if args.host not in {"127.0.0.1", "localhost", "::1"}:
         parser.error("The local API only supports loopback hosts.")
+    if not 0 <= args.port <= 65535:
+        parser.error("Port must be between 0 and 65535.")
 
     database = Database(args.database)
     database.initialize()
     server = LocalApiServer((args.host, args.port), database)
-    print(f"Lightweight IDS local API listening on http://{args.host}:{args.port}")
+    actual_port = int(server.server_address[1])
+    print(f"Lightweight IDS local API listening on http://{args.host}:{actual_port}")
     try:
         server.serve_forever(poll_interval=0.25)
     except KeyboardInterrupt:

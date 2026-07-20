@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import secrets
 import shutil
+import socket
 import subprocess
 import sys
 from threading import Thread
@@ -22,8 +23,6 @@ from storage.database import Database
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 FRONTEND_ROOT = PROJECT_ROOT / "modern_frontend"
-API_URL = "http://127.0.0.1:8787"
-FRONTEND_URL = "http://127.0.0.1:4173"
 REQUIRED_API_CAPABILITIES = {
     "endpoint-security-v1",
     "system-health-v1",
@@ -40,7 +39,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-browser", action="store_true", help="Do not open the frontend in the default browser.")
     parser.add_argument("--skip-install", action="store_true", help="Do not install missing frontend dependencies.")
     parser.add_argument("--bind", default="127.0.0.1", help="Bind address (default: 127.0.0.1). Use 0.0.0.0 to allow remote access.")
+    parser.add_argument("--api-port", type=int, default=0, help="Local API port. Use 0 to select an available port automatically.")
+    parser.add_argument("--frontend-port", type=int, default=0, help="Frontend port. Use 0 to select an available port automatically.")
     args = parser.parse_args(argv)
+    if not 0 <= args.api_port <= 65535 or not 0 <= args.frontend_port <= 65535:
+        parser.error("Ports must be between 0 and 65535.")
 
     api_key = ""
     if args.bind not in {"127.0.0.1", "localhost", "::1"}:
@@ -53,7 +56,8 @@ def main(argv: list[str] | None = None) -> int:
     frontend_process: subprocess.Popen[bytes] | None = None
 
     try:
-        api_health = _read_json(f"{API_URL}/api/health")
+        api_url = f"http://127.0.0.1:{args.api_port}" if args.api_port else ""
+        api_health = _read_json(f"{api_url}/api/health") if api_url else None
         if api_health is not None:
             compatibility_error = _api_compatibility_error(
                 api_health,
@@ -62,29 +66,33 @@ def main(argv: list[str] | None = None) -> int:
             )
             if compatibility_error:
                 raise RuntimeError(
-                    f"Port 8787 is already serving an incompatible local API: {compatibility_error} "
+                    f"Port {args.api_port} is already serving an incompatible local API: {compatibility_error} "
                     "Stop the older modern_main.py or modern_ui.local_api process, then start again."
                 )
-            print(f"Reusing local API at {API_URL}")
+            print(f"Reusing local API at {api_url}")
         else:
             database = Database(args.database)
             database.initialize()
-            api_server = LocalApiServer((args.bind, 8787), database, api_key=api_key)
+            api_server = LocalApiServer((args.bind, args.api_port), database, api_key=api_key)
+            api_port = int(api_server.server_address[1])
+            api_url = f"http://127.0.0.1:{api_port}"
             api_thread = Thread(target=api_server.serve_forever, kwargs={"poll_interval": 0.25}, daemon=True)
             api_thread.start()
-            print(f"Local API started at http://{args.bind}:8787")
+            print(f"Local API started at http://{args.bind}:{api_port}")
 
-        if _http_ready(FRONTEND_URL, b'id="root"'):
-            print(f"Reusing modern frontend at {FRONTEND_URL}")
+        frontend_port = args.frontend_port or _available_port()
+        frontend_url = f"http://127.0.0.1:{frontend_port}"
+        if args.frontend_port and _http_ready(frontend_url, b'id="root"'):
+            print(f"Reusing modern frontend at {frontend_url}")
         else:
             _ensure_frontend_dependencies(install=not args.skip_install)
-            frontend_process = _start_frontend()
-            if not _wait_until_ready(FRONTEND_URL, frontend_process):
+            frontend_process = _start_frontend(frontend_port, api_url)
+            if not _wait_until_ready(frontend_url, frontend_process):
                 raise RuntimeError("The modern frontend did not become ready. Review the Vite output above.")
-            print(f"Modern frontend started at {FRONTEND_URL}")
+            print(f"Modern frontend started at {frontend_url}")
 
         if not args.no_browser:
-            webbrowser.open(FRONTEND_URL)
+            webbrowser.open(frontend_url)
         print("Press Ctrl+C to stop services started by this launcher.")
 
         while True:
@@ -121,14 +129,23 @@ def _ensure_frontend_dependencies(*, install: bool) -> None:
         raise RuntimeError("npm install failed. Review the npm output above.")
 
 
-def _start_frontend() -> subprocess.Popen[bytes]:
+def _available_port(host: str = "127.0.0.1") -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as candidate:
+        candidate.bind((host, 0))
+        return int(candidate.getsockname()[1])
+
+
+def _start_frontend(port: int, api_url: str) -> subprocess.Popen[bytes]:
     node = shutil.which("node.exe" if os.name == "nt" else "node") or shutil.which("node")
     if node is None:
         raise RuntimeError("Node.js is required to run the modern frontend.")
     vite_entry = FRONTEND_ROOT / "node_modules" / "vite" / "bin" / "vite.js"
+    environment = os.environ.copy()
+    environment["VITE_IDS_API_PROXY_TARGET"] = api_url
     return subprocess.Popen(
-        [node, str(vite_entry), "--host", "127.0.0.1", "--port", "4173", "--strictPort"],
+        [node, str(vite_entry), "--host", "127.0.0.1", "--port", str(port), "--strictPort"],
         cwd=FRONTEND_ROOT,
+        env=environment,
     )
 
 

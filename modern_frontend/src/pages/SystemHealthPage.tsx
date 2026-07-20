@@ -72,7 +72,7 @@ export function SystemHealthPage({ refreshVersion }: { refreshVersion: number })
         <button className="icon-button" type="button" title="Refresh local health data" disabled={loading} onClick={() => void load()}><RefreshCw className={loading ? "spin" : ""} size={15} /></button>
       </div>
 
-      {error ? <p className="capture-notice error">{error}. Start this frontend with modern_main.py and stop any older API process using port 8787.</p> : null}
+      {error ? <p className="capture-notice error">{error}. Start this frontend with modern_main.py and stop any older local API process.</p> : null}
 
       {snapshot ? <>
         <section className="metric-strip">
