@@ -3,7 +3,7 @@ import { AlertTriangle, ImagePlus, Palette, PawPrint, RotateCcw } from "lucide-r
 import type { PersonalizationState } from "../data/personalizationStore";
 import { defaultPersonalization } from "../data/personalizationStore";
 
-const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 
 const WALLPAPER_POSITIONS = ["center", "top-left", "top-right", "bottom-left", "bottom-right"] as const;
 const WALLPAPER_SIZES = ["cover", "contain", "stretch", "original"] as const;
@@ -17,7 +17,7 @@ export function PersonalizationPage({ state, onChange, storageWarning, persistWa
     event.target.value = "";
     if (!file) return;
     if (file.size > MAX_IMAGE_BYTES) {
-      setWarning(`"${file.name}" is ${(file.size / 1024 / 1024).toFixed(1)} MB. Images larger than 2 MB may not persist after a page reload.`);
+      setWarning(`"${file.name}" is ${(file.size / 1024 / 1024).toFixed(1)} MB. Large images may slow down the page when first loading.`);
     } else {
       setWarning("");
     }
@@ -41,7 +41,7 @@ export function PersonalizationPage({ state, onChange, storageWarning, persistWa
     </div></section>
     {persistWarning && <div className="storage-warning" role="alert"><AlertTriangle size={15} />Saved personalization could not be read and has been reset to defaults.</div>}
     {warning && <div className="storage-warning" role="alert"><AlertTriangle size={15} />{warning}</div>}
-    {storageWarning && !warning && <div className="storage-warning" role="alert"><AlertTriangle size={15} />Browser storage is full — wallpaper and pet image may not persist after a page reload. Clear older images to free space.</div>}
+    {storageWarning && !warning && <div className="storage-warning" role="alert"><AlertTriangle size={15} />Could not save personalization. Free up disk space or clear the saved wallpaper and pet images.</div>}
     <button className="icon-text-button reset-personalization" type="button" onClick={reset}><RotateCcw size={15} />Reset personalization</button>
   </div>;
 }
