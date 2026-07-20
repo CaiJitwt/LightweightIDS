@@ -52,9 +52,13 @@ export function TrafficPage() {
       setPcapImport(pcapResponse);
       setServiceReady(true);
       if (packetResponse.records.length) {
-        setLivePackets((records) => [...packetResponse.records, ...records]
-          .sort((left, right) => packetOrder(right) - packetOrder(left))
-          .slice(0, 1_000));
+        setLivePackets((records) => {
+          const existing = new Set(records.map(packetKey));
+          const fresh = packetResponse.records.filter((packet) => !existing.has(packetKey(packet)));
+          return [...fresh, ...records]
+            .sort((left, right) => packetOrder(right) - packetOrder(left))
+            .slice(0, 1_000);
+        });
       }
       setRateHistory((history) => [...history, { time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }), rate: nextStatus.packetsPerSecond, alerts: nextStatus.alertTotal }].slice(-60));
       if (nextStatus.error) setActionError(nextStatus.error);
