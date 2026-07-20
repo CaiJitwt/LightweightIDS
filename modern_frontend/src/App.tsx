@@ -202,7 +202,7 @@ export default function App() {
         <div className="page-content">
           <Suspense fallback={<div className="page-loading">Loading view...</div>}>
             {page === "dashboard" && <DashboardPage refreshVersion={refreshVersion} onStatisticsReset={() => { setRefreshVersion((value) => value + 1); setAlertBadgeRefresh((value) => value + 1); }} onOpenAlertCountChange={setOpenAlertCount} onOpenAlerts={() => setPage("alerts")} onOpenHost={(ip) => { setSelectedHostIp(ip); setPage("hosts"); }} />}
-            {page === "traffic" && <TrafficPage />}
+            {page === "traffic" && <TrafficPage onDataChanged={() => { setRefreshVersion((value) => value + 1); setAlertBadgeRefresh((value) => value + 1); }} />}
             {page === "hosts" && <HostsPage initialHostIp={selectedHostIp} refreshVersion={refreshVersion} />}
             {page === "alerts" && <AlertsPage llmSettings={llmSettings} refreshVersion={refreshVersion} initialAlertId={selectedAlertId} onAlertsChanged={() => setAlertBadgeRefresh((value) => value + 1)} />}
             {page === "investigations" && <InvestigationsPage />}

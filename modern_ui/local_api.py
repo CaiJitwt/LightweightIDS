@@ -59,7 +59,10 @@ class LocalApiServer(ThreadingHTTPServer):
         self.settings = SettingsRepository(database)
         self.host_profiles = HostProfileService(database)
         self.alert_trends = AlertTrendAnalyzer()
-        self.pcap_import = PcapImportService(database)
+        self.pcap_import = PcapImportService(
+            database,
+            activity_callback=self.capture_service.publish_import_batch,
+        )
         self.posture_service = EndpointPostureService()
         self.process_inventory = ProcessInventoryService()
         self.file_integrity = FileIntegrityService(database.path.parent / "endpoint_security")
