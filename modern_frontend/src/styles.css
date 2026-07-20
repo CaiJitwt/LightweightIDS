@@ -34,11 +34,7 @@ button { cursor: pointer; }
 .workspace-wallpaper {
   position: fixed;
   inset: 0;
-  background-image: var(--wallpaper);
-  background-size: var(--wallpaper-size, cover);
-  background-position: var(--wallpaper-position, center);
   background-repeat: no-repeat;
-  opacity: var(--wallpaper-opacity, 1);
   z-index: 0;
   pointer-events: none;
 }
@@ -97,8 +93,9 @@ button { cursor: pointer; }
 .sidebar-collapsed .sensor-summary { justify-content: center; padding: 10px 0; }
 
 .workspace { min-width: 0; min-height: 100vh; display: flex; flex-direction: column; z-index: 1; position: relative; }
-.has-wallpaper .workspace { background: color-mix(in srgb, var(--workspace) 92%, transparent); }
-.has-wallpaper .topbar { background: color-mix(in srgb, var(--surface) 88%, transparent); }
+.has-wallpaper .workspace { background: color-mix(in srgb, var(--workspace) 50%, transparent); }
+.has-wallpaper .topbar { background: color-mix(in srgb, var(--surface) 50%, transparent); }
+.has-wallpaper .sidebar { background: color-mix(in srgb, #101820 65%, transparent); }
 .topbar { min-height: 72px; padding: 12px 22px; display: flex; align-items: center; justify-content: space-between; gap: 20px; background: var(--surface); border-bottom: 1px solid var(--border); }
 .page-heading h1 { margin: 0; font-size: 21px; line-height: 1.25; letter-spacing: 0; }
 .page-heading p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }

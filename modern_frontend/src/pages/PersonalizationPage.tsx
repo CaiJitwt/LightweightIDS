@@ -23,6 +23,7 @@ export function PersonalizationPage({ state, onChange, storageWarning, persistWa
     }
     const reader = new FileReader();
     reader.onload = () => onChange({ ...state, [key]: String(reader.result) });
+    reader.onerror = () => setWarning(`Could not read "${file.name}". Try a different image file.`);
     reader.readAsDataURL(file);
   };
   const reset = () => { setWarning(""); onChange(defaultPersonalization); };

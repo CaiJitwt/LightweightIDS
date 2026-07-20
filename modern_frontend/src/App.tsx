@@ -164,12 +164,8 @@ export default function App() {
   return (
     <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}${personalization.background ? " has-wallpaper" : ""}`} data-theme={theme} data-font-scale={fontScale} style={{
       "--accent": personalization.accent,
-      "--wallpaper": personalization.background ? `url(${personalization.background})` : undefined,
-      "--wallpaper-position": personalization.backgroundPosition,
-      "--wallpaper-size": personalization.backgroundSize === "stretch" ? "100% 100%" : personalization.backgroundSize,
-      "--wallpaper-opacity": personalization.backgroundOpacity / 100,
     } as React.CSSProperties}>
-      {personalization.background && <div className="workspace-wallpaper" />}
+      {personalization.background && <div className="workspace-wallpaper" style={{ backgroundImage: `url(${personalization.background})`, backgroundSize: personalization.backgroundSize === "stretch" ? "100% 100%" : personalization.backgroundSize, backgroundPosition: personalization.backgroundPosition, opacity: personalization.backgroundOpacity / 100 }} />}
       <aside className="sidebar">
         <div className="brand-block"><span className="brand-mark"><Shield size={20} /></span><span className="brand-copy"><strong>Lightweight IDS</strong><small>Analyst console</small></span></div>
         <nav className="primary-nav" aria-label="Primary navigation">
