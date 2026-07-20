@@ -25,7 +25,8 @@ import {
   Waypoints,
 } from "lucide-react";
 import type { FontScale, LlmSettings, ThemePreference } from "./types";
-import type { PersonalizationState } from "./pages/PersonalizationPage";
+import { loadPersonalization, savePersonalization, defaultPersonalization } from "./data/personalizationStore";
+import type { PersonalizationState } from "./data/personalizationStore";
 import type { HelpLanguage } from "./pages/HelpPage";
 import { idsApi } from "./api/idsApi";
 
@@ -86,8 +87,6 @@ const pageMeta: Record<PageKey, { title: string; subtitle: string }> = {
   help: { title: "Help center", subtitle: "Product guidance, analyst workflow and quick navigation" },
 };
 
-const defaultPersonalization: PersonalizationState = { accent: "#2677bd", background: "", backgroundPosition: "center", backgroundSize: "cover", backgroundOpacity: 100, petImage: "", petPosition: "bottom-right", petSize: 96, petOpacity: 85 };
-
 export default function App() {
   const [page, setPage] = useState<PageKey>("dashboard");
   const [collapsed, setCollapsed] = useState(false);
@@ -99,8 +98,8 @@ export default function App() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [selectedHostIp, setSelectedHostIp] = useState<string | undefined>();
-  const [personalization, setPersonalization] = useState<PersonalizationState>(() => readPersonalization()[0]);
-  const [persistWarning] = useState(() => readPersonalization()[1]);
+  const [personalization, setPersonalization] = useState<PersonalizationState>(defaultPersonalization);
+  const [persistWarning, setPersistWarning] = useState(false);
   const [storageWarning, setStorageWarning] = useState(false);
   const [helpLanguage, setHelpLanguage] = useState<HelpLanguage>(readHelpLanguage);
   const [openAlertCount, setOpenAlertCount] = useState(0);
@@ -126,8 +125,18 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    try { localStorage.setItem("ids-prototype-personalization", JSON.stringify(personalization)); setStorageWarning(false); }
-    catch { setStorageWarning(true); }
+    let active = true;
+    loadPersonalization().then(([state, corrupted]) => {
+      if (active) { setPersonalization(state); setPersistWarning(corrupted); }
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    savePersonalization(personalization).then(() => { if (active) setStorageWarning(false); })
+      .catch(() => { if (active) setStorageWarning(true); });
+    return () => { active = false; };
   }, [personalization]);
 
   useEffect(() => localStorage.setItem("ids-help-language", helpLanguage), [helpLanguage]);
@@ -211,13 +220,6 @@ export default function App() {
       {personalization.petImage && <img className={`overlay-pet ${personalization.petPosition}`} src={personalization.petImage} alt="" style={{ width: personalization.petSize, opacity: personalization.petOpacity / 100 }} />}
     </div>
   );
-}
-
-function readPersonalization(): [PersonalizationState, boolean] {
-  const raw = localStorage.getItem("ids-prototype-personalization");
-  if (!raw) return [defaultPersonalization, false];
-  try { return [{ ...defaultPersonalization, ...JSON.parse(raw) }, false]; }
-  catch { return [defaultPersonalization, true]; }
 }
 
 function readThemePreference(): ThemePreference {

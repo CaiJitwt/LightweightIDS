@@ -1,19 +1,9 @@
 import { useRef, useState } from "react";
 import { AlertTriangle, ImagePlus, Palette, PawPrint, RotateCcw } from "lucide-react";
+import type { PersonalizationState } from "../data/personalizationStore";
+import { defaultPersonalization } from "../data/personalizationStore";
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
-
-export interface PersonalizationState {
-  accent: string;
-  background: string;
-  backgroundPosition: "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
-  backgroundSize: "cover" | "contain" | "stretch" | "original";
-  backgroundOpacity: number;
-  petImage: string;
-  petPosition: "bottom-right" | "bottom-left" | "top-right" | "top-left";
-  petSize: number;
-  petOpacity: number;
-}
 
 const WALLPAPER_POSITIONS = ["center", "top-left", "top-right", "bottom-left", "bottom-right"] as const;
 const WALLPAPER_SIZES = ["cover", "contain", "stretch", "original"] as const;
@@ -35,7 +25,7 @@ export function PersonalizationPage({ state, onChange, storageWarning, persistWa
     reader.onload = () => onChange({ ...state, [key]: String(reader.result) });
     reader.readAsDataURL(file);
   };
-  const reset = () => { setWarning(""); onChange({ accent: "#2677bd", background: "", backgroundPosition: "center", backgroundSize: "cover", backgroundOpacity: 100, petImage: "", petPosition: "bottom-right", petSize: 96, petOpacity: 85 }); };
+  const reset = () => { setWarning(""); onChange(defaultPersonalization); };
   return <div className="page-stack settings-workspace">
     <section className="settings-section"><header className="section-heading"><div><h2>Workspace appearance</h2><p>Saved locally for this modern frontend profile</p></div><Palette size={17} /></header><div className="settings-body">
       <div className="setting-row"><div><strong>Accent color</strong><small>Used for navigation and interactive emphasis.</small></div><label className="color-picker"><input aria-label="Accent color" type="color" value={state.accent} onChange={(event) => onChange({ ...state, accent: event.target.value })} /><code>{state.accent}</code></label></div>
