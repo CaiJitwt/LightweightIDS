@@ -53,9 +53,11 @@ export function TrafficPage() {
       setServiceReady(true);
       if (packetResponse.records.length) {
         setLivePackets((records) => {
-          const existing = new Set(records.map(packetKey));
-          const fresh = packetResponse.records.filter((packet) => !existing.has(packetKey(packet)));
-          return [...fresh, ...records]
+          const merged = new Map<string, PacketRecord>();
+          for (const packet of [...packetResponse.records, ...records]) {
+            merged.set(packetKey(packet), packet);
+          }
+          return [...merged.values()]
             .sort((left, right) => packetOrder(right) - packetOrder(left))
             .slice(0, 1_000);
         });
