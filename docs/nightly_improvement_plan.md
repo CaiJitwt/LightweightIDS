@@ -1,5 +1,7 @@
 # Nightly Improvement Execution Plan
 
+> **Status: historical planning record.** Some items may be implemented or superseded. Use the [documentation index](README.md), user manual, and current source code for runtime behavior.
+
 ## Goal
 
 Use the remaining development time on changes that make the IDS more usable in real local experiments, without overstating HTTPS payload visibility.

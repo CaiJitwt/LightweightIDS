@@ -1,5 +1,7 @@
 # Runtime Hardening Plan
 
+> **Status: historical planning record.** Some items may be implemented or superseded. Use the [documentation index](README.md), user manual, and current source code for runtime behavior.
+
 ## Objective
 
 Keep long pcap imports and live captures responsive while making capture health visible to the operator.
