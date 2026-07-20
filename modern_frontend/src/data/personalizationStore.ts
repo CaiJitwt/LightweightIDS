@@ -55,6 +55,12 @@ async function removeImage(key: string): Promise<void> {
 
 export interface PersonalizationState {
   accent: string;
+  componentTint: string;
+  componentOpacity: number;
+  componentBlur: number;
+  tableTint: string;
+  tableOpacity: number;
+  tableBlur: number;
   background: string;
   backgroundPosition: "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
   backgroundSize: "cover" | "contain" | "stretch" | "original";
@@ -67,6 +73,12 @@ export interface PersonalizationState {
 
 export const defaultPersonalization: PersonalizationState = {
   accent: "#2677bd",
+  componentTint: "#7ea7c4",
+  componentOpacity: 92,
+  componentBlur: 6,
+  tableTint: "#8ca6b8",
+  tableOpacity: 94,
+  tableBlur: 4,
   background: "",
   backgroundPosition: "center",
   backgroundSize: "cover",

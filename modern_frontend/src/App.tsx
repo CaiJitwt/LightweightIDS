@@ -83,7 +83,7 @@ const pageMeta: Record<PageKey, { title: string; subtitle: string }> = {
   health: { title: "System health", subtitle: "Review sensor and local service readiness" },
   endpoint: { title: "Endpoint security", subtitle: "Read-only host posture, process inventory and file integrity" },
   settings: { title: "Settings", subtitle: "Appearance and local analyst integrations" },
-  personalization: { title: "Personalization", subtitle: "Workspace wallpaper and overlay companion" },
+  personalization: { title: "Personalization", subtitle: "Workspace surfaces, wallpaper and overlay companion" },
   help: { title: "Help center", subtitle: "Product guidance, analyst workflow and quick navigation" },
 };
 
@@ -99,6 +99,7 @@ export default function App() {
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [selectedHostIp, setSelectedHostIp] = useState<string | undefined>();
   const [personalization, setPersonalization] = useState<PersonalizationState>(defaultPersonalization);
+  const [personalizationLoaded, setPersonalizationLoaded] = useState(false);
   const [persistWarning, setPersistWarning] = useState(false);
   const [storageWarning, setStorageWarning] = useState(false);
   const [helpLanguage, setHelpLanguage] = useState<HelpLanguage>(readHelpLanguage);
@@ -127,17 +128,32 @@ export default function App() {
   useEffect(() => {
     let active = true;
     loadPersonalization().then(([state, corrupted]) => {
-      if (active) { setPersonalization(state); setPersistWarning(corrupted); }
-    }).catch(() => undefined);
+      if (active) {
+        setPersonalization(state);
+        setPersistWarning(corrupted);
+        setPersonalizationLoaded(true);
+      }
+    }).catch(() => {
+      if (active) {
+        setPersistWarning(true);
+        setPersonalizationLoaded(true);
+      }
+    });
     return () => { active = false; };
   }, []);
 
   useEffect(() => {
+    if (!personalizationLoaded) return undefined;
     let active = true;
-    savePersonalization(personalization).then(() => { if (active) setStorageWarning(false); })
-      .catch(() => { if (active) setStorageWarning(true); });
-    return () => { active = false; };
-  }, [personalization]);
+    const timer = window.setTimeout(() => {
+      savePersonalization(personalization).then(() => { if (active) setStorageWarning(false); })
+        .catch(() => { if (active) setStorageWarning(true); });
+    }, 180);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [personalization, personalizationLoaded]);
 
   useEffect(() => localStorage.setItem("ids-help-language", helpLanguage), [helpLanguage]);
 
@@ -164,6 +180,12 @@ export default function App() {
   return (
     <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}${personalization.background ? " has-wallpaper" : ""}`} data-theme={theme} data-font-scale={fontScale} style={{
       "--accent": personalization.accent,
+      "--component-tint": personalization.componentTint,
+      "--component-opacity": `${personalization.componentOpacity}%`,
+      "--component-blur": `${personalization.componentBlur}px`,
+      "--table-tint": personalization.tableTint,
+      "--table-opacity": `${personalization.tableOpacity}%`,
+      "--table-blur": `${personalization.tableBlur}px`,
     } as React.CSSProperties}>
       {personalization.background && <div className="workspace-wallpaper" data-testid="workspace-wallpaper" style={{ backgroundImage: `url(${personalization.background})`, backgroundSize: personalization.backgroundSize === "stretch" ? "100% 100%" : personalization.backgroundSize === "original" ? "auto" : personalization.backgroundSize, backgroundPosition: personalization.backgroundPosition, opacity: personalization.backgroundOpacity / 100 }} />}
       <aside className="sidebar">
