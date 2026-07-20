@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import { Activity, BellRing, Radio, RotateCcw, ShieldCheck, TriangleAlert } from "lucide-react";
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -79,9 +77,14 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
     ...point,
     detectionRate: point.packets > 0 ? Math.round(point.alerts * 10000 / point.packets) / 10 : 0,
   }));
-  const averageDetectionRate = detectionRateTrend.length
-    ? detectionRateTrend.reduce((total, point) => total + point.detectionRate, 0) / detectionRateTrend.length
+  const detectionRateSamples = detectionRateTrend.filter((point) => point.packets > 0);
+  const averageDetectionRate = detectionRateSamples.length
+    ? detectionRateSamples.reduce((total, point) => total + point.detectionRate, 0) / detectionRateSamples.length
     : 0;
+  const averagePacketCount = snapshot.trend.length
+    ? snapshot.trend.reduce((total, point) => total + point.packets, 0) / snapshot.trend.length
+    : 0;
+  const trendUnit = snapshot.trendBucket === "minute" ? "minutes" : "hours";
   const resetStatistics = async () => {
     if (!window.confirm("Delete all packet, alert, and security-event runtime data and start from zero? Assets, investigations, and evidence snapshots will be preserved.")) return;
     setResetting(true);
@@ -114,17 +117,18 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
 
       <section className="analysis-grid">
         <div className="section-panel trend-panel">
-          <SectionHeading title="Traffic and alert trend" meta={`${dataLabel} - last 12 observed hours`} />
+          <SectionHeading title="Traffic and alert trend" meta={`${dataLabel} - recent observed ${trendUnit}`} />
           <div className="chart-area" aria-label="Traffic and alert trend chart">
             {snapshot.trend.length ? <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={snapshot.trend} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
+              <LineChart data={snapshot.trend} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
                 <XAxis dataKey="time" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
                 <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
                 <Tooltip contentStyle={{ borderRadius: 6, borderColor: "var(--border)" }} />
-                <Area type="monotone" dataKey="packets" stroke="#2878d0" fill="#dcecff" strokeWidth={2} isAnimationActive={false} />
-                <Area type="monotone" dataKey="alerts" stroke="#c2413b" fill="#fde2e0" strokeWidth={2} isAnimationActive={false} />
-              </AreaChart>
+                <ReferenceLine y={averagePacketCount} stroke="#d97706" strokeDasharray="5 4" label={{ value: "Average traffic", position: "insideTopRight", fill: "#9a5b08", fontSize: 10 }} />
+                <Line type="linear" dataKey="packets" name="Packets" stroke="#2878d0" strokeWidth={2.25} dot={false} activeDot={false} isAnimationActive={false} />
+                <Line type="linear" dataKey="alerts" name="Alerts" stroke="#c2413b" strokeWidth={2.25} dot={false} activeDot={false} isAnimationActive={false} />
+              </LineChart>
             </ResponsiveContainer> : <EmptyState text="No traffic or alerts have been stored yet." />}
           </div>
         </div>
@@ -148,7 +152,7 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
       </section>
 
       <section className="section-panel detection-rate-panel">
-        <SectionHeading title="Detection rate trend" meta="Alerts per 1,000 stored packets by observed hour" />
+        <SectionHeading title="Detection rate trend" meta={`Alerts per 1,000 stored packets by observed ${trendUnit.slice(0, -1)}`} />
         <div className="chart-area" aria-label="Detection rate trend chart">
           {detectionRateTrend.length ? <ResponsiveContainer width="100%" height="100%">
             <LineChart data={detectionRateTrend} margin={{ top: 10, right: 18, left: -18, bottom: 0 }}>
@@ -157,7 +161,7 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
               <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
               <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}`, "Alerts / 1k packets"]} contentStyle={{ borderRadius: 6, borderColor: "var(--border)" }} />
               <ReferenceLine y={averageDetectionRate} stroke="#d97706" strokeDasharray="5 4" label={{ value: "Average", position: "insideTopRight", fill: "#9a5b08", fontSize: 10 }} />
-              <Line type="monotone" dataKey="detectionRate" stroke="#2f8f66" strokeWidth={2.5} dot={{ r: 3, fill: "#2f8f66" }} activeDot={{ r: 5 }} isAnimationActive={false} />
+              <Line type="linear" dataKey="detectionRate" stroke="#2f8f66" strokeWidth={2.5} dot={false} activeDot={false} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer> : <EmptyState text="No packet and alert trend is available yet." />}
         </div>

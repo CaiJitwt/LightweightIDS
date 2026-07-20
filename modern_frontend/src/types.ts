@@ -232,6 +232,7 @@ export interface DashboardSnapshot {
     lastHourPackets: number;
   };
   trend: TrendPoint[];
+  trendBucket?: "minute" | "hour";
   severityDistribution: { name: string; value: number; color: string }[];
   highRiskHosts: HostRecord[];
   recentAlerts: AlertRecord[];

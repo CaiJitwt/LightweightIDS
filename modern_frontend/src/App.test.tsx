@@ -19,7 +19,11 @@ describe("modern IDS frontend", () => {
       json: async () => ({
         capture: { state: "running", interface: "Loopback", filterExpression: "", savePackets: true, detectionEnabled: true, packetTotal: 0, alertTotal: 0, skippedTotal: 0, savedPacketTotal: 0, savedAlertTotal: 0, packetsPerSecond: 0, error: "", nextSequence: 0 },
         statistics: { packetTotal: 128, alertTotal: 2, openAlerts: 1, highPriorityAlerts: 1, highRiskHosts: 1, lastHourPackets: 16 },
-        trend: [{ time: "12:00", bucket: "2026-07-13 12:00", alerts: 1, packets: 16, spike: false }],
+        trend: [
+          { time: "11:59", bucket: "2026-07-13 11:59", alerts: 0, packets: 0, spike: false },
+          { time: "12:00", bucket: "2026-07-13 12:00", alerts: 1, packets: 16, spike: false },
+        ],
+        trendBucket: "minute",
         severityDistribution: [{ name: "High", value: 2, color: "#e5484d" }],
         highRiskHosts: [{ ip: "10.0.0.42", name: "Lab host", role: "Workstation", risk: 82, importance: 0, packets: 128, alerts: 2, lastSeen: "2026-07-13 12:00" }],
         recentAlerts: [{ id: 7, timestamp: "2026-07-13 12:00", severity: "HIGH", ruleId: "HOST_SCAN", ruleName: "Host scan", source: "10.0.0.42:51000", destination: "10.0.0.10:22", protocol: "TCP", description: "Repeated connections", evidence: "targets=2", status: "unconfirmed" }],
@@ -29,7 +33,7 @@ describe("modern IDS frontend", () => {
     render(<App />);
 
     expect(await screen.findByText("128", {}, { timeout: 3000 })).toBeInTheDocument();
-    expect(screen.getByText("Local SQLite data - last 12 observed hours")).toBeInTheDocument();
+    expect(screen.getByText("Local SQLite data - recent observed minutes")).toBeInTheDocument();
     expect(screen.getByText("Lab host")).toBeInTheDocument();
     const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
     expect(await within(navigation).findByTitle("1 unconfirmed alerts")).toHaveTextContent("1");

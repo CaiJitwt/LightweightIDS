@@ -255,11 +255,12 @@ class PacketRepository:
     def count_by_time_bucket(self, bucket: str = "hour", limit: int = 24) -> list[tuple[str, int]]:
         """Return persisted packet counts for the lightweight local analyst API."""
         formats = {
+            "minute": "%Y-%m-%d %H:%M",
             "hour": "%Y-%m-%d %H:00",
             "day": "%Y-%m-%d",
         }
         if bucket not in formats:
-            raise ValueError("bucket must be 'hour' or 'day'")
+            raise ValueError("bucket must be 'minute', 'hour', or 'day'")
 
         with self.database.connect() as connection:
             rows = connection.execute(
@@ -437,11 +438,12 @@ class AlertRepository:
 
     def count_by_time_bucket(self, bucket: str = "hour", limit: int = 24) -> list[tuple[str, int]]:
         formats = {
+            "minute": "%Y-%m-%d %H:%M",
             "hour": "%Y-%m-%d %H:00",
             "day": "%Y-%m-%d",
         }
         if bucket not in formats:
-            raise ValueError("bucket must be 'hour' or 'day'")
+            raise ValueError("bucket must be 'minute', 'hour', or 'day'")
 
         with self.database.connect() as connection:
             rows = connection.execute(

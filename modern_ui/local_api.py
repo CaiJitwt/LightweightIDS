@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timedelta
 import ipaddress
 import json
 import os
@@ -589,22 +590,35 @@ class LocalApiHandler(BaseHTTPRequestHandler):
         hosts = self.server.host_profiles.list_hosts(limit=500)
         alert_counts = dict(self.server.alerts.count_by_time_bucket(bucket="hour", limit=12))
         packet_counts = dict(self.server.packets.count_by_time_bucket(bucket="hour", limit=12))
+        last_hour_packets = packet_counts.get(max(packet_counts), 0) if packet_counts else 0
         severity_counts = self.server.alerts.count_by_severity()
         status_counts = self.server.alerts.count_by_status()
         buckets = sorted(set(alert_counts) | set(packet_counts))[-12:]
+        trend_bucket = "hour"
+        if len(buckets) == 1:
+            trend_bucket = "minute"
+            alert_counts = dict(self.server.alerts.count_by_time_bucket(bucket="minute", limit=12))
+            packet_counts = dict(self.server.packets.count_by_time_bucket(bucket="minute", limit=12))
+            buckets = sorted(set(alert_counts) | set(packet_counts))[-12:]
+
+        analyzed_buckets = list(buckets)
+        analyzed_points = {
+            point.bucket: point
+            for point in self.server.alert_trends.analyze(
+                [(bucket, alert_counts.get(bucket, 0)) for bucket in analyzed_buckets]
+            )
+        }
+        if len(buckets) == 1:
+            buckets = [_previous_bucket(buckets[0], trend_bucket), buckets[0]]
         trend = [
             {
                 "time": _bucket_label(bucket),
                 "bucket": bucket,
                 "alerts": alert_counts.get(bucket, 0),
                 "packets": packet_counts.get(bucket, 0),
-                "spike": point.is_spike,
+                "spike": analyzed_points[bucket].is_spike if bucket in analyzed_points else False,
             }
-            for bucket, point in zip(
-                buckets,
-                self.server.alert_trends.analyze([(bucket, alert_counts.get(bucket, 0)) for bucket in buckets]),
-                strict=True,
-            )
+            for bucket in buckets
         ]
         open_alerts = status_counts.get("unconfirmed", 0)
         high_priority = severity_counts.get("HIGH", 0) + severity_counts.get("CRITICAL", 0)
@@ -617,9 +631,10 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 "openAlerts": open_alerts,
                 "highPriorityAlerts": high_priority,
                 "highRiskHosts": len(high_risk),
-                "lastHourPackets": packet_counts.get(buckets[-1], 0) if buckets else 0,
+                "lastHourPackets": last_hour_packets,
             },
             "trend": trend,
+            "trendBucket": trend_bucket,
             "severityDistribution": [
                 {"name": severity.title(), "value": count, "color": _severity_color(severity)}
                 for severity, count in severity_counts.items()
@@ -932,6 +947,15 @@ def _host_payload(host: Any) -> dict[str, Any]:
 
 def _bucket_label(bucket: str) -> str:
     return bucket[-5:] if len(bucket) >= 5 and ":" in bucket else bucket
+
+
+def _previous_bucket(bucket: str, granularity: str) -> str:
+    formats = {
+        "minute": ("%Y-%m-%d %H:%M", timedelta(minutes=1)),
+        "hour": ("%Y-%m-%d %H:00", timedelta(hours=1)),
+    }
+    date_format, step = formats[granularity]
+    return (datetime.strptime(bucket, date_format) - step).strftime(date_format)
 
 
 def _severity_color(severity: str) -> str:

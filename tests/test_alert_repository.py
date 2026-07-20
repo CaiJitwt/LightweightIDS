@@ -70,6 +70,11 @@ def test_alert_repository_time_buckets_and_rule_feedback(tmp_path):
         ("2026-01-01 00:00", 2),
         ("2026-01-01 01:00", 1),
     ]
+    assert repository.count_by_time_bucket(bucket="minute", limit=24) == [
+        ("2026-01-01 00:10", 1),
+        ("2026-01-01 00:20", 1),
+        ("2026-01-01 01:05", 1),
+    ]
 
     feedback = repository.rule_feedback()
     assert feedback["SQL_INJECTION"]["total"] == 2
