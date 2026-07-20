@@ -32,6 +32,13 @@ class MlFlowAnomalyRule(RuleBase):
 
     def process(self, packet: PacketRecord) -> list[AlertRecord]:
         feature = self.extractor.observe(packet)
+
+        # Feed completed windows into the baseline so it learns normal behaviour
+        # without being polluted by in-progress windows that may contain spikes.
+        now = self.extractor.packet_time(packet)
+        for completed in self.extractor.flush_expired(now):
+            self.detector._remember(completed)
+
         result = self.detector.score_feature(feature, update=False)
         window_key = (feature.src_ip, feature.dst_ip, feature.window_start)
         self._prune_alerted_windows(feature.window_start)

@@ -72,10 +72,9 @@ class IsolationForestFlowDetector:
                 reasons.append(f"isolation_forest_score={model_score:.1f}")
 
         score = max(heuristic_score, model_score)
-        score = min(score, 100.0)
-        if update and score < 50:
+        if update:
             self._remember(feature)
-        return FlowAnomalyResult(score=score, reasons=reasons[:5], backend=self.backend)
+        return FlowAnomalyResult(score=min(score, 100.0), reasons=reasons[:5], backend=self.backend)
 
     def save(self, path: str | Path | None = None) -> None:
         target = Path(path) if path is not None else self.model_path

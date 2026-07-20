@@ -143,6 +143,17 @@ class FlowFeatureExtractor:
         self._prune(self.packet_time(packet))
         return accumulator.feature()
 
+    def flush_expired(self, now: float) -> list[FlowFeature]:
+        """Return final features for windows that have ended and remove them."""
+        threshold = now - self.time_window
+        expired_keys = [key for key in self._active if key[2] <= threshold]
+        features: list[FlowFeature] = []
+        for key in expired_keys:
+            accumulator = self._active.pop(key, None)
+            if accumulator is not None:
+                features.append(accumulator.feature())
+        return features
+
     def reset(self) -> None:
         self._active.clear()
 
