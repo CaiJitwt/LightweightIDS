@@ -86,9 +86,12 @@ class ReportGenerator:
 
     def _build_html(self, alerts: list[AlertRecord], packets: list[PacketRecord], statistics: dict[str, Any]) -> str:
         generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        severity_rows = self._dict_rows(statistics.get("severity_distribution", {}))
-        type_rows = self._dict_rows(statistics.get("alert_type_distribution", {}))
-        top_src_rows = self._tuple_rows(statistics.get("top_src_ips", []), "Source IP", "Count")
+        severity_dist = statistics.get("severityDistribution", {})
+        if isinstance(severity_dist, list):
+            severity_dist = {s["name"]: s["value"] for s in severity_dist}
+        severity_rows = self._dict_rows(severity_dist)
+        type_rows = self._dict_rows(statistics.get("alertTypeDistribution", {}))
+        top_src_rows = self._tuple_rows([(item["ip"], item["count"]) for item in statistics.get("topSourceIps", [])], "Source IP", "Count")
         top_port_rows = self._tuple_rows(statistics.get("top_dst_ports", []), "Destination port", "Count")
         alert_rows = "\n".join(self._alert_row(alert) for alert in alerts) or "<tr><td colspan='8'>No alerts</td></tr>"
 
@@ -115,7 +118,7 @@ class ReportGenerator:
   <div class="summary">
     <div class="card">Total packets<div class="value">{len(packets)}</div></div>
     <div class="card">Total alerts<div class="value">{len(alerts)}</div></div>
-    <div class="card">High or critical alerts<div class="value">{statistics.get("high_or_critical_alerts", 0)}</div></div>
+    <div class="card">High or critical alerts<div class="value">{statistics.get("highPriorityAlerts", 0)}</div></div>
   </div>
 
   <h2>Alert Severity Distribution</h2>

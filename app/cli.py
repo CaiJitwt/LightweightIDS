@@ -5,13 +5,27 @@ import json
 import sys
 from pathlib import Path
 
-from app.constants import PROJECT_ROOT
 from capture.pcap_loader import PcapLoader
 from detection.analysis.attack_chain import AttackChainAnalyzer
 from detection.analysis.mitre_attack import techniques_for_rule, build_coverage_matrix
 from detection.engine import DetectionEngine
 from parser.packet_parser import PacketParser
 from report.report_generator import ReportGenerator
+
+
+def _endpoint(ip: str | None, port: int | None) -> str:
+    value = ip or "Unknown"
+    return f"{value}:{port}" if port is not None else value
+
+
+def _severity_color(severity: str) -> str:
+    return {
+        "CRITICAL": "#b42318",
+        "HIGH": "#e5484d",
+        "MEDIUM": "#d97706",
+        "LOW": "#2563eb",
+        "INFO": "#2f8f66",
+    }.get(severity.upper(), "#7a8996")
 
 
 def run_cli(argv: list[str] | None = None) -> int:
@@ -61,8 +75,6 @@ def run_cli(argv: list[str] | None = None) -> int:
         type_dist[a.alert_type] = type_dist.get(a.alert_type, 0) + 1
         rule_dist[a.rule_id] = rule_dist.get(a.rule_id, 0) + 1
 
-    high_or_critical = severity_dist.get("HIGH", 0) + severity_dist.get("CRITICAL", 0)
-
     # Attack chains
     chains = chain_analyzer.analyze(alerts)
 
@@ -81,16 +93,20 @@ def run_cli(argv: list[str] | None = None) -> int:
     top_src = sorted(src_counts.items(), key=lambda x: x[1], reverse=True)[:10]
 
     statistics = {
-        "packet_count": len(packets),
-        "alert_count": len(alerts),
-        "skipped_count": skipped,
-        "high_or_critical_alerts": high_or_critical,
-        "rules_triggered": len(rule_ids_seen),
-        "severity_distribution": severity_dist,
-        "alert_type_distribution": type_dist,
-        "top_src_ips": top_src,
-        "attack_chain_count": len(chains),
-        "techniques_covered": [{"id": t[0], "name": t[1], "rule": t[2]} for t in techniques_covered],
+        "packetTotal": len(packets),
+        "alertTotal": len(alerts),
+        "skippedCount": skipped,
+        "openAlerts": len(alerts),
+        "highPriorityAlerts": severity_dist.get("HIGH", 0) + severity_dist.get("CRITICAL", 0),
+        "rulesTriggered": len(rule_ids_seen),
+        "severityDistribution": [
+            {"name": severity.title(), "value": count, "color": _severity_color(severity)}
+            for severity, count in severity_dist.items()
+        ],
+        "alertTypeDistribution": type_dist,
+        "topSourceIps": [{"ip": ip, "count": count} for ip, count in top_src],
+        "attackChainCount": len(chains),
+        "techniquesCovered": [{"id": t[0], "name": t[1], "rule": t[2]} for t in techniques_covered],
     }
 
     if args.format == "json":
@@ -98,31 +114,33 @@ def run_cli(argv: list[str] | None = None) -> int:
             "statistics": statistics,
             "alerts": [
                 {
+                    "id": int(a.id or 0),
                     "timestamp": a.timestamp,
                     "severity": a.severity,
-                    "rule_id": a.rule_id,
-                    "alert_type": a.alert_type,
-                    "src_ip": a.src_ip,
-                    "dst_ip": a.dst_ip,
-                    "src_port": a.src_port,
-                    "dst_port": a.dst_port,
-                    "protocol": a.protocol,
+                    "ruleId": a.rule_id,
+                    "ruleName": a.rule_name,
+                    "alertType": a.alert_type,
+                    "source": _endpoint(a.src_ip, a.src_port),
+                    "destination": _endpoint(a.dst_ip, a.dst_port),
+                    "protocol": a.protocol or "UNKNOWN",
                     "description": a.description,
                     "evidence": a.evidence,
+                    "status": a.status or "unconfirmed",
                 }
                 for a in alerts
             ],
-            "attack_chains": [
+            "attackChains": [
                 {
-                    "source_ip": c.source_ip,
-                    "target_ip": c.target_ip,
+                    "sourceIp": c.source_ip,
+                    "targetIp": c.target_ip,
                     "stages": c.stages,
-                    "risk_score": c.risk_score,
-                    "alert_count": len(c.alerts),
+                    "riskScore": c.risk_score,
+                    "alertCount": len(c.alerts),
+                    "summary": c.summary,
                 }
                 for c in chains
             ],
-            "mitre_coverage": {
+            "mitreCoverage": {
                 tactic: [(tech_id, rule_id) for tech_id, rule_id in techs]
                 for tactic, techs in build_coverage_matrix().items()
                 if techs
