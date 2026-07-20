@@ -140,7 +140,7 @@ class WindowsEventCollector:
             ),
             summary=message or f"Windows event {event_id} from {provider or 'unknown provider'}.",
             details=details,
-            severity=_event_severity(event_id),
+            severity=_event_severity(event_id, details),
         )
 
 
@@ -172,7 +172,7 @@ def _normalize_timestamp(value: object) -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def _event_severity(event_id: int) -> str:
+def _event_severity(event_id: int, details: dict[str, str] | None = None) -> str:
     if event_id in {1102, 5001}:
         return "CRITICAL"
     if event_id in {4697, 4698, 4702, 4720, 4728, 4732, 7045, 1116}:
@@ -180,5 +180,29 @@ def _event_severity(event_id: int) -> str:
     if event_id in {4625, 4648, 4672, 21, 24, 25}:
         return "MEDIUM"
     if event_id in {4103, 4104}:
-        return "LOW"
+        return _powershell_severity(details or {})
+    return "LOW"
+
+
+_POWERSHELL_SUSPICIOUS = [
+    # Obfuscation / encoded payloads
+    "frombase64string", "-encodedcommand", "-ec ", "iex ", "invoke-expression",
+    # Download cradle patterns
+    "downloadstring", "downloadfile", "net.webclient", "invoke-webrequest",
+    "invoke-restmethod", "new-object net.webclient", "start-bitstransfer",
+    # Reflection / in-memory execution
+    "system.reflection.assembly", "::load(", "virtualalloc",
+    # Common offensive keywords
+    "mimikatz", "cobaltstrike", "empire", "metasploit",
+    "invoke-mimikatz", "get-keystrokes", "invoke-shellcode",
+]
+
+
+def _powershell_severity(details: dict[str, str]) -> str:
+    """Scan PowerShell script content for suspicious patterns."""
+    text = " ".join(str(v).lower() for v in details.values())
+    if not text:
+        return "MEDIUM"  # no content to inspect — keep elevated
+    if any(pattern in text for pattern in _POWERSHELL_SUSPICIOUS):
+        return "HIGH"
     return "LOW"
