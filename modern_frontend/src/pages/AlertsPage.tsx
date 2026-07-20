@@ -65,13 +65,13 @@ export function AlertsPage({ llmSettings, refreshVersion, initialAlertId, onAler
   const selectedPacket = relatedPackets.find((packet) => packet.id === selectedPacketId) ?? null;
 
   const columns = useMemo<ColumnDef<AlertRecord, unknown>[]>(() => [
-    { accessorKey: "timestamp", header: "Time" },
-    { accessorKey: "severity", header: "Severity", cell: ({ row }) => <SeverityBadge severity={row.original.severity} /> },
-    { accessorKey: "ruleName", header: "Rule" },
-    { accessorKey: "source", header: "Source" },
-    { accessorKey: "destination", header: "Destination" },
-    { accessorKey: "description", header: "Description", enableSorting: false },
-    { accessorKey: "status", header: "Status", cell: ({ getValue }) => <span className={`status status-${String(getValue())}`}>{String(getValue())}</span> },
+    { accessorKey: "timestamp", header: "Time", size: 155 },
+    { accessorKey: "severity", header: "Severity", size: 90, cell: ({ row }) => <SeverityBadge severity={row.original.severity} /> },
+    { accessorKey: "ruleName", header: "Rule", size: 130 },
+    { accessorKey: "source", header: "Source", size: 135 },
+    { accessorKey: "destination", header: "Destination", size: 135 },
+    { accessorKey: "description", header: "Description", size: 200, enableSorting: false },
+    { accessorKey: "status", header: "Status", size: 90, cell: ({ getValue }) => <span className={`status status-${String(getValue())}`}>{String(getValue())}</span> },
   ], []);
 
   const updateStatus = async (status: AlertStatus) => {
@@ -97,7 +97,7 @@ export function AlertsPage({ llmSettings, refreshVersion, initialAlertId, onAler
       </section>
       <div className="master-detail">
         <section className="table-panel alert-master">
-          <DataTable columns={columns} data={visible} getRowId={(row) => String(row.id)} selectedRowId={selected ? String(selected.id) : undefined} onRowClick={(row) => setSelectedId(row.id)} />
+          <DataTable columns={columns} data={visible} getRowId={(row) => String(row.id)} selectedRowId={selected ? String(selected.id) : undefined} onRowClick={(row) => setSelectedId(row.id)} resizableColumns />
         </section>
         <aside className="detail-panel" aria-label="Selected alert details">
           {selected ? <>

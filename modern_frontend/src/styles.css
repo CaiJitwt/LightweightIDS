@@ -184,11 +184,28 @@ kbd { padding: 2px 5px; border: 1px solid var(--border); border-radius: 3px; bac
 .master-detail { min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(520px, 1.6fr) minmax(320px, .8fr); gap: 12px; }
 .alert-master { overflow: hidden; }
 .alert-master .data-table { table-layout: fixed; }
-.alert-master .data-table th:nth-child(1), .alert-master .data-table td:nth-child(1) { width: 62px; }
-.alert-master .data-table th:nth-child(2), .alert-master .data-table td:nth-child(2) { width: 86px; }
-.alert-master .data-table th:nth-child(3), .alert-master .data-table td:nth-child(3) { width: 110px; }
-.alert-master .data-table th:nth-child(4), .alert-master .data-table td:nth-child(4), .alert-master .data-table th:nth-child(5), .alert-master .data-table td:nth-child(5) { width: 120px; }
-.alert-master .data-table th:nth-child(7), .alert-master .data-table td:nth-child(7) { width: 86px; }
+/* Column widths are now controlled by columnDef.size and the resize handle */
+/* ── Column resize handle ── */
+.col-resize-handle {
+  position: absolute;
+  right: 0;
+  top: 2px;
+  bottom: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  cursor: col-resize;
+  user-select: none;
+  opacity: 0;
+  border-radius: 2px;
+  transition: opacity .15s, background .15s;
+}
+.data-table th:hover .col-resize-handle,
+.col-resize-handle:active { opacity: .5; }
+.col-resize-handle:hover,
+.col-resize-handle:active { opacity: 1; background: var(--primary, #2878d0); color: #fff; }
+.resizable-table { min-width: 100%; }
 .detail-panel { min-width: 0; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 14px; border-bottom: 1px solid var(--border); }
 .detail-header h2 { margin: 9px 0 2px; font-size: 15px; }
