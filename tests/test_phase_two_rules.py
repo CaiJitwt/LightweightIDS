@@ -123,7 +123,7 @@ def test_abnormal_outbound_rule_detects_fixed_interval_heartbeat():
                 packet(
                     timestamp=f"2026-01-01 00:00:{seconds:02d}.000",
                         dst_ip="8.8.8.8",
-                        dst_port=443,
+                        dst_port=8443,
                         src_port=50000 + index,
                     )
             )
