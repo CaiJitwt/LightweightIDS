@@ -329,16 +329,16 @@ kbd { padding: 2px 5px; border: 1px solid var(--border); border-radius: 3px; bac
 .endpoint-toolbar small { margin-top: 2px; color: var(--muted); font-size: 10px; }
 .posture-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .posture-card { min-width: 0; min-height: 168px; display: flex; flex-direction: column; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-top: 3px solid #8998a5; border-radius: 6px; }
-.posture-card.pass { border-top-color: #2f8f66; }
-.posture-card.warning { border-top-color: #d97706; }
-.posture-card.fail { border-top-color: #c2413b; }
-.posture-card.unavailable { border-top-color: #7a8996; }
+.posture-card.posture-pass { border-top-color: #2f8f66; }
+.posture-card.posture-warning { border-top-color: #d97706; }
+.posture-card.posture-fail { border-top-color: #c2413b; }
+.posture-card.posture-unavailable { border-top-color: #7a8996; }
 .posture-card header { display: grid; grid-template-columns: 8px minmax(0, 1fr); gap: 8px; align-items: center; }
 .posture-card header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .posture-card header small { grid-column: 2; color: var(--muted); font-size: 10px; }
 .posture-dot { width: 8px; height: 8px; border-radius: 50%; background: #7a8996; }
 .posture-dot.pass { background: #2f8f66; }.posture-dot.warning { background: #d97706; }.posture-dot.fail { background: #c2413b; }
-.posture-card p, .posture-card footer { margin: 11px 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.posture-card p, .posture-card footer { margin: 11px 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
 .posture-card footer { margin-top: auto; padding-top: 9px; border-top: 1px solid var(--border); }
 .empty-security { min-height: 120px; display: grid; grid-column: 1 / -1; place-items: center; color: var(--muted); background: var(--surface); border: 1px dashed var(--border-strong); border-radius: 6px; font-size: 11px; }
 .endpoint-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }

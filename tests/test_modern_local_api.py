@@ -67,6 +67,7 @@ def test_local_api_serves_status_and_filter_validation(tmp_path):
         with urlopen(f"{base}/api/health", timeout=3) as response:
             health = json.loads(response.read())
         assert health["apiVersion"] >= 3
+        assert isinstance(health["elevated"], bool)
         assert "endpoint-security-v1" in health["capabilities"]
         assert "analyst-workflow-v1" in health["capabilities"]
         assert health["database"] == str(database.path.resolve())
