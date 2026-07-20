@@ -297,6 +297,8 @@ export interface TopologySnapshot {
 export type FontScale = "compact" | "default" | "comfortable";
 
 export interface RuntimeSettings {
+  themePreference: ThemePreference;
+  fontScale: FontScale;
   autoSavePackets: boolean;
   realtimeDetection: boolean;
   alertCooldownSeconds: number;

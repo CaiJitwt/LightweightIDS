@@ -95,6 +95,7 @@ export default function App() {
   const systemDark = useSystemDarkMode();
   const theme = themePreference === "system" ? (systemDark ? "dark" : "light") : themePreference;
   const [llmSettings, setLlmSettings] = useState<LlmSettings>(defaultLlmSettings);
+  const [runtimeSettingsLoaded, setRuntimeSettingsLoaded] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [selectedHostIp, setSelectedHostIp] = useState<string | undefined>();
@@ -120,10 +121,28 @@ export default function App() {
     localStorage.removeItem("ids-prototype-llm");
     sessionStorage.removeItem("ids-prototype-llm-api-key");
     idsApi.settings()
-      .then((settings) => { if (active) setLlmSettings(llmSettingsFromRuntime(settings)); })
+      .then((settings) => {
+        if (!active) return;
+        setLlmSettings(llmSettingsFromRuntime(settings));
+        if (settings.themePreference === "system" || settings.themePreference === "light" || settings.themePreference === "dark") {
+          setThemePreference(settings.themePreference);
+        }
+        if (settings.fontScale === "compact" || settings.fontScale === "default" || settings.fontScale === "comfortable") {
+          setFontScale(settings.fontScale);
+        }
+        setRuntimeSettingsLoaded(true);
+      })
       .catch(() => undefined);
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!runtimeSettingsLoaded) return undefined;
+    const timer = window.setTimeout(() => {
+      idsApi.saveSettings({ themePreference, fontScale }).catch(() => undefined);
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [fontScale, runtimeSettingsLoaded, themePreference]);
 
   useEffect(() => {
     let active = true;

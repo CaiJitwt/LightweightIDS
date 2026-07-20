@@ -1,3 +1,5 @@
+import { idsApi } from "../api/idsApi";
+
 const DB_NAME = "ids-personalization";
 const STORE_NAME = "images";
 const DB_VERSION = 1;
@@ -93,7 +95,7 @@ const CONFIG_KEY = "ids-prototype-personalization";
 const INDEXEDDB_PREFIX = "indexeddb:";
 
 /** Replace stored image keys with actual data URLs loaded from IndexedDB. */
-export async function loadPersonalization(): Promise<[PersonalizationState, boolean]> {
+async function loadBrowserPersonalization(): Promise<[PersonalizationState, boolean]> {
   const raw = localStorage.getItem(CONFIG_KEY);
   if (!raw) return [defaultPersonalization, false];
 
@@ -135,7 +137,7 @@ export async function loadPersonalization(): Promise<[PersonalizationState, bool
 }
 
 /** Persist config to localStorage and images to IndexedDB. */
-export async function savePersonalization(state: PersonalizationState): Promise<void> {
+async function saveBrowserPersonalization(state: PersonalizationState): Promise<void> {
   const config: Record<string, unknown> = { ...state };
 
   if (state.background && state.background.startsWith("data:")) {
@@ -155,4 +157,53 @@ export async function savePersonalization(state: PersonalizationState): Promise<
   }
 
   localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+}
+
+export async function loadPersonalization(): Promise<[PersonalizationState, boolean]> {
+  const browserState = await loadBrowserPersonalization();
+  try {
+    const remote = await idsApi.personalization();
+    if (!isPersonalizationState(remote.state)) return browserState;
+    if (remote.persisted) {
+      await saveBrowserPersonalization(remote.state);
+      return [remote.state, false];
+    }
+    if (!localStorage.getItem(CONFIG_KEY)) return [remote.state, false];
+
+    const migrated = await migrateBrowserImages(browserState[0]);
+    const saved = await idsApi.savePersonalization(migrated);
+    if (!isPersonalizationState(saved.state)) return [migrated, browserState[1]];
+    await saveBrowserPersonalization(saved.state);
+    return [saved.state, browserState[1]];
+  } catch {
+    return browserState;
+  }
+}
+
+export async function savePersonalization(state: PersonalizationState): Promise<void> {
+  await saveBrowserPersonalization(state);
+  await idsApi.savePersonalization(state);
+}
+
+async function migrateBrowserImages(state: PersonalizationState): Promise<PersonalizationState> {
+  const migrated = { ...state };
+  for (const key of ["background", "petImage"] as const) {
+    const value = migrated[key];
+    if (!value.startsWith("data:")) continue;
+    const response = await fetch(value);
+    const blob = await response.blob();
+    const extension = blob.type === "image/jpeg" ? "jpg" : blob.type === "image/webp" ? "webp" : "png";
+    const uploaded = await idsApi.uploadPersonalizationImage(key, blob, `${key}.${extension}`);
+    migrated[key] = uploaded.url;
+  }
+  return migrated;
+}
+
+function isPersonalizationState(value: unknown): value is PersonalizationState {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<PersonalizationState>;
+  return typeof candidate.accent === "string"
+    && typeof candidate.componentOpacity === "number"
+    && typeof candidate.background === "string"
+    && typeof candidate.petImage === "string";
 }
