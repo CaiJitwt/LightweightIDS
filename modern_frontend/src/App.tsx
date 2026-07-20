@@ -152,7 +152,7 @@ export default function App() {
     : pageMeta[page];
 
   return (
-    <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`} data-theme={theme} data-font-scale={fontScale} style={{ "--accent": personalization.accent, "--wallpaper": personalization.background ? `url(${personalization.background})` : undefined } as React.CSSProperties}>
+    <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}${personalization.background ? " has-wallpaper" : ""}`} data-theme={theme} data-font-scale={fontScale} style={{ "--accent": personalization.accent, "--wallpaper": personalization.background ? `url(${personalization.background})` : undefined } as React.CSSProperties}>
       {personalization.background && <div className="workspace-wallpaper" />}
       <aside className="sidebar">
         <div className="brand-block"><span className="brand-mark"><Shield size={20} /></span><span className="brand-copy"><strong>Lightweight IDS</strong><small>Analyst console</small></span></div>
