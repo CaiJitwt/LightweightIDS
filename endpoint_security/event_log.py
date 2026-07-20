@@ -52,6 +52,9 @@ class WindowsEventCollector:
         return result
 
     def _read_channel(self, channel: str, event_ids: tuple[int, ...], cursor: int, limit: int) -> list[dict[str, Any]]:
+        # All interpolated values (channel, event_ids, cursor, limit, milliseconds)
+        # originate from the class-level CHANNEL_EVENT_IDS constant and bounded
+        # integer parameters. No external input is interpolated into the command.
         event_clause = " or ".join(f"EventID={event_id}" for event_id in event_ids)
         if cursor > 0:
             time_or_cursor = f"(EventRecordID > {cursor})"
