@@ -10,8 +10,8 @@ class MlFlowAnomalyRule(RuleBase):
     rule_id = "ML_FLOW_ANOMALY"
     name = "ML flow anomaly"
     category = "behavior"
-    severity = "HIGH"
-    threshold = 80
+    severity = "MEDIUM"
+    threshold = 92
     time_window = 60
 
     def __init__(
@@ -32,7 +32,7 @@ class MlFlowAnomalyRule(RuleBase):
 
     def process(self, packet: PacketRecord) -> list[AlertRecord]:
         feature = self.extractor.observe(packet)
-        result = self.detector.score_feature(feature)
+        result = self.detector.score_feature(feature, update=False)
         window_key = (feature.src_ip, feature.dst_ip, feature.window_start)
         self._prune_alerted_windows(feature.window_start)
         if result.score < self.threshold or window_key in self._alerted_windows:

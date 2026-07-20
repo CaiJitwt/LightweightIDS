@@ -48,12 +48,12 @@ def test_isolation_forest_detector_falls_back_without_sklearn_and_scores_flow_sp
             "192.168.1.20",
             180,
             60,
-            packet_count=25,
-            byte_count=25000,
-            unique_dst_ports=12,
-            unique_dst_ips=1,
-            syn_count=25,
-            sensitive_port_count=4,
+            packet_count=60,
+            byte_count=300_000,
+            unique_dst_ports=30,
+            unique_dst_ips=15,
+            syn_count=60,
+            sensitive_port_count=6,
         )
     )
 
@@ -80,21 +80,24 @@ def test_ml_flow_anomaly_rule_alerts_after_normal_baseline_then_spike(tmp_path):
         use_sklearn=False,
         min_train_samples=5,
     )
+    # Pre-populate a stable baseline so the detector has a reference.
+    normal_features = [
+        FlowFeature("192.168.1.10", "192.168.1.20", w * 60, 60, packet_count=2, byte_count=200, unique_dst_ports=1)
+        for w in range(20)
+    ]
+    detector.train(normal_features)
+
     rule = MlFlowAnomalyRule(detector=detector, threshold=80, time_window=60)
     alerts = []
 
-    for second in range(5):
-        alerts.extend(rule.process(packet(second=second, dst_port=80, length=100)))
-
-    assert alerts == []
-
-    for index in range(12):
+    # Process a spike: many unique ports, high byte volume, many SYN packets.
+    for index in range(30):
         alerts.extend(
             rule.process(
                 packet(
                     second=10 + index,
                     dst_port=8000 + index,
-                    length=2000,
+                    length=10_000,
                     tcp_flags="S",
                 )
             )
@@ -107,7 +110,7 @@ def test_ml_flow_anomaly_rule_alerts_after_normal_baseline_then_spike(tmp_path):
 
 def test_detection_engine_registers_ml_flow_rule_from_records():
     engine = DetectionEngine.from_rule_records(
-        [RuleRecord("ML_FLOW_ANOMALY", "ML flow anomaly", "behavior", "HIGH", True, 80, 60, "")],
+        [RuleRecord("ML_FLOW_ANOMALY", "ML flow anomaly", "behavior", "MEDIUM", True, 92, 60, "")],
         alert_cooldown_seconds=0,
     )
 

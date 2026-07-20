@@ -24,7 +24,7 @@ class FlowAnomalyResult:
 @dataclass
 class IsolationForestFlowDetector:
     model_path: Path = DEFAULT_MODEL_PATH
-    min_train_samples: int = 8
+    min_train_samples: int = 10
     history_size: int = 100
     contamination: float = 0.1
     use_sklearn: bool = True
@@ -72,9 +72,10 @@ class IsolationForestFlowDetector:
                 reasons.append(f"isolation_forest_score={model_score:.1f}")
 
         score = max(heuristic_score, model_score)
-        if update:
+        score = min(score, 100.0)
+        if update and score < 50:
             self._remember(feature)
-        return FlowAnomalyResult(score=min(score, 100.0), reasons=reasons[:5], backend=self.backend)
+        return FlowAnomalyResult(score=score, reasons=reasons[:5], backend=self.backend)
 
     def save(self, path: str | Path | None = None) -> None:
         target = Path(path) if path is not None else self.model_path
@@ -119,31 +120,31 @@ class IsolationForestFlowDetector:
         baseline = self._baseline()
         if baseline:
             checks = [
-                ("packet_count", feature.packet_count, baseline["packet_count"], 8, 25),
-                ("byte_count", feature.byte_count, baseline["byte_count"], 4000, 25),
-                ("unique_dst_ports", feature.unique_dst_ports, baseline["unique_dst_ports"], 4, 30),
-                ("unique_dst_ips", feature.unique_dst_ips, baseline["unique_dst_ips"], 4, 25),
-                ("syn_count", feature.syn_count, baseline["syn_count"], 8, 20),
-                ("dns_query_count", feature.dns_query_count, baseline["dns_query_count"], 8, 18),
-                ("sensitive_port_count", feature.sensitive_port_count, baseline["sensitive_port_count"], 2, 25),
-                ("http_indicator_count", feature.http_indicator_count, baseline["http_indicator_count"], 6, 15),
+                ("packet_count", feature.packet_count, baseline["packet_count"], 100, 15),
+                ("byte_count", feature.byte_count, baseline["byte_count"], 200_000, 15),
+                ("unique_dst_ports", feature.unique_dst_ports, baseline["unique_dst_ports"], 20, 20),
+                ("unique_dst_ips", feature.unique_dst_ips, baseline["unique_dst_ips"], 10, 20),
+                ("syn_count", feature.syn_count, baseline["syn_count"], 50, 10),
+                ("dns_query_count", feature.dns_query_count, baseline["dns_query_count"], 20, 10),
+                ("sensitive_port_count", feature.sensitive_port_count, baseline["sensitive_port_count"], 5, 15),
+                ("http_indicator_count", feature.http_indicator_count, baseline["http_indicator_count"], 30, 10),
             ]
             for label, current, expected, minimum_delta, weight in checks:
                 if expected <= 0:
                     continue
-                if current >= max(expected * 3, expected + minimum_delta):
+                if current >= max(expected * 5, expected + minimum_delta):
                     score += weight
                     reasons.append(f"{label}_spike={current}/baseline={expected:.1f}")
 
         absolute_checks = [
-            (feature.unique_dst_ports >= 8, 45, f"many_dst_ports={feature.unique_dst_ports}"),
-            (feature.unique_dst_ips >= 10, 30, f"many_dst_ips={feature.unique_dst_ips}"),
-            (feature.sensitive_port_count >= 3, 30, f"sensitive_port_count={feature.sensitive_port_count}"),
-            (feature.syn_count >= 8, 30, f"syn_count={feature.syn_count}"),
-            (feature.icmp_count >= 20, 20, f"icmp_count={feature.icmp_count}"),
-            (feature.dns_query_count >= 20, 20, f"dns_query_count={feature.dns_query_count}"),
-            (feature.byte_count >= 15000, 25, f"byte_count={feature.byte_count}"),
-            (feature.http_indicator_count >= 20, 15, f"http_indicator_count={feature.http_indicator_count}"),
+            (feature.unique_dst_ports >= 25, 40, f"many_dst_ports={feature.unique_dst_ports}"),
+            (feature.unique_dst_ips >= 15, 30, f"many_dst_ips={feature.unique_dst_ips}"),
+            (feature.sensitive_port_count >= 5, 25, f"sensitive_port_count={feature.sensitive_port_count}"),
+            (feature.syn_count >= 50, 25, f"syn_count={feature.syn_count}"),
+            (feature.icmp_count >= 50, 20, f"icmp_count={feature.icmp_count}"),
+            (feature.dns_query_count >= 50, 20, f"dns_query_count={feature.dns_query_count}"),
+            (feature.byte_count >= 200_000, 25, f"byte_count={feature.byte_count}"),
+            (feature.http_indicator_count >= 50, 15, f"http_indicator_count={feature.http_indicator_count}"),
         ]
         for condition, weight, reason in absolute_checks:
             if condition:
