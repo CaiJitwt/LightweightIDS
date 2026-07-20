@@ -177,6 +177,8 @@ def _event_severity(event_id: int) -> str:
         return "CRITICAL"
     if event_id in {4697, 4698, 4702, 4720, 4728, 4732, 7045, 1116}:
         return "HIGH"
-    if event_id in {4625, 4648, 4672, 4103, 4104, 21, 24, 25}:
+    if event_id in {4625, 4648, 4672, 21, 24, 25}:
         return "MEDIUM"
+    if event_id in {4103, 4104}:
+        return "LOW"
     return "LOW"
