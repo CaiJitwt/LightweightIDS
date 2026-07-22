@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, FileJson, FileText, FileSpreadsheet, CheckCircle2 } from "lucide-react";
 
 import { idsApi } from "../api/idsApi";
+import { useT } from "../i18n/context";
 import { SeverityBadge } from "../components/SeverityBadge";
 import type { AlertRecord } from "../types";
 
 export function ReportsPage({ refreshVersion }: { refreshVersion: number }) {
+  const t = useT();
   const [notice, setNotice] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const [records, setRecords] = useState<AlertRecord[]>([]);
@@ -22,7 +24,7 @@ export function ReportsPage({ refreshVersion }: { refreshVersion: number }) {
     }).catch((error) => {
       if (active) {
         setRecords([]);
-        setNotice(error instanceof Error ? error.message : "Persisted alerts are unavailable.");
+        setNotice(error instanceof Error ? error.message : t("reports.unavailable"));
       }
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -47,39 +49,39 @@ export function ReportsPage({ refreshVersion }: { refreshVersion: number }) {
       link.download = `lightweight-ids-alerts-${Date.now()}.${kind === "html" ? "html" : kind}`;
       link.click();
       URL.revokeObjectURL(link.href);
-      setNotice(`${records.length} alerts exported as ${kind.toUpperCase()}.`);
+      setNotice(t("reports.exported", { count: records.length, format: kind.toUpperCase() }));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Report export failed.");
+      setNotice(error instanceof Error ? error.message : t("reports.exportFailed"));
     }
   };
 
   return (
     <div className="page-stack">
       <section className="report-summary-strip">
-        <div className="report-stat"><span>Total alerts</span><strong>{stats.total}</strong><small>Available for export</small></div>
-        <div className="report-stat"><span>High / Critical</span><strong>{stats.critical}</strong><small>Prioritized in report</small></div>
-        <div className="report-stat"><span>Confirmed</span><strong>{stats.confirmed}</strong><small>Analyst-reviewed</small></div>
-        <div className="report-stat"><span>Export formats</span><strong>3</strong><small>HTML - CSV - JSON</small></div>
+        <div className="report-stat"><span>{t("reports.totalAlerts")}</span><strong>{stats.total}</strong><small>{t("reports.availableExport")}</small></div>
+        <div className="report-stat"><span>{t("reports.highCritical")}</span><strong>{stats.critical}</strong><small>{t("reports.prioritized")}</small></div>
+        <div className="report-stat"><span>{t("reports.confirmed")}</span><strong>{stats.confirmed}</strong><small>{t("reports.analystReviewed")}</small></div>
+        <div className="report-stat"><span>{t("reports.exportFormats")}</span><strong>3</strong><small>{t("reports.formatsList")}</small></div>
       </section>
 
       <section className="section-panel">
-        <header className="section-heading"><div><h2>Export reports</h2><p>Portable analyst exports from persisted alert records</p></div><Download size={17} /></header>
+        <header className="section-heading"><div><h2>{t("reports.exportTitle")}</h2><p>{t("reports.exportSubtitle")}</p></div><Download size={17} /></header>
         <div style={{ padding: 14 }}>
           <div className="report-export-grid">
             <button type="button" className="report-export-card" onClick={() => void exportAlerts("html")}>
               <div className="export-icon"><FileText size={20} /></div>
-              <div><strong>HTML report</strong><p>Analyst-friendly overview with styled alert table</p></div>
-              <footer><Download size={12} />Export HTML</footer>
+              <div><strong>{t("reports.htmlTitle")}</strong><p>{t("reports.htmlDesc")}</p></div>
+              <footer><Download size={12} />{t("reports.exportHtml")}</footer>
             </button>
             <button type="button" className="report-export-card" onClick={() => void exportAlerts("csv")}>
               <div className="export-icon"><FileSpreadsheet size={20} /></div>
-              <div><strong>CSV export</strong><p>Spreadsheet-compatible for Excel, Sheets or data analysis</p></div>
-              <footer><Download size={12} />Export CSV</footer>
+              <div><strong>{t("reports.csvTitle")}</strong><p>{t("reports.csvDesc")}</p></div>
+              <footer><Download size={12} />{t("reports.exportCsv")}</footer>
             </button>
             <button type="button" className="report-export-card" onClick={() => void exportAlerts("json")}>
               <div className="export-icon"><FileJson size={20} /></div>
-              <div><strong>JSON export</strong><p>Structured data for SIEM integration or custom tooling</p></div>
-              <footer><Download size={12} />Export JSON</footer>
+              <div><strong>{t("reports.jsonTitle")}</strong><p>{t("reports.jsonDesc")}</p></div>
+              <footer><Download size={12} />{t("reports.exportJson")}</footer>
             </button>
           </div>
         </div>
@@ -89,13 +91,13 @@ export function ReportsPage({ refreshVersion }: { refreshVersion: number }) {
 
       <section className="section-panel">
         <header className="section-heading">
-          <div><h2>Alert preview</h2><p>Current persisted alerts included in reports</p></div>
-          <button className="text-button" type="button" onClick={() => setShowPreview((v) => !v)}>{showPreview ? "Hide preview" : "Show preview"}</button>
+          <div><h2>{t("reports.alertPreview")}</h2><p>{t("reports.previewSubtitle")}</p></div>
+          <button className="text-button" type="button" onClick={() => setShowPreview((v) => !v)}>{showPreview ? t("reports.hidePreview") : t("reports.showPreview")}</button>
         </header>
         {showPreview && (
           <div className="table-scroll">
             <table className="data-table">
-              <thead><tr><th>Time</th><th>Severity</th><th>Rule</th><th>Source</th><th>Destination</th><th>Status</th></tr></thead>
+              <thead><tr><th>Time</th><th>{t("rules.columnSeverity")}</th><th>{t("rules.columnRule")}</th><th>{t("alerts.source")}</th><th>{t("alerts.destination")}</th><th>{t("alerts.status")}</th></tr></thead>
               <tbody>
                 {previewAlerts.map((alert) => (
                   <tr key={alert.id}>
@@ -107,7 +109,7 @@ export function ReportsPage({ refreshVersion }: { refreshVersion: number }) {
                     <td><span className={`status status-${alert.status}`}>{alert.status}</span></td>
                   </tr>
                 ))}
-                {!previewAlerts.length && <tr><td colSpan={6} className="empty-table">{loading ? "Loading persisted alerts..." : "No persisted alerts are available."}</td></tr>}
+                {!previewAlerts.length && <tr><td colSpan={6} className="empty-table">{loading ? t("reports.loading") : t("reports.noAlerts")}</td></tr>}
               </tbody>
             </table>
           </div>

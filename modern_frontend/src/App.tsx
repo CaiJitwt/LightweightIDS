@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Gauge,
+  Globe,
   HeartPulse,
   CircleHelp,
   Laptop,
@@ -30,8 +31,10 @@ import brandMascot from "./assets/anime-brand-icon.png";
 import { CommandPalette } from "./components/CommandPalette";
 import { loadPersonalization, savePersonalization, defaultPersonalization } from "./data/personalizationStore";
 import type { PersonalizationState } from "./data/personalizationStore";
-import type { HelpLanguage } from "./pages/HelpPage";
+
 import { idsApi } from "./api/idsApi";
+import { LocaleContext, resolveLocale, useLocale, useSetLocale, useT } from "./i18n/context";
+import type { Locale } from "./i18n/context";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
 const TrafficPage = lazy(() => import("./pages/TrafficPage").then((module) => ({ default: module.TrafficPage })));
@@ -52,45 +55,48 @@ const SecurityEventsPage = lazy(() => import("./pages/SecurityEventsPage").then(
 
 type PageKey = "dashboard" | "traffic" | "hosts" | "alerts" | "investigations" | "assets" | "rules" | "reports" | "timeline" | "topology" | "security-events" | "health" | "endpoint" | "settings" | "personalization" | "help";
 
-const navItems = [
-  { key: "dashboard" as const, label: "Dashboard", icon: Gauge },
-  { key: "traffic" as const, label: "Traffic Monitor", icon: Activity },
-  { key: "hosts" as const, label: "Host Explorer", icon: Network },
-  { key: "alerts" as const, label: "Alert Center", icon: BellRing },
-  { key: "investigations" as const, label: "Investigations", icon: BriefcaseBusiness },
-  { key: "assets" as const, label: "Assets", icon: Package },
-  { key: "rules" as const, label: "Rule Management", icon: SlidersHorizontal },
-  { key: "reports" as const, label: "Reports", icon: Timeline },
-  { key: "timeline" as const, label: "Event Timeline", icon: Timeline },
-  { key: "topology" as const, label: "Network Topology", icon: Waypoints },
-  { key: "security-events" as const, label: "Security Events", icon: ScrollText },
-  { key: "health" as const, label: "System Health", icon: HeartPulse },
-  { key: "endpoint" as const, label: "Endpoint Security", icon: ShieldCheck },
-  { key: "settings" as const, label: "Settings", icon: Settings },
-  { key: "personalization" as const, label: "Personalization", icon: Palette },
-  { key: "help" as const, label: "Help Center", icon: CircleHelp },
+const navItemKeys: { key: PageKey; icon: typeof Gauge; labelKey: "nav.dashboard" | "nav.traffic" | "nav.hosts" | "nav.alerts" | "nav.investigations" | "nav.assets" | "nav.rules" | "nav.reports" | "nav.timeline" | "nav.topology" | "nav.securityEvents" | "nav.health" | "nav.endpoint" | "nav.settings" | "nav.personalization" | "nav.help" }[] = [
+  { key: "dashboard", icon: Gauge, labelKey: "nav.dashboard" },
+  { key: "traffic", icon: Activity, labelKey: "nav.traffic" },
+  { key: "hosts", icon: Network, labelKey: "nav.hosts" },
+  { key: "alerts", icon: BellRing, labelKey: "nav.alerts" },
+  { key: "investigations", icon: BriefcaseBusiness, labelKey: "nav.investigations" },
+  { key: "assets", icon: Package, labelKey: "nav.assets" },
+  { key: "rules", icon: SlidersHorizontal, labelKey: "nav.rules" },
+  { key: "reports", icon: Timeline, labelKey: "nav.reports" },
+  { key: "timeline", icon: Timeline, labelKey: "nav.timeline" },
+  { key: "topology", icon: Waypoints, labelKey: "nav.topology" },
+  { key: "security-events", icon: ScrollText, labelKey: "nav.securityEvents" },
+  { key: "health", icon: HeartPulse, labelKey: "nav.health" },
+  { key: "endpoint", icon: ShieldCheck, labelKey: "nav.endpoint" },
+  { key: "settings", icon: Settings, labelKey: "nav.settings" },
+  { key: "personalization", icon: Palette, labelKey: "nav.personalization" },
+  { key: "help", icon: CircleHelp, labelKey: "nav.help" },
 ];
 
-const pageMeta: Record<PageKey, { title: string; subtitle: string }> = {
-  dashboard: { title: "Security overview", subtitle: "Current network posture and analyst priorities" },
-  traffic: { title: "Traffic monitor", subtitle: "Live packet metadata from the active capture interface" },
-  hosts: { title: "Host explorer", subtitle: "Observed assets, connections and composite risk" },
-  alerts: { title: "Alert center", subtitle: "Review evidence, related packets and analyst status" },
-  investigations: { title: "Investigations", subtitle: "Preserve analyst evidence and investigation notes" },
-  assets: { title: "Assets", subtitle: "Define high-value systems for risk prioritization" },
-  rules: { title: "Rule management", subtitle: "Tune enabled detection rules and time windows" },
-  reports: { title: "Reports", subtitle: "Export analyst-friendly persisted alert records" },
-  timeline: { title: "Event timeline", subtitle: "Correlate observed events across the analyst workflow" },
-  topology: { title: "Network topology", subtitle: "Explore observed hosts and communication paths" },
-  "security-events": { title: "Security events", subtitle: "Monitor Windows authentication, persistence and security-control activity" },
-  health: { title: "System health", subtitle: "Review sensor and local service readiness" },
-  endpoint: { title: "Endpoint security", subtitle: "Read-only host posture, process inventory and file integrity" },
-  settings: { title: "Settings", subtitle: "Appearance and local analyst integrations" },
-  personalization: { title: "Personalization", subtitle: "Workspace surfaces, wallpaper and overlay companion" },
-  help: { title: "Help center", subtitle: "Product guidance, analyst workflow and quick navigation" },
+const pageMetaKey: Record<PageKey, { titleKey: string; subtitleKey: string }> = {
+  dashboard: { titleKey: "page.dashboard", subtitleKey: "meta.dashboard" },
+  traffic: { titleKey: "page.traffic", subtitleKey: "meta.traffic" },
+  hosts: { titleKey: "page.hosts", subtitleKey: "meta.hosts" },
+  alerts: { titleKey: "page.alerts", subtitleKey: "meta.alerts" },
+  investigations: { titleKey: "page.investigations", subtitleKey: "meta.investigations" },
+  assets: { titleKey: "page.assets", subtitleKey: "meta.assets" },
+  rules: { titleKey: "page.rules", subtitleKey: "meta.rules" },
+  reports: { titleKey: "page.reports", subtitleKey: "meta.reports" },
+  timeline: { titleKey: "page.timeline", subtitleKey: "meta.timeline" },
+  topology: { titleKey: "page.topology", subtitleKey: "meta.topology" },
+  "security-events": { titleKey: "page.securityEvents", subtitleKey: "meta.securityEvents" },
+  health: { titleKey: "page.health", subtitleKey: "meta.health" },
+  endpoint: { titleKey: "page.endpoint", subtitleKey: "meta.endpoint" },
+  settings: { titleKey: "page.settings", subtitleKey: "meta.settings" },
+  personalization: { titleKey: "page.personalization", subtitleKey: "meta.personalization" },
+  help: { titleKey: "page.help", subtitleKey: "meta.help" },
 };
 
-export default function App() {
+function AppShell() {
+  const t = useT();
+  const setLocale = useSetLocale();
+  const locale = useLocale();
   const [page, setPage] = useState<PageKey>("dashboard");
   const [collapsed, setCollapsed] = useState(false);
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
@@ -106,7 +112,7 @@ export default function App() {
   const [personalizationLoaded, setPersonalizationLoaded] = useState(false);
   const [persistWarning, setPersistWarning] = useState(false);
   const [storageWarning, setStorageWarning] = useState(false);
-  const [helpLanguage, setHelpLanguage] = useState<HelpLanguage>(readHelpLanguage);
+
   const [openAlertCount, setOpenAlertCount] = useState(0);
   const [alertBadgeRefresh, setAlertBadgeRefresh] = useState(0);
   const [selectedAlertId, setSelectedAlertId] = useState<number | undefined>();
@@ -159,10 +165,10 @@ export default function App() {
   useEffect(() => {
     if (!runtimeSettingsLoaded) return undefined;
     const timer = window.setTimeout(() => {
-      idsApi.saveSettings({ themePreference, fontScale }).catch(() => undefined);
+      idsApi.saveSettings({ themePreference, fontScale, locale }).catch(() => undefined);
     }, 180);
     return () => window.clearTimeout(timer);
-  }, [fontScale, runtimeSettingsLoaded, themePreference]);
+  }, [fontScale, runtimeSettingsLoaded, themePreference, locale]);
 
   useEffect(() => {
     let active = true;
@@ -194,7 +200,6 @@ export default function App() {
     };
   }, [personalization, personalizationLoaded]);
 
-  useEffect(() => localStorage.setItem("ids-help-language", helpLanguage), [helpLanguage]);
 
   useEffect(() => {
     let active = true;
@@ -230,37 +235,39 @@ export default function App() {
   }, []);
 
   const commandActions = useMemo(() => [
-    ...navItems.map(({ key, label, icon: Icon }) => ({
+    ...navItemKeys.map(({ key, labelKey, icon: Icon }) => ({
       key: `page:${key}`,
-      label,
-      category: "Navigate",
+      label: t(labelKey),
+      category: t("command.navigate"),
       icon: <Icon size={16} />,
     })),
-    { key: "action:refresh", label: "Refresh current view", category: "Action", icon: <RefreshCw size={16} /> },
+    { key: "action:refresh", label: t("app.refresh"), category: t("command.navigate"), icon: <RefreshCw size={16} /> },
     {
       key: "action:theme",
-      label: `Use ${theme === "light" ? "dark" : "light"} theme`,
+      label: theme === "light" ? t("app.themeDark") : t("app.themeLight"),
       category: "Appearance",
       icon: theme === "light" ? <Moon size={16} /> : <Sun size={16} />,
     },
-  ], [theme]);
+  ], [theme, t]);
 
   const runCommand = useCallback((key: string) => {
     if (key.startsWith("page:")) {
       const target = key.slice(5) as PageKey;
-      if (target in pageMeta) setPage(target);
+      if (target in pageMetaKey) setPage(target);
       return;
     }
     if (key === "action:refresh") refreshCurrentView();
     if (key === "action:theme") setThemePreference(theme === "light" ? "dark" : "light");
   }, [refreshCurrentView, theme]);
 
-  const meta = page === "help" && helpLanguage === "zh"
-    ? { title: "帮助中心", subtitle: "产品说明、分析工作流和快速页面导航" }
-    : pageMeta[page];
+  const metaKey = pageMetaKey[page];
+
+  const themeTitle = themePreference === "system" ? t("app.themeSystem") : themePreference === "dark" ? t("app.themeDark") : t("app.themeLight");
+
+  const sensorOnline = sensorStatus?.state === "running";
 
   return (
-    <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}${personalization.background ? " has-wallpaper" : ""}`} data-theme={theme} data-font-scale={fontScale} style={{
+    <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}${personalization.background ? " has-wallpaper" : ""}`} data-theme={theme} data-font-scale={fontScale} lang={locale} style={{
       "--accent": personalization.accent,
       "--component-tint": personalization.componentTint,
       "--component-opacity": `${personalization.componentOpacity}%`,
@@ -271,33 +278,35 @@ export default function App() {
     } as React.CSSProperties}>
       {personalization.background && createPortal(<div className="workspace-wallpaper" data-testid="workspace-wallpaper" style={{ backgroundImage: `url(${personalization.background})`, backgroundSize: personalization.backgroundSize === "stretch" ? "100% 100%" : personalization.backgroundSize === "original" ? "auto" : personalization.backgroundSize, backgroundPosition: personalization.backgroundPosition, opacity: personalization.backgroundOpacity / 100 }} />, document.body)}
       <aside className="sidebar">
-        <div className="brand-block"><span className="brand-mark"><img src={brandMascot} alt="" /></span><span className="brand-copy"><strong>Lightweight IDS</strong><small>Analyst console</small></span></div>
+        <div className="brand-block"><span className="brand-mark"><img src={brandMascot} alt="" /></span><span className="brand-copy"><strong>{t("app.brand")}</strong><small>{t("app.tagline")}</small></span></div>
         <nav className="primary-nav" aria-label="Primary navigation">
-          {navItems.map((item) => {
+          {navItemKeys.map((item) => {
             const Icon = item.icon;
+            const label = t(item.labelKey);
             const badge = item.key === "alerts" && openAlertCount > 0 ? (openAlertCount > 99 ? "99+" : openAlertCount) : null;
-            return <button type="button" key={item.key} className={page === item.key ? "active" : ""} onClick={() => setPage(item.key)} title={collapsed ? item.label : undefined}><Icon size={18} /><span>{item.label}</span>{badge !== null && <b title={`${openAlertCount} unconfirmed alerts`}>{badge}</b>}</button>;
+            return <button type="button" key={item.key} className={page === item.key ? "active" : ""} onClick={() => setPage(item.key)} title={collapsed ? label : undefined}><Icon size={18} /><span>{label}</span>{badge !== null && <b title={`${openAlertCount} unconfirmed alerts`}>{badge}</b>}</button>;
           })}
         </nav>
         <div className="sidebar-footer">
-          <div className="sensor-summary"><span className={`live-dot${!sensorStatus || sensorStatus.state !== "running" ? " paused" : ""}`} /><span>{sensorStatus?.state === "running" ? <><strong>Sensor online</strong><small>{sensorStatus.interface || "Active interface"} &middot; {sensorStatus.packetsPerSecond > 1000 ? `${(sensorStatus.packetsPerSecond / 1000).toFixed(1)}k` : sensorStatus.packetsPerSecond} pkt/s</small></> : <><strong>Sensor idle</strong><small>{sensorStatus ? "Capture stopped" : "API unavailable"}</small></>}</span></div>
-          <button type="button" className="collapse-button" onClick={() => setCollapsed((value) => !value)} title={collapsed ? "Expand sidebar" : "Collapse sidebar"}>{collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}<span>Collapse</span></button>
+          <div className="sensor-summary"><span className={`live-dot${!sensorOnline ? " paused" : ""}`} /><span>{sensorOnline ? <><strong>{t("app.sensorOnline")}</strong><small>{sensorStatus?.interface || ""} &middot; {(sensorStatus?.packetsPerSecond ?? 0) > 1000 ? `${((sensorStatus?.packetsPerSecond ?? 0) / 1000).toFixed(1)}k` : (sensorStatus?.packetsPerSecond ?? 0)} pkt/s</small></> : <><strong>{t("app.sensorOnline")}</strong><small>{sensorStatus ? "Capture stopped" : "API unavailable"}</small></>}</span></div>
+          <button type="button" className="collapse-button" onClick={() => setCollapsed((value) => !value)} title={collapsed ? t("app.expand") : t("app.collapse")}>{collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}<span>{t("app.collapse")}</span></button>
         </div>
       </aside>
 
       <main className="workspace">
         <header className="topbar">
-          <div className="page-heading"><h1>{meta.title}</h1><p>{meta.subtitle}</p></div>
+          <div className="page-heading"><h1>{t(metaKey.titleKey as Parameters<typeof t>[0])}</h1><p>{t(metaKey.subtitleKey as Parameters<typeof t>[0])}</p></div>
           <div className="topbar-actions">
-            <button className="global-search" type="button" aria-label="Open command palette" aria-haspopup="dialog" aria-expanded={commandOpen} onClick={() => setCommandOpen(true)}><Search size={16} /><span>Search</span><kbd>Ctrl K</kbd></button>
-            {page === "dashboard" && <label className="refresh-toggle"><input type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)} /><span>Auto-refresh</span></label>}
-            <button className="icon-button" type="button" title="Refresh current view" onClick={refreshCurrentView}><RefreshCw size={17} /></button>
-            <button className="icon-button" type="button" title={themePreference === "system" ? "Following system - click for dark" : themePreference === "dark" ? "Switch to light theme" : "Switch to system theme"} onClick={() => setThemePreference(themePreference === "system" ? "dark" : themePreference === "dark" ? "light" : "system")}>{themePreference === "system" ? <MonitorCog size={17} /> : themePreference === "dark" ? <Moon size={17} /> : <Sun size={17} />}</button>
-            <button className="user-button" type="button" title="Open analyst settings" onClick={() => setPage("settings")}><Laptop size={16} /><span>Analyst</span></button>
+            <button className="global-search" type="button" aria-label={t("command.placeholder")} aria-haspopup="dialog" aria-expanded={commandOpen} onClick={() => setCommandOpen(true)}><Search size={16} /><span>{t("app.search")}</span><kbd>Ctrl K</kbd></button>
+            {page === "dashboard" && <label className="refresh-toggle"><input type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)} /><span>{t("app.autoRefresh")}</span></label>}
+            <button className="icon-button" type="button" title={t("app.refresh")} onClick={refreshCurrentView}><RefreshCw size={17} /></button>
+            <button className="icon-button" type="button" title={themeTitle} onClick={() => setThemePreference(themePreference === "system" ? "dark" : themePreference === "dark" ? "light" : "system")}>{themePreference === "system" ? <MonitorCog size={17} /> : themePreference === "dark" ? <Moon size={17} /> : <Sun size={17} />}</button>
+            <button className="icon-text-button" type="button" title={t("app.language")} onClick={() => setLocale(locale === "en" ? "zh" : "en")}><Globe size={15} /><span style={{ fontSize: 11, fontWeight: 600 }}>{locale === "en" ? "EN" : "中文"}</span></button>
+            <button className="user-button" type="button" title={t("app.user")} onClick={() => setPage("settings")}><Laptop size={16} /><span>{t("app.user")}</span></button>
           </div>
         </header>
         <div className="page-content" data-manual-refresh-version={manualRefreshVersion}>
-          <Suspense key={`${page}:${manualRefreshVersion}`} fallback={<div className="page-loading">Loading view...</div>}>
+          <Suspense key={`${page}:${manualRefreshVersion}`} fallback={<div className="page-loading">{t("common.loadingView")}</div>}>
             {page === "dashboard" && <DashboardPage refreshVersion={refreshVersion} onStatisticsReset={() => { setRefreshVersion((value) => value + 1); setAlertBadgeRefresh((value) => value + 1); }} onOpenAlertCountChange={setOpenAlertCount} onOpenAlerts={() => setPage("alerts")} onOpenHost={(ip) => { setSelectedHostIp(ip); setPage("hosts"); }} />}
             {page === "traffic" && <TrafficPage onDataChanged={() => { setRefreshVersion((value) => value + 1); setAlertBadgeRefresh((value) => value + 1); }} />}
             {page === "hosts" && <HostsPage initialHostIp={selectedHostIp} refreshVersion={refreshVersion} />}
@@ -313,13 +322,26 @@ export default function App() {
             {page === "endpoint" && <EndpointSecurityPage refreshVersion={refreshVersion} />}
             {page === "settings" && <SettingsPage themePreference={themePreference} onThemePreferenceChange={setThemePreference} fontScale={fontScale} onFontScaleChange={setFontScale} llmSettings={llmSettings} onLlmSettingsChange={setLlmSettings} />}
             {page === "personalization" && <PersonalizationPage state={personalization} onChange={setPersonalization} storageWarning={storageWarning} persistWarning={persistWarning} />}
-            {page === "help" && <HelpPage onNavigate={setPage} language={helpLanguage} onLanguageChange={setHelpLanguage} />}
+            {page === "help" && <HelpPage onNavigate={setPage} language={locale} onLanguageChange={setLocale} />}
           </Suspense>
         </div>
       </main>
       <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} actions={commandActions} onSelect={runCommand} />
       {personalization.petImage && <img className={`overlay-pet ${personalization.petPosition}`} src={personalization.petImage} alt="" style={{ width: personalization.petSize, opacity: personalization.petOpacity / 100 }} />}
     </div>
+  );
+}
+
+export default function App() {
+  const [locale, setLocale] = useState<Locale>(resolveLocale);
+  useEffect(() => {
+    localStorage.setItem("ids-prototype-locale", locale);
+    document.documentElement.lang = locale;
+  }, [locale]);
+  return (
+    <LocaleContext.Provider value={{ locale, setLocale }}>
+      <AppShell />
+    </LocaleContext.Provider>
   );
 }
 
@@ -333,9 +355,7 @@ function readFontScale(): FontScale {
   return value === "compact" || value === "comfortable" ? value : "default";
 }
 
-function readHelpLanguage(): HelpLanguage {
-  return localStorage.getItem("ids-help-language") === "zh" ? "zh" : "en";
-}
+
 
 const defaultLlmSettings: LlmSettings = {
   baseUrl: "https://api.openai.com/v1",

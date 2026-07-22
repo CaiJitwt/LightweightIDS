@@ -23,7 +23,7 @@ describe("NetworkTopologyPage", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { rerender } = render(<NetworkTopologyPage refreshVersion={0} />);
-    const canvas = await screen.findByLabelText("Observed network topology");
+    const canvas = await screen.findByLabelText("Observed packet topology");
     const viewport = screen.getByRole("region", { name: "Scrollable network topology canvas" });
     expect(canvas).toHaveAttribute("width", "1200");
     expect(canvas).toHaveAttribute("height", "760");
@@ -35,7 +35,7 @@ describe("NetworkTopologyPage", () => {
     rerender(<NetworkTopologyPage refreshVersion={1} />);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(await screen.findByText(/No packet connections are stored yet/)).toBeInTheDocument();
-    expect(screen.queryByLabelText("Observed network topology")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Observed packet topology")).not.toBeInTheDocument();
   });
 });
 

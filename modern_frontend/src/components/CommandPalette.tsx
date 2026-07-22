@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Search } from "lucide-react";
+import { useT } from "../i18n/context";
 
 interface CommandAction {
   key: string;
@@ -17,6 +18,7 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({ open, onClose, actions, onSelect }: CommandPaletteProps) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -89,14 +91,14 @@ export function CommandPalette({ open, onClose, actions, onSelect }: CommandPale
           <input
             ref={inputRef}
             className="command-input"
-            placeholder="Jump to a page or run an action..."
+            placeholder={t("command.placeholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           <kbd className="command-esc-hint">esc</kbd>
         </div>
         {filtered.length === 0 ? (
-          <div className="command-empty">No matching pages or actions.</div>
+          <div className="command-empty">{t("command.noResults")}</div>
         ) : (
           <div className="command-results">
             {filtered.map((action, index) => (
@@ -125,9 +127,9 @@ export function CommandPalette({ open, onClose, actions, onSelect }: CommandPale
           </div>
         )}
         <footer className="command-footer">
-          <span><kbd>↑↓</kbd> Navigate</span>
-          <span><kbd>↵</kbd> Open</span>
-          <span><kbd>esc</kbd> Dismiss</span>
+          <span><kbd>↑↓</kbd> {t("command.navigate")}</span>
+          <span><kbd>↵</kbd> {t("command.open")}</span>
+          <span><kbd>esc</kbd> {t("command.dismiss")}</span>
         </footer>
       </div>
     </div>

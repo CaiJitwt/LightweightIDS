@@ -3,6 +3,7 @@ import { Activity, Cpu, HardDrive, MemoryStick, Network, RefreshCw, Wifi, WifiOf
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { idsApi } from "../api/idsApi";
+import { useT } from "../i18n/context";
 import type { SystemHealthSnapshot } from "../types";
 
 interface HealthPoint {
@@ -15,6 +16,7 @@ interface HealthPoint {
 }
 
 export function SystemHealthPage({ refreshVersion }: { refreshVersion: number }) {
+  const t = useT();
   const [snapshot, setSnapshot] = useState<SystemHealthSnapshot | null>(null);
   const [history, setHistory] = useState<HealthPoint[]>([]);
   const [error, setError] = useState("");
@@ -38,11 +40,11 @@ export function SystemHealthPage({ refreshVersion }: { refreshVersion: number })
         alerts: next.engine.sessionAlerts,
       }].slice(-60));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Local system health is unavailable.");
+      setError(reason instanceof Error ? reason.message : t("health.unavailable"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -65,65 +67,66 @@ export function SystemHealthPage({ refreshVersion }: { refreshVersion: number })
       <div className="health-status-bar">
         <span className={`health-connection ${snapshot ? "health-online" : error ? "health-offline" : "health-checking"}`}>
           {snapshot ? <Wifi size={14} /> : error ? <WifiOff size={14} /> : <Activity size={14} />}
-          {snapshot ? `Local host: ${snapshot.system.hostname}` : error ? "Local health API unavailable" : "Reading local host"}
+          {snapshot ? t("health.localhost", { hostname: snapshot.system.hostname }) : error ? t("health.unavailable") : t("health.reading")}
         </span>
-        <span className="health-meta"><strong>API</strong> {snapshot ? `v${snapshot.engine.apiVersion}` : "Unknown"}</span>
-        <span className="health-meta"><strong>Uptime</strong> {snapshot ? formatDuration(snapshot.engine.uptimeSeconds) : "Unknown"}</span>
-        <button className="icon-button" type="button" title="Refresh local health data" disabled={loading} onClick={() => void load()}><RefreshCw className={loading ? "spin" : ""} size={15} /></button>
+        <span className="health-meta"><strong>{t("health.api")}</strong> {snapshot ? `v${snapshot.engine.apiVersion}` : t("common.unknown")}</span>
+        <span className="health-meta"><strong>{t("health.uptime")}</strong> {snapshot ? formatDuration(snapshot.engine.uptimeSeconds) : t("common.unknown")}</span>
+        <button className="icon-button" type="button" title={t("health.refresh")} disabled={loading} onClick={() => void load()}><RefreshCw className={loading ? "spin" : ""} size={15} /></button>
       </div>
 
-      {error ? <p className="capture-notice error">{error}. Start this frontend with modern_main.py and stop any older local API process.</p> : null}
+      {error ? <p className="capture-notice error">{error}. {t("health.errorHint")}</p> : null}
 
       {snapshot ? <>
         <section className="metric-strip">
-          <GaugeMetric icon={<Cpu size={18} />} label="CPU" value={`${snapshot.system.cpuPercent.toFixed(1)}%`} meta={`${snapshot.system.logicalProcessors} logical processors`} color={gaugeColor(snapshot.system.cpuPercent, 70, 90)} />
-          <GaugeMetric icon={<MemoryStick size={18} />} label="Memory" value={`${memoryPercent.toFixed(1)}%`} meta={`${formatBytes(snapshot.system.memoryUsedBytes)} of ${formatBytes(snapshot.system.memoryTotalBytes)}`} color={gaugeColor(memoryPercent, 75, 90)} />
-          <GaugeMetric icon={<HardDrive size={18} />} label="Disk" value={`${diskPercent.toFixed(1)}%`} meta={`${formatBytes(snapshot.system.diskFreeBytes)} free`} color={gaugeColor(diskPercent, 80, 92)} />
-          <GaugeMetric icon={<Network size={18} />} label="Packet rate" value={`${snapshot.engine.packetsPerSecond.toFixed(1)}/s`} meta={`${titleCase(snapshot.engine.captureState)} - ${snapshot.engine.captureInterface}`} color={snapshot.engine.captureState === "running" ? "#2f8f66" : "#2878d0"} />
+          <GaugeMetric icon={<Cpu size={18} />} label={t("health.cpu")} value={`${snapshot.system.cpuPercent.toFixed(1)}%`} meta={t("health.logicalProcessors", { count: snapshot.system.logicalProcessors })} color={gaugeColor(snapshot.system.cpuPercent, 70, 90)} />
+          <GaugeMetric icon={<MemoryStick size={18} />} label={t("health.memory")} value={`${memoryPercent.toFixed(1)}%`} meta={t("health.memoryUsage", { used: formatBytes(snapshot.system.memoryUsedBytes), total: formatBytes(snapshot.system.memoryTotalBytes) })} color={gaugeColor(memoryPercent, 75, 90)} />
+          <GaugeMetric icon={<HardDrive size={18} />} label={t("health.disk")} value={`${diskPercent.toFixed(1)}%`} meta={t("health.diskFree", { free: formatBytes(snapshot.system.diskFreeBytes) })} color={gaugeColor(diskPercent, 80, 92)} />
+          <GaugeMetric icon={<Network size={18} />} label={t("health.packetRate")} value={`${snapshot.engine.packetsPerSecond.toFixed(1)}/s`} meta={`${titleCase(snapshot.engine.captureState)} - ${snapshot.engine.captureInterface}`} color={snapshot.engine.captureState === "running" ? "#2f8f66" : "#2878d0"} />
         </section>
 
         <section className="analysis-grid">
-          <HealthChart title="CPU, GPU and memory" meta="Live user-mode resource telemetry" data={history} keys={[{ key: "cpu", name: "CPU %", color: "#2878d0", fill: "#dcecff" }, { key: "gpu", name: "GPU %", color: "#8b5cf6", fill: "#ede9fe" }, { key: "memory", name: "Memory %", color: "#d97706", fill: "#feebc8" }]} />
-          <HealthChart title="Packet throughput" meta="Current capture session" data={history} keys={[{ key: "packets", name: "Packets/s", color: "#2f8f66", fill: "#d8f3e6" }]} />
+          <HealthChart title={t("health.cpuGpuMemory")} meta={t("health.cpuGpuMeta")} data={history} keys={[{ key: "cpu", name: "CPU %", color: "#2878d0", fill: "#dcecff" }, { key: "gpu", name: "GPU %", color: "#8b5cf6", fill: "#ede9fe" }, { key: "memory", name: "Memory %", color: "#d97706", fill: "#feebc8" }]} />
+          <HealthChart title={t("health.packetThroughput")} meta={t("health.packetMeta")} data={history} keys={[{ key: "packets", name: "Packets/s", color: "#2f8f66", fill: "#d8f3e6" }]} />
         </section>
 
         <section className="health-details">
           <div className="section-panel">
-            <header className="section-heading"><div><h2>Engine diagnostics</h2><p>{snapshot.system.platform}</p></div></header>
+            <header className="section-heading"><div><h2>{t("health.engineDiagnostics")}</h2><p>{snapshot.system.platform}</p></div></header>
             <div className="health-table-wrap">
               <table className="data-table"><tbody>
-                <HealthRow label="Detection rules" value={`${snapshot.engine.activeRules} active / ${snapshot.engine.rulesLoaded} loaded`} />
-                <HealthRow label="Packets stored" value={snapshot.engine.packetsStored.toLocaleString()} />
-                <HealthRow label="Alerts stored" value={snapshot.engine.alertsStored.toLocaleString()} />
-                <HealthRow label="Session packets" value={snapshot.engine.sessionPackets.toLocaleString()} />
-                <HealthRow label="Session alerts" value={snapshot.engine.sessionAlerts.toLocaleString()} />
-                <HealthRow label="Capture state" value={titleCase(snapshot.engine.captureState)} status={snapshot.engine.captureState === "running" ? "ok" : undefined} />
-                <HealthRow label="Database size" value={formatBytes(snapshot.engine.databaseBytes)} />
-                <HealthRow label="GPU telemetry" value={snapshot.system.gpuPercent == null ? "Unavailable" : `${snapshot.system.gpuPercent.toFixed(1)}% - ${snapshot.system.gpuName || "Supported GPU"}`} />
-                <HealthRow label="Resource monitor" value={titleCase(snapshot.resourceMonitor?.state ?? "unavailable")} status={snapshot.resourceMonitor?.state === "running" ? "ok" : undefined} />
+                <HealthRow label={t("health.detectionRules")} value={t("health.rulesDetail", { active: snapshot.engine.activeRules, loaded: snapshot.engine.rulesLoaded })} />
+                <HealthRow label={t("health.packetsStored")} value={snapshot.engine.packetsStored.toLocaleString()} />
+                <HealthRow label={t("health.alertsStored")} value={snapshot.engine.alertsStored.toLocaleString()} />
+                <HealthRow label={t("health.sessionPackets")} value={snapshot.engine.sessionPackets.toLocaleString()} />
+                <HealthRow label={t("health.sessionAlerts")} value={snapshot.engine.sessionAlerts.toLocaleString()} />
+                <HealthRow label={t("health.captureState")} value={titleCase(snapshot.engine.captureState)} status={snapshot.engine.captureState === "running" ? "ok" : undefined} />
+                <HealthRow label={t("health.databaseSize")} value={formatBytes(snapshot.engine.databaseBytes)} />
+                <HealthRow label={t("health.gpuTelemetry")} value={snapshot.system.gpuPercent == null ? t("health.gpuUnavailable") : t("health.gpuAvailable", { percent: snapshot.system.gpuPercent.toFixed(1), name: snapshot.system.gpuName || "Supported GPU" })} />
+                <HealthRow label={t("health.resourceMonitor")} value={titleCase(snapshot.resourceMonitor?.state ?? "unavailable")} status={snapshot.resourceMonitor?.state === "running" ? "ok" : undefined} />
               </tbody></table>
             </div>
           </div>
           <div className="section-panel">
-            <header className="section-heading"><div><h2>Active detectors</h2><p>Configured rules and persisted alert hits</p></div></header>
+            <header className="section-heading"><div><h2>{t("health.activeDetectors")}</h2><p>{t("health.detectorsMeta")}</p></div></header>
             <div className="detector-list">
               {detectors.slice(0, 14).map((detector) => <div key={detector.id} className="detector-row">
                 <span className={`live-dot ${detector.enabled ? "" : "paused"}`} />
-                <span className="detector-name"><strong>{detector.name}</strong><small>{detector.enabled ? `Active - ${detector.severity}` : "Disabled"}</small></span>
-                <span className="detector-hits">{detector.hits.toLocaleString()} hits</span>
+                <span className="detector-name"><strong>{detector.name}</strong><small>{detector.enabled ? t("health.detectorActive", { severity: detector.severity }) : t("common.disabled")}</small></span>
+                <span className="detector-hits">{t("health.detectorHits", { count: detector.hits.toLocaleString() })}</span>
               </div>)}
-              {!detectors.length ? <p className="empty-state">No rule records are available.</p> : null}
+              {!detectors.length ? <p className="empty-state">{t("health.noRules")}</p> : null}
             </div>
           </div>
         </section>
-      </> : !error ? <p className="empty-state">Reading current host and engine status...</p> : null}
+      </> : !error ? <p className="empty-state">{t("health.waiting")}</p> : null}
     </div>
   );
 }
 
 function HealthChart({ title, meta, data, keys }: { title: string; meta: string; data: HealthPoint[]; keys: { key: keyof HealthPoint; name: string; color: string; fill: string }[] }) {
+  const t = useT();
   return <div className="section-panel"><header className="section-heading"><div><h2>{title}</h2><p>{meta}</p></div></header><div className="chart-area">
-    {data.length ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" /><XAxis dataKey="time" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} minTickGap={28} /><YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} /><Tooltip contentStyle={{ borderRadius: 6, borderColor: "var(--border)" }} />{keys.map((item) => <Area key={item.key} type="monotone" dataKey={item.key} stroke={item.color} fill={item.fill} strokeWidth={2} isAnimationActive={false} name={item.name} />)}</AreaChart></ResponsiveContainer> : <p className="empty-state">Waiting for the first local sample.</p>}
+    {data.length ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" /><XAxis dataKey="time" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} minTickGap={28} /><YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} /><Tooltip contentStyle={{ borderRadius: 6, borderColor: "var(--border)" }} />{keys.map((item) => <Area key={item.key} type="monotone" dataKey={item.key} stroke={item.color} fill={item.fill} strokeWidth={2} isAnimationActive={false} name={item.name} />)}</AreaChart></ResponsiveContainer> : <p className="empty-state">{t("health.waitingSample")}</p>}
   </div></div>;
 }
 
@@ -132,7 +135,8 @@ function GaugeMetric({ icon, label, value, meta, color }: { icon: React.ReactNod
 }
 
 function HealthRow({ label, value, status }: { label: string; value: string; status?: "ok" }) {
-  return <tr><td style={{ color: "var(--muted)" }}>{label}</td><td style={{ textAlign: "right", fontWeight: 600 }}>{value}{status ? <span style={{ marginLeft: 6, color: "#2f8f66" }}>Active</span> : null}</td></tr>;
+  const t = useT();
+  return <tr><td style={{ color: "var(--muted)" }}>{label}</td><td style={{ textAlign: "right", fontWeight: 600 }}>{value}{status ? <span style={{ marginLeft: 6, color: "#2f8f66" }}>{t("common.active")}</span> : null}</td></tr>;
 }
 
 function gaugeColor(value: number, warning: number, critical: number) {

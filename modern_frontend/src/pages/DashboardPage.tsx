@@ -15,6 +15,7 @@ import {
 } from "recharts";
 
 import { idsApi } from "../api/idsApi";
+import { useT } from "../i18n/context";
 import { SeverityBadge } from "../components/SeverityBadge";
 import { alerts, hosts, severityDistribution, trendData } from "../data/mockData";
 import type { DashboardSnapshot } from "../types";
@@ -51,6 +52,7 @@ const previewSnapshot: DashboardSnapshot = {
 };
 
 export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange, onStatisticsReset, refreshVersion }: DashboardPageProps) {
+  const t = useT();
   const [snapshot, setSnapshot] = useState<DashboardSnapshot>(previewSnapshot);
   const [connected, setConnected] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -74,10 +76,10 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
   }, [onOpenAlertCountChange, refreshVersion]);
 
   const captureLive = snapshot.capture.state === "running";
-  const dataLabel = connected ? "Local SQLite data" : "Offline preview";
+  const dataLabel = connected ? t("dashboard.localData") : t("dashboard.offlinePreview");
 
   if (loading) {
-    return <div className="page-stack"><div className="page-loading">Connecting to local API...</div></div>;
+    return <div className="page-stack"><div className="page-loading">{t("common.loading")}</div></div>;
   }
   const detectionRateTrend = snapshot.trend.map((point) => ({
     ...point,
@@ -90,9 +92,9 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
   const averagePacketCount = snapshot.trend.length
     ? snapshot.trend.reduce((total, point) => total + point.packets, 0) / snapshot.trend.length
     : 0;
-  const trendUnit = snapshot.trendBucket === "minute" ? "minutes" : "hours";
+  const trendUnit = snapshot.trendBucket === "minute" ? t("dashboard.minutes") : t("dashboard.hours");
   const resetStatistics = async () => {
-    if (!window.confirm("Delete all packet, alert, and security-event runtime data and start from zero? Assets, investigations, and evidence snapshots will be preserved.")) return;
+    if (!window.confirm(t("dashboard.resetConfirm"))) return;
     setResetting(true);
     setResetNotice("");
     try {
@@ -101,9 +103,9 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
       setConnected(true);
       onOpenAlertCountChange(result.dashboard.statistics.openAlerts);
       onStatisticsReset();
-      setResetNotice("Packet, alert, and security-event runtime data reset. New activity will start from zero.");
+      setResetNotice(t("dashboard.resetDone"));
     } catch (error) {
-      setResetNotice(error instanceof Error ? error.message : "Statistics could not be reset.");
+      setResetNotice(error instanceof Error ? error.message : t("dashboard.resetFailed"));
     } finally {
       setResetting(false);
     }
@@ -111,19 +113,19 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
   return (
     <div className="page-stack" data-refresh-version={refreshVersion}>
       <section className="dashboard-toolbar">
-        <span>{resetNotice || `${dataLabel} is active.`}</span>
-        <button className="danger-button" type="button" disabled={!connected || resetting} onClick={() => void resetStatistics()} title={connected ? "Reset persisted statistics" : "Start the local API to reset statistics"}><RotateCcw size={15} />{resetting ? "Resetting..." : "Reset statistics"}</button>
+        <span>{resetNotice || t("dashboard.dataActive", { label: dataLabel })}</span>
+        <button className="danger-button" type="button" disabled={!connected || resetting} onClick={() => void resetStatistics()} title={connected ? t("dashboard.resetTitle") : t("dashboard.resetDisabled")}><RotateCcw size={15} />{resetting ? t("dashboard.resetting") : t("dashboard.resetStatistics")}</button>
       </section>
       <section className="metric-strip" aria-label="Current IDS statistics">
-        <Metric icon={<Radio size={18} />} label="Capture status" value={captureLive ? "Live" : titleCase(snapshot.capture.state)} meta={snapshot.capture.interface || "No active interface"} tone={captureLive ? "green" : "blue"} />
-        <Metric icon={<Activity size={18} />} label="Packets observed" value={formatNumber(snapshot.statistics.packetTotal)} meta={`${formatNumber(snapshot.statistics.lastHourPackets)} in latest hour`} tone="blue" />
-        <Metric icon={<BellRing size={18} />} label="Open alerts" value={formatNumber(snapshot.statistics.openAlerts)} meta={`${formatNumber(snapshot.statistics.highPriorityAlerts)} high priority`} tone="amber" />
-        <Metric icon={<TriangleAlert size={18} />} label="High-risk hosts" value={formatNumber(snapshot.statistics.highRiskHosts)} meta="Composite risk score of 70 or higher" tone="red" />
+        <Metric icon={<Radio size={18} />} label={t("dashboard.captureStatus")} value={captureLive ? t("dashboard.live") : titleCase(snapshot.capture.state)} meta={snapshot.capture.interface || t("dashboard.noActiveInterface")} tone={captureLive ? "green" : "blue"} />
+        <Metric icon={<Activity size={18} />} label={t("dashboard.packetsObserved")} value={formatNumber(snapshot.statistics.packetTotal)} meta={t("dashboard.inLatestHour", { count: formatNumber(snapshot.statistics.lastHourPackets) })} tone="blue" />
+        <Metric icon={<BellRing size={18} />} label={t("dashboard.openAlerts")} value={formatNumber(snapshot.statistics.openAlerts)} meta={t("dashboard.highPriority", { count: formatNumber(snapshot.statistics.highPriorityAlerts) })} tone="amber" />
+        <Metric icon={<TriangleAlert size={18} />} label={t("dashboard.highRiskHosts")} value={formatNumber(snapshot.statistics.highRiskHosts)} meta={t("dashboard.riskScore70")} tone="red" />
       </section>
 
       <section className="analysis-grid">
         <div className="section-panel trend-panel">
-          <SectionHeading title="Traffic and alert trend" meta={`${dataLabel} - recent observed ${trendUnit}`} />
+          <SectionHeading title={t("dashboard.trafficTrend")} meta={t("dashboard.trafficTrendMeta", { label: dataLabel, unit: trendUnit })} />
           <div className="chart-area" aria-label="Traffic and alert trend chart">
             {snapshot.trend.length ? <ResponsiveContainer width="100%" height="100%">
               <LineChart data={snapshot.trend} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
@@ -131,16 +133,16 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
                 <XAxis dataKey="time" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
                 <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
                 <Tooltip contentStyle={{ borderRadius: 6, borderColor: "var(--border)" }} />
-                <ReferenceLine y={averagePacketCount} stroke="#d97706" strokeDasharray="5 4" label={{ value: "Average traffic", position: "insideTopRight", fill: "#9a5b08", fontSize: 10 }} />
-                <Line type="linear" dataKey="packets" name="Packets" stroke="#2878d0" strokeWidth={2.25} dot={false} activeDot={false} isAnimationActive={false} />
-                <Line type="linear" dataKey="alerts" name="Alerts" stroke="#c2413b" strokeWidth={2.25} dot={false} activeDot={false} isAnimationActive={false} />
+                <ReferenceLine y={averagePacketCount} stroke="#d97706" strokeDasharray="5 4" label={{ value: t("dashboard.averageTraffic"), position: "insideTopRight", fill: "#9a5b08", fontSize: 10 }} />
+                <Line type="linear" dataKey="packets" name={t("traffic.packets")} stroke="#2878d0" strokeWidth={2.25} dot={false} activeDot={false} isAnimationActive={false} />
+                <Line type="linear" dataKey="alerts" name={t("traffic.alerts")} stroke="#c2413b" strokeWidth={2.25} dot={false} activeDot={false} isAnimationActive={false} />
               </LineChart>
-            </ResponsiveContainer> : <EmptyState text="No traffic or alerts have been stored yet." />}
+            </ResponsiveContainer> : <EmptyState text={t("dashboard.noTrafficYet")} />}
           </div>
         </div>
 
         <div className="section-panel severity-panel">
-          <SectionHeading title="Severity distribution" meta={`${formatNumber(snapshot.statistics.alertTotal)} persisted alerts`} />
+          <SectionHeading title={t("dashboard.severityDistribution")} meta={t("dashboard.persistedAlerts", { count: formatNumber(snapshot.statistics.alertTotal) })} />
           <div className="chart-area" aria-label="Severity distribution chart">
             {snapshot.severityDistribution.length ? <ResponsiveContainer width="100%" height="100%">
               <BarChart data={snapshot.severityDistribution} layout="vertical" margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
@@ -152,30 +154,30 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
                   {snapshot.severityDistribution.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
                 </Bar>
               </BarChart>
-            </ResponsiveContainer> : <EmptyState text="No alerts have been stored yet." />}
+            </ResponsiveContainer> : <EmptyState text={t("dashboard.noAlertsYet")} />}
           </div>
         </div>
       </section>
 
       <section className="section-panel detection-rate-panel">
-        <SectionHeading title="Detection rate trend" meta={`Alerts per 1,000 stored packets by observed ${trendUnit.slice(0, -1)}`} />
+        <SectionHeading title={t("dashboard.detectionRateTrend")} meta={t("dashboard.detectionRateMeta", { unit: trendUnit })} />
         <div className="chart-area" aria-label="Detection rate trend chart">
           {detectionRateTrend.length ? <ResponsiveContainer width="100%" height="100%">
             <LineChart data={detectionRateTrend} margin={{ top: 10, right: 18, left: -18, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
               <XAxis dataKey="time" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
               <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
-              <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}`, "Alerts / 1k packets"]} contentStyle={{ borderRadius: 6, borderColor: "var(--border)" }} />
-              <ReferenceLine y={averageDetectionRate} stroke="#d97706" strokeDasharray="5 4" label={{ value: "Average", position: "insideTopRight", fill: "#9a5b08", fontSize: 10 }} />
+              <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}`, t("dashboard.alertsPer1k")]} contentStyle={{ borderRadius: 6, borderColor: "var(--border)" }} />
+              <ReferenceLine y={averageDetectionRate} stroke="#d97706" strokeDasharray="5 4" label={{ value: t("dashboard.average"), position: "insideTopRight", fill: "#9a5b08", fontSize: 10 }} />
               <Line type="linear" dataKey="detectionRate" stroke="#2f8f66" strokeWidth={2.5} dot={false} activeDot={false} isAnimationActive={false} />
             </LineChart>
-          </ResponsiveContainer> : <EmptyState text="No packet and alert trend is available yet." />}
+          </ResponsiveContainer> : <EmptyState text={t("dashboard.noTrendAvailable")} />}
         </div>
       </section>
 
       <section className="dashboard-lower">
         <div className="section-panel host-risk-panel">
-          <SectionHeading title="High-risk hosts" meta="Prioritized by composite risk" />
+          <SectionHeading title={t("dashboard.highRiskHostsTitle")} meta={t("dashboard.highRiskMeta")} />
           <div className="compact-list">
             {snapshot.highRiskHosts.length ? snapshot.highRiskHosts.slice(0, 4).map((host) => (
               <button className="risk-row button-row" type="button" key={host.ip} onClick={() => onOpenHost(host.ip)}>
@@ -184,17 +186,17 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
                   <span><strong>{host.name}</strong><small>{host.ip} - {host.role}</small></span>
                 </div>
                 <span className={`risk-score risk-${host.risk >= 80 ? "high" : host.risk >= 50 ? "medium" : "low"}`}>{host.risk}</span>
-                <span className="host-alert-count">{host.alerts} alerts</span>
+                <span className="host-alert-count">{t("dashboard.alertsCount", { count: host.alerts })}</span>
               </button>
-            )) : <EmptyState text="No host risk signals are available yet." />}
+            )) : <EmptyState text={t("dashboard.noHostSignals")} />}
           </div>
         </div>
 
         <div className="section-panel recent-alerts-panel">
           <SectionHeading
-            title="Recent alerts"
-            meta="Analyst review queue"
-            action={<button className="text-button" type="button" onClick={onOpenAlerts}>Open Alert Center</button>}
+            title={t("dashboard.recentAlerts")}
+            meta={t("dashboard.analystQueue")}
+            action={<button className="text-button" type="button" onClick={onOpenAlerts}>{t("dashboard.openAlertCenter")}</button>}
           />
           <div className="compact-list">
             {snapshot.recentAlerts.length ? snapshot.recentAlerts.slice(0, 4).map((alert) => (
@@ -203,12 +205,12 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
                 <span><strong>{alert.ruleName}</strong><small>{alert.source} to {alert.destination}</small></span>
                 <time>{alert.timestamp}</time>
               </button>
-            )) : <EmptyState text="No alerts have been stored yet." />}
+            )) : <EmptyState text={t("dashboard.noAlertsYet")} />}
           </div>
         </div>
       </section>
 
-      <div className="system-note"><ShieldCheck size={15} /> HTTPS payload remains encrypted; TLS items show metadata and fingerprint risk only.</div>
+      <div className="system-note"><ShieldCheck size={15} /> {t("dashboard.tlsNote")}</div>
     </div>
   );
 }

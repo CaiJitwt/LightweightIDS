@@ -16,6 +16,7 @@ from uuid import uuid4
 from app.constants import DEFAULT_DATABASE_PATH
 from detection.analysis.alert_trend import AlertTrendAnalyzer
 from detection.analysis.host_profile import HostProfileService
+from parser.packet_parser import _sanitize_payload
 from endpoint_security import EndpointPostureService, FileIntegrityService, ProcessInventoryService, ResourceThreatMonitorService, RuntimeHealthService, is_process_elevated
 from modern_ui.capture_session import CaptureSessionService, default_capture_options, parse_capture_options
 from modern_ui.llm_guidance import LlmGuidanceError, LlmGuidanceService
@@ -526,6 +527,11 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             values["modern_font_scale"] = _setting_choice(
                 payload, "fontScale", {"compact", "default", "comfortable"}
             )
+        if "locale" in payload:
+            locale = str(payload["locale"]).strip()
+            if locale not in {"en", "zh"}:
+                raise ValueError("locale must be 'en' or 'zh'")
+            values["app_locale"] = locale
         if "autoSavePackets" in payload:
             values["auto_save_packets"] = _bool_setting(payload, "autoSavePackets")
         if "realtimeDetection" in payload:
@@ -695,7 +701,7 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                     "id": f"packet-{packet.id}",
                     "timestamp": packet.timestamp,
                     "kind": "packet",
-                    "headline": f"{packet.protocol} {packet.raw_summary}".strip()[:240],
+                    "headline": _sanitize_payload(f"{packet.protocol} {packet.raw_summary}".strip()[:240]),
                     "detail": f"{_endpoint(packet.src_ip, packet.src_port)} -> {_endpoint(packet.dst_ip, packet.dst_port)} - {packet.length} bytes",
                     "source": _endpoint(packet.src_ip, packet.src_port),
                     "destination": _endpoint(packet.dst_ip, packet.dst_port),
@@ -987,7 +993,7 @@ def _packet_payload(packet: Any) -> dict[str, Any]:
         "protocol": packet.protocol or "UNKNOWN",
         "length": int(packet.length or 0),
         "flags": packet.tcp_flags or "",
-        "summary": packet.raw_summary,
+        "summary": _sanitize_payload(packet.raw_summary),
         "details": {
             "sourceIp": packet.src_ip,
             "destinationIp": packet.dst_ip,
@@ -1089,9 +1095,13 @@ def _path_list(value: object) -> list[str]:
 
 
 def _settings_payload(settings: SettingsRepository) -> dict[str, Any]:
+    locale = settings.get("app_locale", "en")
+    if locale not in {"en", "zh"}:
+        locale = "en"
     return {
         "themePreference": settings.get("modern_theme_preference", "system"),
         "fontScale": settings.get("modern_font_scale", "default"),
+        "locale": str(locale),
         "autoSavePackets": settings.get_bool("auto_save_packets", True),
         "realtimeDetection": settings.get_bool("enable_realtime_detection", True),
         "alertCooldownSeconds": settings.get_int("alert_cooldown_seconds", 10),

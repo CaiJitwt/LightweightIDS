@@ -1,9 +1,30 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any, Optional
 
 from models import PacketRecord
+
+# Binary protocol payloads (TLS, etc.) decoded as UTF-8 produce random
+# Unicode glyphs (e.g. ȯÒۓ֢) that look like garbled text.
+# This keeps only printable ASCII (0x20-0x7E) — used for packet raw_summary.
+_ASCII_ONLY_RE = re.compile(r"[^\x20-\x7e]")
+
+# Control characters (0x00-0x1F, 0x7F-0x9F) and Unicode replacement char (U+FFFD).
+# Used for human-generated text where we want to preserve non-ASCII (e.g. CJK).
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f-\x9f�]")
+
+
+def _sanitize_payload(text: str) -> str:
+    """Strip non-printable-ASCII characters from packet payloads, then collapse whitespace."""
+    return " ".join(_ASCII_ONLY_RE.sub(" ", text).split())
+
+
+def _sanitize_display_text(text: str) -> str:
+    """Replace control characters and Unicode replacement chars, then collapse whitespace.
+    Preserves non-ASCII (CJK, etc.) — safe for human-generated alert text."""
+    return " ".join(_CONTROL_CHARS_RE.sub(" ", text).split())
 
 
 class PacketParser:
@@ -77,7 +98,7 @@ class PacketParser:
             http_method=http_method,
             http_host=http_host,
             http_path=http_path,
-            raw_summary=self._packet_summary(packet, payload_text),
+            raw_summary=self._packet_summary(packet, payload_text, protocol),
         )
 
     def _detect_protocol(self, packet: object, src_port: Optional[int], dst_port: Optional[int], payload: str) -> str:
@@ -222,7 +243,11 @@ class PacketParser:
 
         return method, host, path
 
-    def _packet_summary(self, packet: object, payload_text: str = "") -> str:
+    # Protocols whose payload is always encrypted/opaque ciphertext — the
+    # Scapy layer summary is sufficient; appending |payload= only adds noise.
+    _ENCRYPTED_PROTOCOLS = frozenset({"TLS", "HTTPS", "QUIC"})
+
+    def _packet_summary(self, packet: object, payload_text: str = "", protocol: str = "") -> str:
         try:
             summary = str(packet.summary())  # type: ignore[attr-defined]
         except Exception:
@@ -230,8 +255,10 @@ class PacketParser:
 
         if not payload_text:
             return summary
+        if protocol in self._ENCRYPTED_PROTOCOLS:
+            return summary
 
-        preview = " ".join(payload_text.replace("\x00", " ").split())
+        preview = _sanitize_payload(payload_text)
         if not preview:
             return summary
         if len(preview) > 240:

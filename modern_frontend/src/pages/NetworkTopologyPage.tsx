@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Activity, Globe, Laptop, Network, Search, Server, ShieldAlert } from "lucide-react";
 
 import { idsApi } from "../api/idsApi";
+import { useT } from "../i18n/context";
 import type { TopologyEdgeRecord, TopologyNodeKind, TopologyNodeRecord, TopologySnapshot } from "../types";
 
 interface PositionedNode extends TopologyNodeRecord {
@@ -16,10 +17,6 @@ const VIEWBOX_HEIGHT = 760;
 
 const nodeKindIcon: Record<TopologyNodeKind, typeof Laptop> = {
   workstation: Laptop, server: Server, gateway: Network, external: Globe,
-};
-
-const nodeKindLabel: Record<TopologyNodeKind, string> = {
-  workstation: "Workstation", server: "Server", gateway: "Gateway", external: "External",
 };
 
 function planTopology(snapshot: TopologySnapshot): { nodes: PositionedNode[]; edges: TopologyEdgeRecord[]; hiddenNodes: number } {
@@ -74,11 +71,19 @@ function placeRing(
 }
 
 export function NetworkTopologyPage({ refreshVersion }: { refreshVersion: number }) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<TopologySnapshot>(EMPTY_TOPOLOGY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const nodeKindLabel: Record<TopologyNodeKind, string> = {
+    workstation: t("topology.workstation"),
+    server: t("topology.server"),
+    gateway: t("topology.gateway"),
+    external: t("topology.external"),
+  };
 
   useEffect(() => {
     let active = true;
@@ -90,13 +95,13 @@ export function NetworkTopologyPage({ refreshVersion }: { refreshVersion: number
         setError("");
       })
       .catch((reason) => {
-        if (active) setError(reason instanceof Error ? reason.message : "Network topology could not be loaded.");
+        if (active) setError(reason instanceof Error ? reason.message : t("topology.unavailable"));
       })
       .finally(() => {
         if (active) setLoading(false);
       });
     return () => { active = false; };
-  }, [refreshVersion]);
+  }, [refreshVersion, t]);
 
   const { nodes, edges, hiddenNodes } = useMemo(() => planTopology(snapshot), [snapshot]);
   const normalizedQuery = query.trim().toLowerCase();
@@ -114,33 +119,33 @@ export function NetworkTopologyPage({ refreshVersion }: { refreshVersion: number
   return (
     <div className="page-stack" data-refresh-version={refreshVersion}>
       <section className="topology-summary">
-        <TopologyMetric icon={<Laptop size={15} />} label="Workstations" value={workstationCount} color="#2878d0" background="#dcecff" />
-        <TopologyMetric icon={<Server size={15} />} label="Servers" value={serverCount} color="#2f8f66" background="#d8f3e6" />
-        <TopologyMetric icon={<ShieldAlert size={15} />} label="High Risk" value={highRiskCount} color="#c2413b" background="#fde2e0" />
-        <TopologyMetric icon={<Network size={15} />} label="Connections" value={edges.length} color="#6d7f90" background="#e5eaee" />
+        <TopologyMetric icon={<Laptop size={15} />} label={t("topology.workstations")} value={workstationCount} color="#2878d0" background="#dcecff" />
+        <TopologyMetric icon={<Server size={15} />} label={t("topology.servers")} value={serverCount} color="#2f8f66" background="#d8f3e6" />
+        <TopologyMetric icon={<ShieldAlert size={15} />} label={t("topology.highRisk")} value={highRiskCount} color="#c2413b" background="#fde2e0" />
+        <TopologyMetric icon={<Network size={15} />} label={t("topology.connections")} value={edges.length} color="#6d7f90" background="#e5eaee" />
       </section>
 
       <section className="filter-row">
-        <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search observed hosts by name, IP or role" /></label>
+        <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("topology.search")} /></label>
         <span className="result-count">
-          {matchingNodeIds.size} observed endpoints{hiddenNodes ? `, ${hiddenNodes} lower-volume endpoints hidden` : ""}
+          {t("topology.endpoints", { count: matchingNodeIds.size })}{hiddenNodes ? `, ${t("topology.hidden", { count: hiddenNodes })}` : ""}
         </span>
       </section>
 
       <div className="topology-workspace">
         <div className="topology-stage">
           <div className="topology-legend">
-            <strong>Observed packet topology</strong>
+            <strong>{t("topology.legendTitle")}</strong>
             <div>{(["workstation", "server", "gateway", "external"] as const).map((kind) => {
               const Icon = nodeKindIcon[kind];
               return <span key={kind} className="topology-legend-item"><span className={`topology-legend-dot topology-kind-${kind}`}><Icon size={12} /></span>{nodeKindLabel[kind]}</span>;
             })}</div>
           </div>
           <div className="topology-canvas-wrap" role="region" aria-label="Scrollable network topology canvas" tabIndex={0}>
-            {loading && !nodes.length ? <p className="empty-state">Loading observed packet connections...</p> : null}
-            {!loading && error && !nodes.length ? <p className="empty-state">Local API unavailable: {error}</p> : null}
-            {!loading && !error && !nodes.length ? <p className="empty-state">No packet connections are stored yet. Start capture or import a PCAP to build the topology.</p> : null}
-            {nodes.length ? <svg className="topology-canvas" width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} preserveAspectRatio="xMidYMid meet" aria-label="Observed network topology">
+            {loading && !nodes.length ? <p className="empty-state">{t("topology.loading")}</p> : null}
+            {!loading && error && !nodes.length ? <p className="empty-state">{t("topology.unavailable")}: {error}</p> : null}
+            {!loading && !error && !nodes.length ? <p className="empty-state">{t("topology.empty")}</p> : null}
+            {nodes.length ? <svg className="topology-canvas" width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} preserveAspectRatio="xMidYMid meet" aria-label={t("topology.legendTitle")}>
               <defs>
                 <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
                 <marker id="arrowhead" viewBox="0 0 7 6" refX="7" refY="3" markerWidth="7" markerHeight="6" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8899aa" /></marker>
@@ -169,32 +174,32 @@ export function NetworkTopologyPage({ refreshVersion }: { refreshVersion: number
               })}
             </svg> : null}
           </div>
-          {error && nodes.length ? <p className="topology-refresh-error">Latest refresh failed: {error}</p> : null}
+          {error && nodes.length ? <p className="topology-refresh-error">{t("topology.refreshFailed", { error })}</p> : null}
         </div>
 
         <aside className="topology-detail">
           {selected ? <>
             <header className="topology-detail-header"><h3>{selected.label}</h3><span className={`risk-score risk-${selected.risk >= 80 ? "high" : selected.risk >= 50 ? "medium" : "low"}`}>{selected.risk}</span></header>
             <dl className="detail-grid">
-              <div><dt>IP Address</dt><dd>{selected.ip}</dd></div>
-              <div><dt>Type</dt><dd>{nodeKindLabel[selected.kind]}</dd></div>
-              <div><dt>Role</dt><dd>{selected.role}</dd></div>
-              <div><dt>Last Seen</dt><dd>{selected.lastSeen || "Unknown"}</dd></div>
-              <div><dt>Packets</dt><dd>{selected.packets.toLocaleString()}</dd></div>
-              <div><dt>Alerts</dt><dd>{selected.alerts.toLocaleString()}</dd></div>
+              <div><dt>{t("topology.ipAddress")}</dt><dd>{selected.ip}</dd></div>
+              <div><dt>{t("topology.type")}</dt><dd>{nodeKindLabel[selected.kind]}</dd></div>
+              <div><dt>{t("topology.role")}</dt><dd>{selected.role}</dd></div>
+              <div><dt>{t("topology.lastSeen")}</dt><dd>{selected.lastSeen || t("common.unknown")}</dd></div>
+              <div><dt>{t("topology.packets")}</dt><dd>{selected.packets.toLocaleString()}</dd></div>
+              <div><dt>{t("topology.alerts")}</dt><dd>{selected.alerts.toLocaleString()}</dd></div>
             </dl>
             <div className="topology-detail-section">
-              <h3>Observed connections <span>{connectedToSelected.length}</span></h3>
+              <h3>{t("topology.observedConnections")} <span>{connectedToSelected.length}</span></h3>
               <div className="packet-stack">
                 {connectedToSelected.map((edge) => {
                   const outbound = edge.source === selectedNode;
                   const peer = outbound ? edge.target : edge.source;
-                  return <div key={`${edge.source}-${edge.target}-${edge.protocol}`} className="topology-connection-row"><strong>{outbound ? "To" : "From"} {peer}</strong><span>{edge.protocol} - {edge.packets.toLocaleString()} packets</span><small>{formatBytes(edge.bytes)} - last seen {edge.lastSeen || "unknown"}</small></div>;
+                  return <div key={`${edge.source}-${edge.target}-${edge.protocol}`} className="topology-connection-row"><strong>{outbound ? t("topology.to") : t("topology.from")} {peer}</strong><span>{edge.protocol} - {t("topology.packetsCount", { count: edge.packets.toLocaleString() })}</span><small>{t("topology.bytesCount", { bytes: formatBytes(edge.bytes), when: edge.lastSeen || "unknown" })}</small></div>;
                 })}
-                {!connectedToSelected.length && <p className="empty-hint">No connections recorded.</p>}
+                {!connectedToSelected.length && <p className="empty-hint">{t("topology.noConnections")}</p>}
               </div>
             </div>
-          </> : <div className="topology-empty-detail"><Activity size={24} /><p>Select a node in the topology graph to view its observed packet connections.</p></div>}
+          </> : <div className="topology-empty-detail"><Activity size={24} /><p>{t("topology.selectNode")}</p></div>}
         </aside>
       </div>
     </div>

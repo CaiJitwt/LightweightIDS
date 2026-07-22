@@ -2,20 +2,23 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, BellRing, Clock, Filter, Network, Radio, Search } from "lucide-react";
 
 import { idsApi } from "../api/idsApi";
+import { useT } from "../i18n/context";
 import { SeverityBadge } from "../components/SeverityBadge";
 import type { EventTimelineRecord } from "../types";
 
 
 const kindColors: Record<EventTimelineRecord["kind"], string> = { alert: "#c2413b", packet: "#2878d0", system: "#6d7f90" };
-const kindLabels: Record<EventTimelineRecord["kind"], string> = { alert: "Alert", packet: "Packet", system: "System" };
 
 
 export function EventTimelinePage({ refreshVersion }: { refreshVersion: number }) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState("All");
   const [sortAsc, setSortAsc] = useState(false);
   const [records, setRecords] = useState<EventTimelineRecord[]>([]);
   const [error, setError] = useState("");
+
+  const kindLabels: Record<EventTimelineRecord["kind"], string> = { alert: t("timeline.alerts"), packet: t("timeline.packets"), system: t("timeline.systemEvents") };
 
   useEffect(() => {
     let active = true;
@@ -27,7 +30,7 @@ export function EventTimelinePage({ refreshVersion }: { refreshVersion: number }
     }).catch((reason) => {
       if (active) {
         setRecords([]);
-        setError(reason instanceof Error ? reason.message : "Persisted timeline data is unavailable.");
+        setError(reason instanceof Error ? reason.message : t("timeline.unavailable"));
       }
     });
     return () => { active = false; };
@@ -50,29 +53,29 @@ export function EventTimelinePage({ refreshVersion }: { refreshVersion: number }
   return (
     <div className="page-stack" data-refresh-version={refreshVersion}>
       <section className="timeline-summary">
-        <TimelineMetric icon={<BellRing size={15} />} label="Alerts" value={alertCount} color="#c2413b" background="#fde2e0" />
-        <TimelineMetric icon={<Network size={15} />} label="Packets" value={packetCount} color="#2878d0" background="#dcecff" />
-        <TimelineMetric icon={<Radio size={15} />} label="System events" value={systemCount} color="#6d7f90" background="#e5eaee" />
+        <TimelineMetric icon={<BellRing size={15} />} label={t("timeline.alerts")} value={alertCount} color="#c2413b" background="#fde2e0" />
+        <TimelineMetric icon={<Network size={15} />} label={t("timeline.packets")} value={packetCount} color="#2878d0" background="#dcecff" />
+        <TimelineMetric icon={<Radio size={15} />} label={t("timeline.systemEvents")} value={systemCount} color="#6d7f90" background="#e5eaee" />
       </section>
 
       {error && <p className="capture-notice error">{error}</p>}
 
       <section className="filter-row">
-        <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search timeline events" /></label>
+        <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("timeline.search")} /></label>
         <label className="select-box"><Filter size={15} />
-          <select aria-label="Timeline event type" value={kindFilter} onChange={(event) => setKindFilter(event.target.value)}>
-            <option>All</option><option>Alert</option><option>Packet</option><option>System</option>
+          <select aria-label={t("timeline.eventType")} value={kindFilter} onChange={(event) => setKindFilter(event.target.value)}>
+            <option value="All">{t("common.all")}</option><option value="Alert">{t("timeline.alerts")}</option><option value="Packet">{t("timeline.packets")}</option><option value="System">{t("timeline.systemEvents")}</option>
           </select>
         </label>
-        <button className="icon-button" type="button" title={sortAsc ? "Switch to newest first" : "Switch to oldest first"} onClick={() => setSortAsc((value) => !value)}>
+        <button className="icon-button" type="button" title={sortAsc ? t("timeline.newestFirst") : t("timeline.oldestFirst")} onClick={() => setSortAsc((value) => !value)}>
           {sortAsc ? <ArrowUp size={17} /> : <ArrowDown size={17} />}
         </button>
-        <span className="result-count">{visible.length} events</span>
+        <span className="result-count">{t("timeline.events", { count: visible.length })}</span>
       </section>
 
       <section className="section-panel">
         <div className="timeline" style={{ padding: "2px 14px" }}>
-          {!visible.length ? <p className="empty-hint" style={{ padding: 32, textAlign: "center" }}>No persisted timeline events match the current filters.</p> : visible.map((entry, index) => {
+          {!visible.length ? <p className="empty-hint" style={{ padding: 32, textAlign: "center" }}>{t("timeline.noEvents")}</p> : visible.map((entry, index) => {
             const isLast = index === visible.length - 1;
             const color = kindColors[entry.kind];
             return <div key={entry.id} className={`timeline-entry ${isLast ? "timeline-entry-last" : ""}`}>

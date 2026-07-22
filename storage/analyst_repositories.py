@@ -8,6 +8,7 @@ from models import (
     InvestigationEvidenceRecord,
     InvestigationRecord,
 )
+from parser.packet_parser import _sanitize_display_text, _sanitize_payload
 from storage.database import Database
 
 
@@ -209,6 +210,20 @@ class InvestigationRepository:
         )
 
 
+def _timeline_packet_summary(protocol: str, raw_summary: str) -> str:
+    """Build a clean one-liner for host timeline packet events.
+
+    Strips the ``| payload=…`` suffix because for encrypted protocols (TLS,
+    HTTPS, QUIC) it is ciphertext noise, and even for cleartext protocols
+    the Scapy layer summary already carries the essential information.
+    """
+    raw = raw_summary
+    idx = raw.find(" | payload=")
+    if idx != -1:
+        raw = raw[:idx]
+    return f"{protocol}: {raw}"
+
+
 class HostRepository:
     def __init__(self, database: Database) -> None:
         self.database = database
@@ -346,7 +361,9 @@ class HostRepository:
                 event_type="Packet",
                 direction="Outbound" if row["src_ip"] == host_ip else "Inbound",
                 peer_ip=str(row["dst_ip"] if row["src_ip"] == host_ip else row["src_ip"] or ""),
-                summary=f"{row['protocol']}: {row['raw_summary']}",
+                summary=_sanitize_payload(
+                    _timeline_packet_summary(str(row["protocol"]), str(row["raw_summary"] or ""))
+                ),
             )
             for row in packet_rows
         ]
@@ -356,7 +373,7 @@ class HostRepository:
                 event_type="Alert",
                 direction="Outbound" if row["src_ip"] == host_ip else "Inbound",
                 peer_ip=str(row["dst_ip"] if row["src_ip"] == host_ip else row["src_ip"] or ""),
-                summary=f"{row['rule_name']}: {row['description']}",
+                summary=_sanitize_display_text(f"{row['rule_name']}: {row['description']}"),
                 severity=str(row["severity"]),
             )
             for row in alert_rows

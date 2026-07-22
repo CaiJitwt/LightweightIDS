@@ -4,10 +4,12 @@ import { Calendar, ClipboardPlus, Pencil, RefreshCw, Search, Trash2, X } from "l
 import { idsApi } from "../api/idsApi";
 import { SeverityBadge } from "../components/SeverityBadge";
 import type { InvestigationRecord, Severity } from "../types";
+import { useT } from "../i18n/context";
 
 const emptyForm: { title: string; status: "Open" | "Monitoring" | "Closed"; priority: Severity; hostIp: string; summary: string; notes: string } = { title: "", status: "Open", priority: "MEDIUM", hostIp: "", summary: "", notes: "" };
 
 export function InvestigationsPage() {
+  const t = useT();
   const [records, setRecords] = useState<InvestigationRecord[]>([]);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -23,7 +25,7 @@ export function InvestigationsPage() {
       setRecords(next);
       setNotice("");
     } catch {
-      setNotice("Local API unavailable. Investigations are read-only previews.");
+      setNotice(t("investigations.unavailable"));
     }
   };
   useEffect(() => { void load(); }, []);
@@ -52,9 +54,9 @@ export function InvestigationsPage() {
       setEditingId(null);
       await load();
       if (savedId !== null) setSelectedId(savedId);
-      setNotice(savedId !== null ? "Investigation updated." : "Investigation created.");
+      setNotice(savedId !== null ? t("investigations.updated") : t("investigations.created"));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Could not create investigation.");
+      setNotice(error instanceof Error ? error.message : t("investigations.createFailed"));
     } finally {
       setSaving(false);
     }
@@ -69,9 +71,9 @@ export function InvestigationsPage() {
         setForm(emptyForm);
       }
       await load();
-      setNotice("Investigation deleted.");
+      setNotice(t("investigations.deleted"));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Investigation could not be deleted.");
+      setNotice(error instanceof Error ? error.message : t("investigations.deleteFailed"));
     }
   };
 
@@ -90,24 +92,24 @@ export function InvestigationsPage() {
     <div className="page-stack investigation-workspace">
       <section className="investigation-master">
         <div className="filter-row">
-          <label className="search-box"><Search size={16} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search investigations…" /></label>
+          <label className="search-box"><Search size={16} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("investigations.search")} /></label>
           <select className="plain-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option>All</option><option>Open</option><option>Monitoring</option><option>Closed</option>
+            <option value="All">{t("common.all")}</option><option>Open</option><option>Monitoring</option><option>Closed</option>
           </select>
-          <button className="icon-button" type="button" title="Refresh" onClick={() => void load()}><RefreshCw size={15} /></button>
-          <span className="result-count">{visible.length} cases</span>
+          <button className="icon-button" type="button" title={t("common.refresh")} onClick={() => void load()}><RefreshCw size={15} /></button>
+          <span className="result-count">{t("investigations.cases", { count: visible.length })}</span>
         </div>
         <div className="investigation-list">
           {visible.length ? visible.map((record) => (
             <div key={record.id} className={`investigation-card ${record.id === selectedId ? "selected" : ""}`} onClick={() => setSelectedId(record.id)}>
               <div>
                 <h3>{record.title}</h3>
-                <small>{record.host_ip ?? "No host"} · {record.status}</small>
-                <p>{record.summary || "No summary provided."}</p>
+                <small>{record.host_ip ?? t("investigations.noHost")} · {record.status}</small>
+                <p>{record.summary || t("investigations.noSummary")}</p>
               </div>
               <SeverityBadge severity={record.priority} />
             </div>
-          )) : <p className="empty-state">No investigations match the current filters.</p>}
+          )) : <p className="empty-state">{t("investigations.noInvestigations")}</p>}
         </div>
       </section>
 
@@ -118,35 +120,35 @@ export function InvestigationsPage() {
               <div>
                 <SeverityBadge severity={selected.priority} />
                 <h2>{selected.title}</h2>
-                <p>{selected.host_ip ?? "No host"} · Created {selected.created_at}</p>
+                <p>{selected.host_ip ?? t("investigations.noHost")} · Created {selected.created_at}</p>
               </div>
               <div style={{ display: "flex", gap: 6 }}>
-                <button className="icon-button" type="button" title="Edit investigation" onClick={() => edit(selected)}><Pencil size={14} /></button>
-                <button className="icon-button" type="button" title="Delete investigation" onClick={() => void remove(selected.id)}><Trash2 size={14} /></button>
-                <button className="icon-button" type="button" title="Close details" onClick={() => setSelectedId(null)}><X size={17} /></button>
+                <button className="icon-button" type="button" title={t("investigations.edit")} onClick={() => edit(selected)}><Pencil size={14} /></button>
+                <button className="icon-button" type="button" title={t("investigations.deleteTitle")} onClick={() => void remove(selected.id)}><Trash2 size={14} /></button>
+                <button className="icon-button" type="button" title={t("investigations.closeDetails")} onClick={() => setSelectedId(null)}><X size={17} /></button>
               </div>
             </header>
             <dl className="detail-grid">
-              <div><dt>Status</dt><dd className={`status status-${selected.status === "Closed" ? "ignored" : selected.status === "Open" ? "unconfirmed" : "confirmed"}`}>{selected.status}</dd></div>
-              <div><dt>Priority</dt><dd><SeverityBadge severity={selected.priority} /></dd></div>
-              <div><dt>Last Updated</dt><dd>{selected.updated_at}</dd></div>
-              <div><dt>Created</dt><dd>{selected.created_at}</dd></div>
+              <div><dt>{t("investigations.status")}</dt><dd className={`status status-${selected.status === "Closed" ? "ignored" : selected.status === "Open" ? "unconfirmed" : "confirmed"}`}>{selected.status}</dd></div>
+              <div><dt>{t("investigations.priority")}</dt><dd><SeverityBadge severity={selected.priority} /></dd></div>
+              <div><dt>{t("investigations.lastUpdated")}</dt><dd>{selected.updated_at}</dd></div>
+              <div><dt>{t("investigations.createdLabel")}</dt><dd>{selected.created_at}</dd></div>
             </dl>
-            <div className="detail-section"><h3>Summary</h3><p>{selected.summary || "No summary provided."}</p></div>
-            <div className="detail-section"><h3>Notes</h3><p>{selected.notes || "No notes recorded."}</p></div>
+            <div className="detail-section"><h3>{t("investigations.summaryLabel")}</h3><p>{selected.summary || t("investigations.noSummary")}</p></div>
+            <div className="detail-section"><h3>{t("investigations.notesLabel")}</h3><p>{selected.notes || t("investigations.noNotes")}</p></div>
           </>
         ) : (
           <div className="empty-detail">
             <ClipboardPlus size={24} color="var(--muted)" />
-            <p>Select an investigation to view details,<br />or create a new one below.</p>
+            <p>{t("investigations.selectHint")}</p>
           </div>
         )}
 
         <form className="investigation-form-panel" onSubmit={submit} style={{ borderTop: "1px solid var(--border)", marginTop: selected ? 0 : "auto" }}>
-          <header className="section-heading" style={{ padding: "0 0 8px", height: "auto", borderBottom: "none" }}><div><h2>{editingId === null ? "New investigation" : "Edit investigation"}</h2><p>Persist analyst context in the local database</p></div></header>
-          <input required placeholder="Investigation title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+          <header className="section-heading" style={{ padding: "0 0 8px", height: "auto", borderBottom: "none" }}><div><h2>{editingId === null ? t("investigations.new") : t("investigations.editTitle")}</h2><p>{t("investigations.persistHint")}</p></div></header>
+          <input required placeholder={t("investigations.titlePlaceholder")} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           <div className="form-row">
-            <input placeholder="Host IP (optional)" value={form.hostIp} onChange={(e) => setForm({ ...form, hostIp: e.target.value })} />
+            <input placeholder={t("investigations.hostPlaceholder")} value={form.hostIp} onChange={(e) => setForm({ ...form, hostIp: e.target.value })} />
             <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value as Severity })}>
               {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((v) => <option key={v}>{v}</option>)}
             </select>
@@ -154,11 +156,11 @@ export function InvestigationsPage() {
           <select aria-label="Investigation status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as typeof form.status })}>
             {["Open", "Monitoring", "Closed"].map((value) => <option key={value}>{value}</option>)}
           </select>
-          <textarea placeholder="Summary" value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} />
-          <textarea placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          <textarea placeholder={t("investigations.summaryPlaceholder")} value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} />
+          <textarea placeholder={t("investigations.notesPlaceholder")} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           <div className="inline-actions">
-            <button className="primary-button" type="submit" disabled={saving}>{editingId === null ? <ClipboardPlus size={15} /> : <Pencil size={15} />}{editingId === null ? "Create investigation" : "Save changes"}</button>
-            {editingId !== null && <button className="icon-text-button" type="button" onClick={cancelEdit}><X size={15} />Cancel</button>}
+            <button className="primary-button" type="submit" disabled={saving}>{editingId === null ? <ClipboardPlus size={15} /> : <Pencil size={15} />}{editingId === null ? t("investigations.create") : t("investigations.saveChanges")}</button>
+            {editingId !== null && <button className="icon-text-button" type="button" onClick={cancelEdit}><X size={15} />{t("common.cancel")}</button>}
           </div>
           {notice && <p className="capture-notice" style={{ margin: 0 }}><Calendar size={14} />{notice}</p>}
         </form>
