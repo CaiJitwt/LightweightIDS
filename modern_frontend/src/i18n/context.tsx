@@ -56,9 +56,6 @@ export function resolveLocale(): Locale {
   } catch {
     // localStorage unavailable (SSR / test env)
   }
-  if (typeof navigator !== "undefined" && navigator.language?.startsWith("zh")) {
-    return "zh";
-  }
   return "en";
 }
 
