@@ -98,7 +98,7 @@ python -m scripts.generate_demo_pcap
 
 Then import `sample_data/demo_attack_chain.pcap`. The classic Traffic Monitor can also generate and load it through `Load demo data` when necessary. See the [Demo Guide](docs/demo_guide.md).
 
-For a live virtual-machine demonstration, start the isolated [HTTP Alert Demo Lab](demo_http_lab/README.md). It accepts inert plaintext samples only from authorized private-network clients and sends them through the normal live-capture and Detection Engine path without executing or forwarding submitted content.
+For a live virtual-machine demonstration, start the [HTTP Alert Demo Lab](demo_http_lab/README.md) with `python -m demo_http_lab.main`. Its default classroom mode needs no token, accepts only private-network clients, and sends inert plaintext samples through the normal live-capture and Detection Engine path without executing or forwarding content.
 
 ## Reset Behavior
 

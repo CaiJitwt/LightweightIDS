@@ -62,8 +62,8 @@ def test_loading_the_demo_page_does_not_trigger_its_attack_scenarios():
         assert not WEB_DEMO_RULE_IDS.intersection(rule_ids), filename
 
 
-def test_demo_server_requires_a_token_and_discards_request_content():
-    server = DemoHttpServer(("127.0.0.1", 0), token="test-token")
+def test_demo_server_classroom_mode_discards_request_content_without_a_token():
+    server = DemoHttpServer(("127.0.0.1", 0))
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     base_url = f"http://127.0.0.1:{server.server_address[1]}"
@@ -72,26 +72,14 @@ def test_demo_server_requires_a_token_and_discards_request_content():
             assert response.status == 200
             assert b"Lightweight IDS HTTP Alert Lab" in response.read()
 
-        unauthorized = Request(
-            f"{base_url}/sink/benign",
-            data=b"message=private-content",
-            method="POST",
-        )
-        with pytest.raises(HTTPError) as error:
-            urlopen(unauthorized, timeout=3)
-        assert error.value.code == 403
-
         submitted = b"message=private-content"
-        authorized = Request(
+        request = Request(
             f"{base_url}/sink/benign",
             data=submitted,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-                "X-Demo-Token": "test-token",
-            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
             method="POST",
         )
-        with urlopen(authorized, timeout=3) as response:
+        with urlopen(request, timeout=3) as response:
             body = response.read()
             result = json.loads(body)
 
@@ -99,6 +87,31 @@ def test_demo_server_requires_a_token_and_discards_request_content():
         assert result["accepted"] is True
         assert result["receivedBytes"] == len(submitted)
         assert submitted not in body
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+
+
+def test_demo_server_can_optionally_require_a_token():
+    server = DemoHttpServer(("127.0.0.1", 0), token="test-token")
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        unauthorized = Request(f"{base_url}/sink/benign", data=b"message=test", method="POST")
+        with pytest.raises(HTTPError) as error:
+            urlopen(unauthorized, timeout=3)
+        assert error.value.code == 403
+
+        authorized = Request(
+            f"{base_url}/sink/benign",
+            data=b"message=test",
+            headers={"X-Demo-Token": "test-token"},
+            method="POST",
+        )
+        with urlopen(authorized, timeout=3) as response:
+            assert response.status == 202
     finally:
         server.shutdown()
         server.server_close()

@@ -23,7 +23,16 @@ def main(argv: list[str] | None = None) -> int:
         default=8080,
         help="HTTP port recognized by PacketParser (default: 8080).",
     )
-    parser.add_argument("--token", default="", help="Optional fixed session token; a random token is safer.")
+    parser.add_argument(
+        "--require-token",
+        action="store_true",
+        help="Require a generated URL token instead of using the default classroom mode.",
+    )
+    parser.add_argument(
+        "--token",
+        default="",
+        help="Require this fixed token. Supplying a value also enables token protection.",
+    )
     parser.add_argument(
         "--allow-network",
         action="append",
@@ -34,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--advertise-host", default="", help="Private host IP printed for VM users.")
     args = parser.parse_args(argv)
 
-    token = args.token or secrets.token_urlsafe(18)
+    token = args.token or (secrets.token_urlsafe(18) if args.require_token else "")
     try:
         server = DemoHttpServer(
             (args.host, args.port),
@@ -52,10 +61,14 @@ def main(argv: list[str] | None = None) -> int:
 
     print("Lightweight IDS HTTP demo lab is ready.")
     print(f"Listening on {args.host}:{args.port}; accepted bodies are discarded and never executed.")
-    print(f"Session token: {token}")
-    print("Open one of these URLs from the authorized VM:")
+    if token:
+        print(f"Protected mode token: {token}")
+    else:
+        print("Classroom mode: private-network clients can send samples without a token.")
+    print("Open an address on the same private subnet as the VM:")
     for address in addresses:
-        print(f"  http://{address}:{args.port}/#{token}")
+        suffix = f"#{token}" if token else ""
+        print(f"  http://{address}:{args.port}/{suffix}")
     print("Start live capture on the VM-facing adapter before sending scenarios.")
     print(f"Recommended capture filter: tcp.dstport == {args.port}")
     print("Press Ctrl+C to stop the demo lab.")

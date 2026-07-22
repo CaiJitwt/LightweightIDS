@@ -57,8 +57,7 @@ const log = document.querySelector("#activity-log");
 const sequenceButton = document.querySelector("#send-sequence");
 const customButton = document.querySelector("#send-custom");
 
-state.textContent = token ? "Session ready" : "Missing session token";
-state.classList.toggle("error", !token);
+state.textContent = token ? "Protected session ready" : "Classroom session ready";
 
 for (const scenario of scenarios) {
   const article = document.createElement("article");
@@ -105,17 +104,12 @@ async function sendScenario(scenario, button) {
 }
 
 async function send(id, body, title) {
-  if (!token) {
-    addLog(title, false, "Open the complete URL printed by the host terminal.");
-    return;
-  }
   try {
+    const headers = { "Content-Type": "application/x-www-form-urlencoded" };
+    if (token) headers["X-Demo-Token"] = token;
     const response = await fetch(`/sink/${encodeURIComponent(id)}`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "X-Demo-Token": token,
-      },
+      headers,
       body,
     });
     const result = await response.json();

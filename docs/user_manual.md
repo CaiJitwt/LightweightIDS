@@ -65,7 +65,7 @@ python -m scripts.generate_demo_pcap
 
 Import `sample_data/demo_attack_chain.pcap`. In the classic desktop, `Load demo data` generates the file automatically if it is missing.
 
-For a live VM-to-host demonstration, follow [HTTP Alert Demo Lab](../demo_http_lab/README.md). Start capture on the VM-facing adapter with `tcp.dstport == 8080`, then open the tokenized lab URL from the VM. Samples pass through live capture and Detection Engine; the receiver discards them without execution, persistence, or forwarding.
+For a live VM-to-host demonstration, follow [HTTP Alert Demo Lab](../demo_http_lab/README.md). Start capture on the VM-facing adapter with `tcp.dstport == 8080`, run `python -m demo_http_lab.main`, and open a printed private address from the VM. The default classroom mode needs no token. Samples pass through live capture and Detection Engine; the receiver discards them without execution, persistence, or forwarding.
 
 ### Authorized Decrypted HTTP Logs
 

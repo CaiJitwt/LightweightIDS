@@ -32,7 +32,7 @@ class DemoHttpServer(ThreadingHTTPServer):
         self,
         address: tuple[str, int],
         *,
-        token: str,
+        token: str = "",
         allowed_networks: Iterable[str] = (),
         max_body_bytes: int = 4_096,
         requests_per_minute: int = 30,
@@ -145,6 +145,8 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
         return False
 
     def _authorize(self) -> bool:
+        if not self.server.token:
+            return True
         provided = self.headers.get("X-Demo-Token", "")
         if provided and compare_digest(provided, self.server.token):
             return True

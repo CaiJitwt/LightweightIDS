@@ -65,7 +65,7 @@ python -m scripts.generate_demo_pcap
 
 然后导入 `sample_data/demo_attack_chain.pcap`。经典桌面端的 `Load demo data` 会在文件缺失时自动生成。
 
-需要从虚拟机向宿主机进行实时演示时，请参考 [HTTP 告警演示实验室](../demo_http_lab/README.md)。在连接虚拟机的网卡上使用 `tcp.dstport == 8080` 启动抓包，再从虚拟机打开带令牌的实验页面。样本会经过实时抓包和 Detection Engine，接收器不会执行、持久化或转发内容。
+需要从虚拟机向宿主机进行实时演示时，请参考 [HTTP 告警演示实验室](../demo_http_lab/README.md)。在连接虚拟机的网卡上使用 `tcp.dstport == 8080` 启动抓包，运行 `python -m demo_http_lab.main`，再从虚拟机打开终端打印的私网地址。默认课堂模式无需令牌。样本会经过实时抓包和 Detection Engine，接收器不会执行、持久化或转发内容。
 
 ### 授权解密 HTTP 日志
 
