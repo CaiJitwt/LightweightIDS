@@ -57,7 +57,7 @@ const log = document.querySelector("#activity-log");
 const sequenceButton = document.querySelector("#send-sequence");
 const customButton = document.querySelector("#send-custom");
 
-state.textContent = token ? "Protected session ready" : "Classroom session ready";
+state.textContent = token ? "Protected session ready" : "Local session ready";
 
 for (const scenario of scenarios) {
   const article = document.createElement("article");
@@ -113,9 +113,13 @@ async function send(id, body, title) {
       body,
     });
     const result = await response.json();
-    const message = response.ok
-      ? `Accepted as request #${result.sequence}; ${result.receivedBytes} bytes discarded.`
-      : result.error;
+    let message = result.error;
+    if (response.ok && result.emitted) {
+      const description = result.interfaceDescription ? ` (${result.interfaceDescription})` : "";
+      message = `Injected on ${result.interface}${description}: ${result.sourceIp} -> ${result.destinationIp}:${result.destinationPort}.`;
+    } else if (response.ok) {
+      message = `Accepted as request #${result.sequence}; no adapter frame was injected.`;
+    }
     addLog(title, response.ok, message);
   } catch (error) {
     addLog(title, false, error instanceof Error ? error.message : "Request failed.");

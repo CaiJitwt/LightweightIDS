@@ -10,15 +10,15 @@
     <main>
       <header>
         <div>
-          <p class="eyebrow">Classroom demonstration</p>
+          <p class="eyebrow">Default adapter demonstration</p>
           <h1>Lightweight IDS HTTP Alert Lab</h1>
-          <p>Send inert HTTP samples to the host while the analyst watches Traffic Monitor and Alert Center.</p>
+          <p>Inject inert HTTP samples on the default capture adapter while the analyst watches Traffic Monitor and Alert Center.</p>
         </div>
         <span id="session-state" class="state">Checking session</span>
       </header>
 
       <section class="notice">
-        <strong>Safe sink:</strong> request bodies are discarded. Nothing is executed, stored, forwarded, or sent to another target.
+        <strong>Safe sink:</strong> browser bodies are never executed or stored. Submitted samples become one local self-addressed Ethernet frame; nothing is executed, stored, forwarded, or sent to a public target.
       </section>
 
       <section>
@@ -30,7 +30,7 @@
       </section>
 
       <section>
-        <div class="section-title"><div><h2>Custom text sample</h2><p>Sent only to this host, with a 2 KB browser-side limit.</p></div></div>
+        <div class="section-title"><div><h2>Custom text sample</h2><p>Runs through every enabled rule applicable to an HTTP packet; benign text remains silent.</p></div></div>
         <textarea id="custom-payload" maxlength="2048" placeholder="Enter inert text for a custom signature check"></textarea>
         <button id="send-custom" type="button">Send custom sample</button>
       </section>
