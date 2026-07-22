@@ -255,7 +255,7 @@ function AppShell() {
             {page === "dashboard" && <label className="refresh-toggle"><input type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)} /><span>{t("app.autoRefresh")}</span></label>}
             <button className="icon-button" type="button" title={t("app.refresh")} onClick={() => { setRefreshVersion((value) => value + 1); setAlertBadgeRefresh((value) => value + 1); }}><RefreshCw size={17} /></button>
             <button className="icon-button" type="button" title={themeTitle} onClick={() => setThemePreference(themePreference === "system" ? "dark" : themePreference === "dark" ? "light" : "system")}>{themePreference === "system" ? <MonitorCog size={17} /> : themePreference === "dark" ? <Moon size={17} /> : <Sun size={17} />}</button>
-            <button className="icon-button" type="button" title={t("app.language")} onClick={() => setLocale(locale === "en" ? "zh" : "en")}><Globe size={17} /><span style={{ marginLeft: 4, fontSize: 12, fontWeight: 600 }}>{locale === "en" ? "EN" : "中文"}</span></button>
+            <button className="icon-text-button" type="button" title={t("app.language")} onClick={() => setLocale(locale === "en" ? "zh" : "en")}><Globe size={15} /><span style={{ fontSize: 11, fontWeight: 600 }}>{locale === "en" ? "EN" : "中文"}</span></button>
             <button className="user-button" type="button" title="Analyst profile"><Laptop size={16} /><span>{t("app.user")}</span></button>
           </div>
         </header>
