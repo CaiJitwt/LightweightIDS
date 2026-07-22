@@ -125,6 +125,17 @@ class CaptureSessionService:
             capture.stop()
         return self.status()
 
+    def stop_and_wait(self, timeout_seconds: float = 5.0) -> dict[str, Any]:
+        """Stop capture and wait until its final packet and alert batch is persisted."""
+        self.stop()
+        with self._lock:
+            thread = self._thread
+        if thread and thread.is_alive():
+            thread.join(max(0.1, timeout_seconds))
+        if thread and thread.is_alive():
+            raise RuntimeError("Live capture did not stop before the reset timeout.")
+        return self.status()
+
     def shutdown(self, timeout_seconds: float = 3.0) -> None:
         self.stop()
         with self._lock:

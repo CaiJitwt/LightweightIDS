@@ -53,6 +53,8 @@ const SystemHealthPage = lazy(() => import("./pages/SystemHealthPage").then((mod
 const HelpPage = lazy(() => import("./pages/HelpPage").then((module) => ({ default: module.HelpPage })));
 const SecurityEventsPage = lazy(() => import("./pages/SecurityEventsPage").then((module) => ({ default: module.SecurityEventsPage })));
 
+const DATA_REFRESH_INTERVAL_MS = 5_000;
+
 type PageKey = "dashboard" | "traffic" | "hosts" | "alerts" | "investigations" | "assets" | "rules" | "reports" | "timeline" | "topology" | "security-events" | "health" | "endpoint" | "settings" | "personalization" | "help";
 
 const navItemKeys: { key: PageKey; icon: typeof Gauge; labelKey: "nav.dashboard" | "nav.traffic" | "nav.hosts" | "nav.alerts" | "nav.investigations" | "nav.assets" | "nav.rules" | "nav.reports" | "nav.timeline" | "nav.topology" | "nav.securityEvents" | "nav.health" | "nav.endpoint" | "nav.settings" | "nav.personalization" | "nav.help" }[] = [
@@ -212,10 +214,13 @@ function AppShell() {
   }, [alertBadgeRefresh, autoRefresh]);
 
   useEffect(() => {
-    if (!autoRefresh || page !== "dashboard") return undefined;
-    const timer = window.setInterval(() => setRefreshVersion((value) => value + 1), 5000);
+    if (!autoRefresh) return undefined;
+    const timer = window.setInterval(
+      () => setRefreshVersion((value) => value + 1),
+      DATA_REFRESH_INTERVAL_MS,
+    );
     return () => window.clearInterval(timer);
-  }, [autoRefresh, page]);
+  }, [autoRefresh]);
 
   useEffect(() => {
     const openCommandPalette = (event: KeyboardEvent) => {
@@ -228,11 +233,15 @@ function AppShell() {
     return () => window.removeEventListener("keydown", openCommandPalette);
   }, []);
 
-  const refreshCurrentView = useCallback(() => {
-    setManualRefreshVersion((value) => value + 1);
+  const notifyDataChanged = useCallback(() => {
     setRefreshVersion((value) => value + 1);
     setAlertBadgeRefresh((value) => value + 1);
   }, []);
+
+  const refreshCurrentView = useCallback(() => {
+    setManualRefreshVersion((value) => value + 1);
+    notifyDataChanged();
+  }, [notifyDataChanged]);
 
   const commandActions = useMemo(() => [
     ...navItemKeys.map(({ key, labelKey, icon: Icon }) => ({
@@ -298,22 +307,22 @@ function AppShell() {
           <div className="page-heading"><h1>{t(metaKey.titleKey as Parameters<typeof t>[0])}</h1><p>{t(metaKey.subtitleKey as Parameters<typeof t>[0])}</p></div>
           <div className="topbar-actions">
             <button className="global-search" type="button" aria-label={t("command.placeholder")} aria-haspopup="dialog" aria-expanded={commandOpen} onClick={() => setCommandOpen(true)}><Search size={16} /><span>{t("app.search")}</span><kbd>Ctrl K</kbd></button>
-            {page === "dashboard" && <label className="refresh-toggle"><input type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)} /><span>{t("app.autoRefresh")}</span></label>}
+            <label className="refresh-toggle"><input type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)} /><span>{t("app.autoRefresh")}</span></label>
             <button className="icon-button" type="button" title={t("app.refresh")} onClick={refreshCurrentView}><RefreshCw size={17} /></button>
             <button className="icon-button" type="button" title={themeTitle} onClick={() => setThemePreference(themePreference === "system" ? "dark" : themePreference === "dark" ? "light" : "system")}>{themePreference === "system" ? <MonitorCog size={17} /> : themePreference === "dark" ? <Moon size={17} /> : <Sun size={17} />}</button>
             <button className="icon-text-button" type="button" title={t("app.language")} onClick={() => setLocale(locale === "en" ? "zh" : "en")}><Globe size={15} /><span style={{ fontSize: 11, fontWeight: 600 }}>{locale === "en" ? "EN" : "中文"}</span></button>
             <button className="user-button" type="button" title={t("app.user")} onClick={() => setPage("settings")}><Laptop size={16} /><span>{t("app.user")}</span></button>
           </div>
         </header>
-        <div className="page-content" data-manual-refresh-version={manualRefreshVersion}>
+        <div className="page-content" data-manual-refresh-version={manualRefreshVersion} data-refresh-version={refreshVersion}>
           <Suspense key={`${page}:${manualRefreshVersion}`} fallback={<div className="page-loading">{t("common.loadingView")}</div>}>
-            {page === "dashboard" && <DashboardPage refreshVersion={refreshVersion} onStatisticsReset={() => { setRefreshVersion((value) => value + 1); setAlertBadgeRefresh((value) => value + 1); }} onOpenAlertCountChange={setOpenAlertCount} onOpenAlerts={() => setPage("alerts")} onOpenHost={(ip) => { setSelectedHostIp(ip); setPage("hosts"); }} />}
-            {page === "traffic" && <TrafficPage onDataChanged={() => { setRefreshVersion((value) => value + 1); setAlertBadgeRefresh((value) => value + 1); }} />}
+            {page === "dashboard" && <DashboardPage refreshVersion={refreshVersion} onStatisticsReset={notifyDataChanged} onOpenAlertCountChange={setOpenAlertCount} onOpenAlerts={() => setPage("alerts")} onOpenHost={(ip) => { setSelectedHostIp(ip); setPage("hosts"); }} />}
+            {page === "traffic" && <TrafficPage onDataChanged={notifyDataChanged} />}
             {page === "hosts" && <HostsPage initialHostIp={selectedHostIp} refreshVersion={refreshVersion} />}
-            {page === "alerts" && <AlertsPage llmSettings={llmSettings} refreshVersion={refreshVersion} initialAlertId={selectedAlertId} onAlertsChanged={() => setAlertBadgeRefresh((value) => value + 1)} />}
-            {page === "investigations" && <InvestigationsPage />}
-            {page === "assets" && <AssetsPage />}
-            {page === "rules" && <RulesPage />}
+            {page === "alerts" && <AlertsPage llmSettings={llmSettings} refreshVersion={refreshVersion} initialAlertId={selectedAlertId} onAlertsChanged={notifyDataChanged} />}
+            {page === "investigations" && <InvestigationsPage refreshVersion={refreshVersion} />}
+            {page === "assets" && <AssetsPage refreshVersion={refreshVersion} />}
+            {page === "rules" && <RulesPage refreshVersion={refreshVersion} />}
             {page === "reports" && <ReportsPage refreshVersion={refreshVersion} />}
             {page === "timeline" && <EventTimelinePage refreshVersion={refreshVersion} />}
             {page === "topology" && <NetworkTopologyPage refreshVersion={refreshVersion} />}

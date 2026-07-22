@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
 
 import App from "./App";
@@ -10,6 +10,7 @@ describe("modern IDS frontend", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -72,6 +73,17 @@ describe("modern IDS frontend", () => {
 
     expect(await screen.findByRole("heading", { name: "Security events" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Start monitoring" })).toBeInTheDocument();
+  });
+
+  it("keeps the shared data refresh clock active in Alert Center", () => {
+    vi.useFakeTimers();
+    render(<App />);
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Primary navigation" })).getByRole("button", { name: /Alert Center/ }));
+
+    const content = document.querySelector(".page-content");
+    expect(content).toHaveAttribute("data-refresh-version", "0");
+    act(() => { vi.advanceTimersByTime(5_000); });
+    expect(content).toHaveAttribute("data-refresh-version", "1");
   });
 
   it("activates command search, refresh and analyst settings controls", async () => {

@@ -598,10 +598,9 @@ class LocalApiHandler(BaseHTTPRequestHandler):
         return _rule_payload(updated)
 
     def _reset_statistics(self) -> None:
-        if self.server.capture_service.status().get("state") != "stopped":
-            raise RuntimeError("Stop live capture before resetting statistics.")
         if self.server.pcap_import.status().get("state") == "importing":
             raise RuntimeError("Wait for the PCAP import to finish before resetting statistics.")
+        self.server.capture_service.stop_and_wait()
         security_monitor_running = self.server.security_event_monitor.status().get("state") == "running"
         self.server.resource_monitor.stop()
         if security_monitor_running:

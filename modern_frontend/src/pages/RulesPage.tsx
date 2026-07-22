@@ -7,12 +7,12 @@ import { SeverityBadge } from "../components/SeverityBadge";
 import { FALLBACK_RULE_GUIDANCE, RULE_GUIDANCE } from "../data/ruleGuidance";
 import type { RuleRecord } from "../types";
 
-export function RulesPage() {
+export function RulesPage({ refreshVersion = 0 }: { refreshVersion?: number }) {
   const t = useT();
   const [records, setRecords] = useState<RuleRecord[]>([]);
   const [notice, setNotice] = useState(t("rules.defaultNotice"));
   const load = () => idsApi.rules().then(({ records: next }) => { setRecords(next); setNotice(t("rules.loaded", { count: next.length })); }).catch(() => setNotice(t("rules.unavailable")));
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [refreshVersion]);
   const update = async (rule: RuleRecord, changes: Partial<Pick<RuleRecord, "enabled" | "threshold" | "timeWindow">>) => {
     try {
       const { record } = await idsApi.updateRule(rule.id, changes);

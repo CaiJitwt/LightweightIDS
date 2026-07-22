@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from threading import Thread
+from threading import Event, Thread
 from time import monotonic, sleep
 from urllib.request import Request, urlopen
 
@@ -9,6 +9,7 @@ import pytest
 
 from detection.engine import DetectionEngine
 from endpoint_security.event_log import EventCollectionResult
+from modern_ui import capture_session
 from modern_ui.capture_session import CaptureStartOptions, parse_capture_options
 from modern_ui.local_api import LocalApiServer
 from models import AlertRecord, PacketRecord, SecurityEventRecord
@@ -319,6 +320,57 @@ def test_local_api_updates_rules_and_resets_statistics(tmp_path):
         live_records = server.capture_service.packets_since(0)["records"]
         assert live_records[0]["sequence"] == 1
         assert live_records[0]["id"] == 1
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+
+
+def test_reset_statistics_stops_active_capture_before_deleting_data(tmp_path, monkeypatch):
+    class BlockingCapture:
+        def __init__(self, **_kwargs):
+            self.stopped = Event()
+
+        def start(self):
+            self.stopped.wait(5)
+
+        def stop(self):
+            self.stopped.set()
+
+    monkeypatch.setattr(capture_session, "LiveCapture", BlockingCapture)
+
+    database = Database(tmp_path / "ids.db")
+    database.initialize()
+    packets = PacketRepository(database)
+    packets.add(PacketRecord(timestamp="2026-07-14 02:00:00.000", src_ip="10.0.0.2", dst_ip="10.0.0.3", protocol="TCP", length=60))
+    server = LocalApiServer(("127.0.0.1", 0), database)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = server.server_address
+    base = f"http://{host}:{port}"
+    try:
+        start_request = Request(
+            f"{base}/api/capture/start",
+            data=json.dumps({"interface": "", "savePackets": True, "detectionEnabled": True}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(start_request, timeout=3) as response:
+            assert json.loads(response.read())["state"] == "running"
+
+        reset_request = Request(
+            f"{base}/api/statistics/reset",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(reset_request, timeout=3) as response:
+            reset_payload = json.loads(response.read())
+
+        assert reset_payload["reset"] is True
+        assert reset_payload["dashboard"]["capture"]["state"] == "stopped"
+        assert reset_payload["dashboard"]["statistics"]["packetTotal"] == 0
+        assert packets.count() == 0
     finally:
         server.shutdown()
         server.server_close()

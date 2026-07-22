@@ -7,7 +7,7 @@ import type { AssetRecord } from "../types";
 
 const emptyAsset = { ip: "", displayName: "", role: "Workstation", importance: 50, notes: "" };
 
-export function AssetsPage() {
+export function AssetsPage({ refreshVersion = 0 }: { refreshVersion?: number }) {
   const t = useT();
   const [assets, setAssets] = useState<AssetRecord[]>([]);
   const [query, setQuery] = useState("");
@@ -25,7 +25,7 @@ export function AssetsPage() {
       setNotice(t("assets.unavailable"));
     }
   };
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [refreshVersion]);
 
   const visible = useMemo(() => {
     if (!query.trim()) return assets;

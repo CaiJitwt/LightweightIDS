@@ -8,7 +8,7 @@ import { useT } from "../i18n/context";
 
 const emptyForm: { title: string; status: "Open" | "Monitoring" | "Closed"; priority: Severity; hostIp: string; summary: string; notes: string } = { title: "", status: "Open", priority: "MEDIUM", hostIp: "", summary: "", notes: "" };
 
-export function InvestigationsPage() {
+export function InvestigationsPage({ refreshVersion = 0 }: { refreshVersion?: number }) {
   const t = useT();
   const [records, setRecords] = useState<InvestigationRecord[]>([]);
   const [query, setQuery] = useState("");
@@ -28,7 +28,7 @@ export function InvestigationsPage() {
       setNotice(t("investigations.unavailable"));
     }
   };
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [refreshVersion]);
 
   const visible = useMemo(() => {
     return records.filter((r) => {
