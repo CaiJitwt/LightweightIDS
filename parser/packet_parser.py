@@ -98,7 +98,7 @@ class PacketParser:
             http_method=http_method,
             http_host=http_host,
             http_path=http_path,
-            raw_summary=self._packet_summary(packet, payload_text),
+            raw_summary=self._packet_summary(packet, payload_text, protocol),
         )
 
     def _detect_protocol(self, packet: object, src_port: Optional[int], dst_port: Optional[int], payload: str) -> str:
@@ -243,13 +243,19 @@ class PacketParser:
 
         return method, host, path
 
-    def _packet_summary(self, packet: object, payload_text: str = "") -> str:
+    # Protocols whose payload is always encrypted/opaque ciphertext — the
+    # Scapy layer summary is sufficient; appending |payload= only adds noise.
+    _ENCRYPTED_PROTOCOLS = frozenset({"TLS", "HTTPS", "QUIC"})
+
+    def _packet_summary(self, packet: object, payload_text: str = "", protocol: str = "") -> str:
         try:
             summary = str(packet.summary())  # type: ignore[attr-defined]
         except Exception:
             summary = repr(packet)
 
         if not payload_text:
+            return summary
+        if protocol in self._ENCRYPTED_PROTOCOLS:
             return summary
 
         preview = _sanitize_payload(payload_text)
