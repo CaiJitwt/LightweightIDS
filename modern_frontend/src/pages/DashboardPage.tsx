@@ -55,6 +55,7 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
   const [connected, setConnected] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [resetNotice, setResetNotice] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -63,16 +64,21 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
         if (!active) return;
         setSnapshot(next);
         setConnected(true);
+        setLoading(false);
         onOpenAlertCountChange(next.statistics.openAlerts);
       })
       .catch(() => {
-        if (active) setConnected(false);
+        if (active) { setConnected(false); setLoading(false); }
       });
     return () => { active = false; };
   }, [onOpenAlertCountChange, refreshVersion]);
 
   const captureLive = snapshot.capture.state === "running";
   const dataLabel = connected ? "Local SQLite data" : "Offline preview";
+
+  if (loading) {
+    return <div className="page-stack"><div className="page-loading">Connecting to local API...</div></div>;
+  }
   const detectionRateTrend = snapshot.trend.map((point) => ({
     ...point,
     detectionRate: point.packets > 0 ? Math.round(point.alerts * 10000 / point.packets) / 10 : 0,
