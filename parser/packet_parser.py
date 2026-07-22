@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any, Optional
 
 from models import PacketRecord
+
+# Control characters (0x00-0x1F, 0x7F-0x9F) and Unicode replacement character (U+FFFD)
+_NON_PRINTABLE_RE = re.compile(r"[\x00-\x1f\x7f-\x9f�]")
+
+
+def _sanitize_payload(text: str) -> str:
+    """Replace non-printable / replacement characters and collapse whitespace."""
+    return " ".join(_NON_PRINTABLE_RE.sub(" ", text).split())
 
 
 class PacketParser:
@@ -231,7 +240,7 @@ class PacketParser:
         if not payload_text:
             return summary
 
-        preview = " ".join(payload_text.replace("\x00", " ").split())
+        preview = _sanitize_payload(payload_text)
         if not preview:
             return summary
         if len(preview) > 240:

@@ -11,7 +11,7 @@ from capture.live_capture import LiveCapture
 from capture.packet_filter import PacketFilter, PacketFilterError
 from detection.engine import DetectionEngine
 from models import AlertRecord, PacketRecord
-from parser.packet_parser import PacketParser
+from parser.packet_parser import PacketParser, _sanitize_payload
 from storage.analyst_repositories import AssetRepository
 from storage.blocklist_repository import BlocklistEntryRepository
 from storage.database import Database
@@ -317,7 +317,7 @@ class CaptureSessionService:
                 "protocol": packet.protocol,
                 "length": packet.length,
                 "flags": packet.tcp_flags or "",
-                "summary": packet.raw_summary,
+                "summary": _sanitize_payload(packet.raw_summary),
                 "details": asdict(packet),
             }
         )

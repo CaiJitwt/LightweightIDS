@@ -16,6 +16,7 @@ from uuid import uuid4
 from app.constants import DEFAULT_DATABASE_PATH
 from detection.analysis.alert_trend import AlertTrendAnalyzer
 from detection.analysis.host_profile import HostProfileService
+from parser.packet_parser import _sanitize_payload
 from endpoint_security import EndpointPostureService, FileIntegrityService, ProcessInventoryService, ResourceThreatMonitorService, RuntimeHealthService, is_process_elevated
 from modern_ui.capture_session import CaptureSessionService, default_capture_options, parse_capture_options
 from modern_ui.llm_guidance import LlmGuidanceError, LlmGuidanceService
@@ -700,7 +701,7 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                     "id": f"packet-{packet.id}",
                     "timestamp": packet.timestamp,
                     "kind": "packet",
-                    "headline": f"{packet.protocol} {packet.raw_summary}".strip()[:240],
+                    "headline": _sanitize_payload(f"{packet.protocol} {packet.raw_summary}".strip()[:240]),
                     "detail": f"{_endpoint(packet.src_ip, packet.src_port)} -> {_endpoint(packet.dst_ip, packet.dst_port)} - {packet.length} bytes",
                     "source": _endpoint(packet.src_ip, packet.src_port),
                     "destination": _endpoint(packet.dst_ip, packet.dst_port),
@@ -988,7 +989,7 @@ def _packet_payload(packet: Any) -> dict[str, Any]:
         "protocol": packet.protocol or "UNKNOWN",
         "length": int(packet.length or 0),
         "flags": packet.tcp_flags or "",
-        "summary": packet.raw_summary,
+        "summary": _sanitize_payload(packet.raw_summary),
         "details": {
             "sourceIp": packet.src_ip,
             "destinationIp": packet.dst_ip,

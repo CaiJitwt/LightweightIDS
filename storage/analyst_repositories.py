@@ -8,6 +8,7 @@ from models import (
     InvestigationEvidenceRecord,
     InvestigationRecord,
 )
+from parser.packet_parser import _sanitize_payload
 from storage.database import Database
 
 
@@ -346,7 +347,7 @@ class HostRepository:
                 event_type="Packet",
                 direction="Outbound" if row["src_ip"] == host_ip else "Inbound",
                 peer_ip=str(row["dst_ip"] if row["src_ip"] == host_ip else row["src_ip"] or ""),
-                summary=f"{row['protocol']}: {row['raw_summary']}",
+                summary=_sanitize_payload(f"{row['protocol']}: {row['raw_summary']}"),
             )
             for row in packet_rows
         ]
@@ -356,7 +357,7 @@ class HostRepository:
                 event_type="Alert",
                 direction="Outbound" if row["src_ip"] == host_ip else "Inbound",
                 peer_ip=str(row["dst_ip"] if row["src_ip"] == host_ip else row["src_ip"] or ""),
-                summary=f"{row['rule_name']}: {row['description']}",
+                summary=_sanitize_payload(f"{row['rule_name']}: {row['description']}"),
                 severity=str(row["severity"]),
             )
             for row in alert_rows
