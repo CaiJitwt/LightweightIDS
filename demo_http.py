@@ -1,4 +1,4 @@
-"""Start the local HTTP alert demonstration and open it in a browser."""
+"""Start the HTTP alert demo, also available as `python main.py demo`."""
 
 from __future__ import annotations
 

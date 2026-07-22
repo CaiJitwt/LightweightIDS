@@ -10,7 +10,7 @@ The project is designed for coursework, authorized laboratories, and defensive a
 
 | Interface | Start command | Best for |
 | --- | --- | --- |
-| Modern analyst workspace | `python modern_main.py` | Browser workflow, richer charts, live capture, topology, endpoint security, and LLM guidance |
+| Modern analyst workspace | `python main.py modern` | Browser workflow, richer charts, live capture, topology, endpoint security, and LLM guidance |
 | Classic PySide6 desktop | `python main.py` | Native workflow, custom rules, enforced blocklist, and durable investigation evidence |
 
 Both interfaces use the same SQLite database by default: `data/lightweight_ids.db`.
@@ -62,7 +62,7 @@ cd ..
 From the project root:
 
 ```powershell
-python modern_main.py
+python main.py modern
 ```
 
 The launcher initializes the database, selects available loopback ports for the local API and frontend, prints both addresses, and opens the browser.
@@ -70,11 +70,13 @@ The launcher initializes the database, selects available loopback ports for the 
 Useful options:
 
 ```powershell
-python modern_main.py --no-browser
-python modern_main.py --skip-install
-python modern_main.py --database .\data\custom_ids.db
-python modern_main.py --api-port 8787 --frontend-port 4173
+python main.py modern --no-browser
+python main.py modern --skip-install
+python main.py modern --database .\data\custom_ids.db
+python main.py modern --api-port 8787 --frontend-port 4173
 ```
+
+`python modern_main.py` remains available as a compatibility shortcut. Run `python main.py --help` to see all integrated launch modes.
 
 Press `Ctrl+C` in the launcher terminal to stop services started by that launcher.
 
@@ -98,7 +100,7 @@ python -m scripts.generate_demo_pcap
 
 Then import `sample_data/demo_attack_chain.pcap`. The classic Traffic Monitor can also generate and load it through `Load demo data` when necessary. See the [Demo Guide](docs/demo_guide.md).
 
-For a local live demonstration, leave **Default interface** selected in Traffic Monitor and start the [HTTP Alert Demo Lab](demo_http_lab/README.md) with `python demo_http.py`. Its control page remains on `127.0.0.1`, while submitted inert frames are injected into the default capture adapter printed in the terminal and pass through the normal live-capture and Detection Engine path. No sample is executed or sent to a public target.
+For a local live demonstration, leave **Default interface** selected in Traffic Monitor and start the [HTTP Alert Demo Lab](demo_http_lab/README.md) with `python main.py demo`. The `python demo_http.py` shortcut remains supported. Its control page remains on `127.0.0.1`, while submitted inert frames are injected into the default capture adapter printed in the terminal and pass through the normal live-capture and Detection Engine path. No sample is executed or sent to a public target.
 
 ## Reset Behavior
 

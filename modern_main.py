@@ -1,3 +1,5 @@
+"""Modern frontend launcher, also available as `python main.py modern`."""
+
 from __future__ import annotations
 
 import argparse
