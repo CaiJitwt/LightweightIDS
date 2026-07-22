@@ -26,6 +26,7 @@ export interface PacketRecord {
   length: number;
   flags: string;
   summary: string;
+  rawHex?: string;
   details?: Record<string, unknown>;
 }
 

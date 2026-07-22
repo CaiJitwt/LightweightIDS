@@ -211,7 +211,10 @@ export function TrafficPage({ onDataChanged }: { onDataChanged?: () => void }) {
             <header className="detail-header"><div><span className={`protocol protocol-${selectedPacket.protocol.toLowerCase()}`}>{selectedPacket.protocol}</span><h2>Packet #{selectedPacket.id}</h2><p>{selectedPacket.timestamp}</p></div><button className="icon-button" type="button" title={t("traffic.closeDetails")} onClick={() => setSelectedPacketKey(null)}><X size={17} /></button></header>
             <dl className="detail-grid"><div><dt>{t("traffic.source")}</dt><dd title={selectedPacket.source}>{selectedPacket.source}</dd></div><div><dt>{t("traffic.destination")}</dt><dd title={selectedPacket.destination}>{selectedPacket.destination}</dd></div><div><dt>{t("traffic.length")}</dt><dd>{selectedPacket.length.toLocaleString()} {t("traffic.bytes")}</dd></div><div><dt>{t("traffic.tcpFlags")}</dt><dd>{selectedPacket.flags || "-"}</dd></div></dl>
             <div className="detail-section"><h3>{t("traffic.packetSummary")}</h3><p>{selectedPacket.summary || t("traffic.noSummary")}</p></div>
-            <div className="detail-section packet-full-metadata"><h3>{t("traffic.completeMetadata")}</h3><code>{JSON.stringify({ id: selectedPacket.id, sequence: selectedPacket.sequence, timestamp: selectedPacket.timestamp, source: selectedPacket.source, destination: selectedPacket.destination, protocol: selectedPacket.protocol, length: selectedPacket.length, flags: selectedPacket.flags, ...selectedPacket.details }, null, 2)}</code></div>
+            <div className="detail-bottom">
+              <div className="detail-section packet-full-metadata"><h3>{t("traffic.completeMetadata")}</h3><code>{JSON.stringify({ id: selectedPacket.id, sequence: selectedPacket.sequence, timestamp: selectedPacket.timestamp, source: selectedPacket.source, destination: selectedPacket.destination, protocol: selectedPacket.protocol, length: selectedPacket.length, flags: selectedPacket.flags, ...selectedPacket.details }, null, 2)}</code></div>
+              {selectedPacket.rawHex && <HexDump hex={selectedPacket.rawHex} />}
+            </div>
           </> : <div className="empty-detail">{t("traffic.selectPacket")}</div>}
         </aside>
       </div>
@@ -229,4 +232,29 @@ function packetOrder(packet: PacketRecord): number {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return <div><span>{label}</span><strong>{value}</strong></div>;
+}
+
+function HexDump({ hex }: { hex: string }) {
+  const lines: { offset: string; hex: string; ascii: string }[] = [];
+  for (let i = 0; i < hex.length; i += 32) {
+    const chunk = hex.slice(i, i + 32);
+    const bytes: string[] = [];
+    let ascii = "";
+    for (let j = 0; j < chunk.length; j += 2) {
+      const byte = chunk.slice(j, j + 2);
+      bytes.push(byte);
+      const code = parseInt(byte, 16);
+      ascii += code >= 32 && code <= 126 ? String.fromCharCode(code) : ".";
+    }
+    const hexPart = bytes.slice(0, 8).join(" ") + "  " + bytes.slice(8).join(" ");
+    lines.push({ offset: i.toString(16).padStart(4, "0"), hex: hexPart, ascii });
+  }
+  return (
+    <div className="detail-section hex-dump-section">
+      <h3>Packet Bytes (Hex / ASCII)</h3>
+      <pre className="hex-dump">{lines.map((line) => (
+        <span key={line.offset}>{line.offset}  {line.hex.padEnd(49)}  {line.ascii}{"\n"}</span>
+      ))}</pre>
+    </div>
+  );
 }

@@ -85,6 +85,8 @@ class PacketParser:
         if protocol == "HTTP":
             http_method, http_host, http_path = self._parse_http_payload(payload_text)
 
+        raw_hex = self._safe_hex(packet)
+
         return PacketRecord(
             timestamp=timestamp,
             src_ip=src_ip or None,
@@ -99,6 +101,7 @@ class PacketParser:
             http_host=http_host,
             http_path=http_path,
             raw_summary=self._packet_summary(packet, payload_text, protocol),
+            raw_hex=raw_hex,
         )
 
     def _detect_protocol(self, packet: object, src_port: Optional[int], dst_port: Optional[int], payload: str) -> str:
@@ -242,6 +245,13 @@ class PacketParser:
                 break
 
         return method, host, path
+
+    @staticmethod
+    def _safe_hex(packet: object) -> Optional[str]:
+        try:
+            return bytes(packet).hex()
+        except Exception:
+            return None
 
     # Protocols whose payload is always encrypted/opaque ciphertext — the
     # Scapy layer summary is sufficient; appending |payload= only adds noise.

@@ -20,3 +20,4 @@ class PacketRecord:
     http_host: Optional[str] = None
     http_path: Optional[str] = None
     raw_summary: str = ""
+    raw_hex: Optional[str] = None

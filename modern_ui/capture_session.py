@@ -318,6 +318,7 @@ class CaptureSessionService:
                 "length": packet.length,
                 "flags": packet.tcp_flags or "",
                 "summary": _sanitize_payload(packet.raw_summary),
+                "rawHex": packet.raw_hex,
                 "details": asdict(packet),
             }
         )

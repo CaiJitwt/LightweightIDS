@@ -23,6 +23,7 @@ def _insert_record_batch(connection: sqlite3.Connection, table: str, records: li
     for record in records:
         data = asdict(record)  # type: ignore[arg-type]
         data.pop("id", None)
+        data.pop("raw_hex", None)  # live-capture only, not persisted
         rows.append(data)
     columns = ", ".join(rows[0].keys())
     placeholders = ", ".join("?" for _ in rows[0])
@@ -96,6 +97,7 @@ class PacketRepository:
     def add(self, packet: PacketRecord) -> int:
         data = asdict(packet)
         data.pop("id", None)
+        data.pop("raw_hex", None)  # live-capture only, not persisted
         columns = ", ".join(data.keys())
         placeholders = ", ".join("?" for _ in data)
         with self.database.connect() as connection:

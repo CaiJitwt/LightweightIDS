@@ -455,7 +455,7 @@ kbd { padding: 2px 5px; border: 1px solid var(--border); border-radius: 3px; bac
 .col-resize-handle:hover,
 .col-resize-handle:active { opacity: 1; background: var(--primary, #2878d0); color: #fff; }
 .resizable-table { min-width: 100%; }
-.detail-panel { min-width: 0; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; position: sticky; top: 12px; align-self: start; max-height: calc(100vh - 130px); }
+.detail-panel { min-width: 0; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow-y: auto; position: sticky; top: 12px; align-self: start; max-height: calc(100vh - 130px); }
 .detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 14px; border-bottom: 1px solid var(--border); }
 .detail-header h2 { margin: 9px 0 2px; font-size: var(--fs-xl); }
 .detail-header p { margin: 0; color: var(--muted); font-size: var(--fs-xs); }
@@ -603,8 +603,27 @@ html[data-theme="dark"] .storage-warning { background: #422006; color: #fbbf24; 
 .traffic-packet-table .data-table th:nth-child(6), .traffic-packet-table .data-table td:nth-child(6) { width: 64px; }
 .traffic-packet-table .data-table th:nth-child(7), .traffic-packet-table .data-table td:nth-child(7) { width: 58px; }
 .packet-detail-panel { min-height: 360px; }
-.packet-full-metadata { min-height: 0; flex: 1; overflow: hidden; }
-.packet-full-metadata code { max-height: 320px; overflow: auto; white-space: pre-wrap; }
+.packet-full-metadata { min-height: 0; }
+
+.detail-bottom { flex: 1; min-height: 0; overflow-y: auto; }
+.packet-full-metadata code { max-height: 480px; overflow: auto; white-space: pre-wrap; }
+
+/* ── Hex dump (Wireshark-style packet bytes) ── */
+.hex-dump-section { }
+.hex-dump {
+  margin: 0;
+  padding: 8px;
+  font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", Consolas, monospace;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--muted);
+  background: var(--surface-muted);
+  border-radius: 4px;
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre;
+}
 .settings-workspace { max-width: 960px; font-size: var(--fs-sm); }
 .settings-section { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .settings-body { display: flex; flex-direction: column; gap: 14px; padding: 16px; }
