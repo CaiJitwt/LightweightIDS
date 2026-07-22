@@ -14,7 +14,7 @@ class SqlInjectionRule(RuleBase):
     severity = "CRITICAL"
     threshold = 1
     time_window = 0
-    protocols = {"HTTP", "HTTPS"}
+    protocols = {"HTTP", "HTTPS", "TCP"}
 
     KEYWORDS = [
         "union select",
