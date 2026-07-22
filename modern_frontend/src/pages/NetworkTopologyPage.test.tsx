@@ -23,7 +23,12 @@ describe("NetworkTopologyPage", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { rerender } = render(<NetworkTopologyPage refreshVersion={0} />);
-    expect(await screen.findByLabelText("Observed network topology")).toBeInTheDocument();
+    const canvas = await screen.findByLabelText("Observed network topology");
+    const viewport = screen.getByRole("region", { name: "Scrollable network topology canvas" });
+    expect(canvas).toHaveAttribute("width", "1200");
+    expect(canvas).toHaveAttribute("height", "760");
+    expect(viewport).toHaveAttribute("tabindex", "0");
+    expect(viewport).toContainElement(canvas);
     expect(screen.getByText("Workstation 2")).toBeInTheDocument();
     expect(screen.getAllByText("8.8.8.8")).toHaveLength(2);
 

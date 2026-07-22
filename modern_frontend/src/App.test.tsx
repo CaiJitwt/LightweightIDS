@@ -78,6 +78,28 @@ describe("modern IDS frontend", () => {
     expect(await screen.findByRole("button", { name: "Start monitoring" })).toBeInTheDocument();
   });
 
+  it("activates command search, refresh and analyst settings controls", async () => {
+    render(<App />);
+    const content = document.querySelector(".page-content");
+    expect(content).toHaveAttribute("data-manual-refresh-version", "0");
+
+    fireEvent.click(screen.getByRole("button", { name: "Open command palette" }));
+    const palette = await screen.findByRole("dialog", { name: "Command palette" });
+    fireEvent.click(within(palette).getByRole("button", { name: /Network Topology/ }));
+    expect(await screen.findByRole("heading", { name: "Network topology" })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    const reopened = await screen.findByRole("dialog", { name: "Command palette" });
+    fireEvent.click(within(reopened).getByRole("button", { name: /Refresh current view/ }));
+    expect(content).toHaveAttribute("data-manual-refresh-version", "1");
+
+    fireEvent.click(screen.getByTitle("Refresh current view"));
+    expect(content).toHaveAttribute("data-manual-refresh-version", "2");
+
+    fireEvent.click(screen.getByTitle("Open analyst settings"));
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
+  });
+
   it("defaults to the system theme and keeps the persisted LLM key masked", async () => {
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
