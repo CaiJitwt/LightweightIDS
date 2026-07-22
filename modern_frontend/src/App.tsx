@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useSyncExternalStore, useState } from "react";
 import {
   Activity,
   BellRing,
@@ -289,18 +289,16 @@ function llmSettingsFromRuntime(settings: Partial<import("./types").RuntimeSetti
 }
 
 function useSystemDarkMode(): boolean {
-  const [matches, setMatches] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false);
-  useEffect(() => {
+  const subscribe = useCallback((notify: () => void) => {
     const mql = window.matchMedia?.("(prefers-color-scheme: dark)");
-    if (!mql) return;
-    const onChange = (event: MediaQueryListEvent) => setMatches(event.matches);
-    const onFocus = () => setMatches(mql.matches);
-    mql.addEventListener("change", onChange);
-    window.addEventListener("focus", onFocus);
+    if (!mql) return () => {};
+    mql.addEventListener("change", notify);
+    window.addEventListener("focus", notify);
     return () => {
-      mql.removeEventListener("change", onChange);
-      window.removeEventListener("focus", onFocus);
+      mql.removeEventListener("change", notify);
+      window.removeEventListener("focus", notify);
     };
   }, []);
-  return matches;
+  const getSnapshot = useCallback(() => window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false, []);
+  return useSyncExternalStore(subscribe, getSnapshot);
 }
