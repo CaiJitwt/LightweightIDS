@@ -213,8 +213,6 @@ export default function App() {
     : pageMeta[page];
 
   return (
-    <>
-      {personalization.background && <div className="workspace-wallpaper" data-testid="workspace-wallpaper" style={{ backgroundImage: `url(${personalization.background})`, backgroundSize: personalization.backgroundSize === "stretch" ? "100% 100%" : personalization.backgroundSize === "original" ? "auto" : personalization.backgroundSize, backgroundPosition: personalization.backgroundPosition, opacity: personalization.backgroundOpacity / 100 }} />}
     <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}${personalization.background ? " has-wallpaper" : ""}`} data-theme={theme} data-font-scale={fontScale} style={{
       "--accent": personalization.accent,
       "--component-tint": personalization.componentTint,
@@ -224,6 +222,7 @@ export default function App() {
       "--table-opacity": `${personalization.tableOpacity}%`,
       "--table-blur": `${personalization.tableBlur}px`,
     } as React.CSSProperties}>
+      {personalization.background && <div className="workspace-wallpaper" data-testid="workspace-wallpaper" style={{ backgroundImage: `url(${personalization.background})`, backgroundSize: personalization.backgroundSize === "stretch" ? "100% 100%" : personalization.backgroundSize === "original" ? "auto" : personalization.backgroundSize, backgroundPosition: personalization.backgroundPosition, opacity: personalization.backgroundOpacity / 100 }} />}
       <aside className="sidebar">
         <div className="brand-block"><span className="brand-mark"><img src={brandMascot} alt="" /></span><span className="brand-copy"><strong>Lightweight IDS</strong><small>Analyst console</small></span></div>
         <nav className="primary-nav" aria-label="Primary navigation">
@@ -273,7 +272,6 @@ export default function App() {
       </main>
       {personalization.petImage && <img className={`overlay-pet ${personalization.petPosition}`} src={personalization.petImage} alt="" style={{ width: personalization.petSize, opacity: personalization.petOpacity / 100 }} />}
     </div>
-    </>
   );
 }
 
