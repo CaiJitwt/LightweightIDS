@@ -11,8 +11,8 @@ interface PositionedNode extends TopologyNodeRecord {
 
 const EMPTY_TOPOLOGY: TopologySnapshot = { nodes: [], edges: [] };
 const MAX_VISIBLE_NODES = 60;
-const VIEWBOX_WIDTH = 900;
-const VIEWBOX_HEIGHT = 620;
+const VIEWBOX_WIDTH = 1200;
+const VIEWBOX_HEIGHT = 760;
 
 const nodeKindIcon: Record<TopologyNodeKind, typeof Laptop> = {
   workstation: Laptop, server: Server, gateway: Network, external: Globe,
@@ -46,9 +46,9 @@ function planTopology(snapshot: TopologySnapshot): { nodes: PositionedNode[]; ed
   const secondary = internal.slice(16);
   const positions = new Map<string, { x: number; y: number }>();
   positions.set(center.id, { x: VIEWBOX_WIDTH / 2, y: VIEWBOX_HEIGHT / 2 });
-  placeRing(positions, primary, 180, 145, -Math.PI / 2);
-  placeRing(positions, secondary, 305, 235, -Math.PI / 2 + 0.12);
-  placeRing(positions, external, 405, 275, -Math.PI / 2 + 0.24);
+  placeRing(positions, primary, 220, 165, -Math.PI / 2);
+  placeRing(positions, secondary, 375, 255, -Math.PI / 2 + 0.12);
+  placeRing(positions, external, 525, 325, -Math.PI / 2 + 0.24);
 
   return {
     nodes: retained.map((node) => ({ ...node, ...(positions.get(node.id) ?? { x: VIEWBOX_WIDTH / 2, y: VIEWBOX_HEIGHT / 2 }) })),
@@ -136,11 +136,11 @@ export function NetworkTopologyPage({ refreshVersion }: { refreshVersion: number
               return <span key={kind} className="topology-legend-item"><span className={`topology-legend-dot topology-kind-${kind}`}><Icon size={12} /></span>{nodeKindLabel[kind]}</span>;
             })}</div>
           </div>
-          <div className="topology-canvas-wrap">
+          <div className="topology-canvas-wrap" role="region" aria-label="Scrollable network topology canvas" tabIndex={0}>
             {loading && !nodes.length ? <p className="empty-state">Loading observed packet connections...</p> : null}
             {!loading && error && !nodes.length ? <p className="empty-state">Local API unavailable: {error}</p> : null}
             {!loading && !error && !nodes.length ? <p className="empty-state">No packet connections are stored yet. Start capture or import a PCAP to build the topology.</p> : null}
-            {nodes.length ? <svg className="topology-canvas" viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} preserveAspectRatio="xMidYMid meet" aria-label="Observed network topology">
+            {nodes.length ? <svg className="topology-canvas" width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} preserveAspectRatio="xMidYMid meet" aria-label="Observed network topology">
               <defs>
                 <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
                 <marker id="arrowhead" viewBox="0 0 7 6" refX="7" refY="3" markerWidth="7" markerHeight="6" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8899aa" /></marker>

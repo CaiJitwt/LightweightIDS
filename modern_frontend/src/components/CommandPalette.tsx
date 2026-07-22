@@ -83,13 +83,13 @@ export function CommandPalette({ open, onClose, actions, onSelect }: CommandPale
 
   return (
     <div className="command-overlay" onClick={onClose}>
-      <div className="command-palette" onClick={(e) => e.stopPropagation()} ref={containerRef}>
+      <div className="command-palette" role="dialog" aria-modal="true" aria-label="Command palette" onClick={(e) => e.stopPropagation()} ref={containerRef}>
         <div className="command-input-wrap">
           <Search size={15} className="command-search-icon" />
           <input
             ref={inputRef}
             className="command-input"
-            placeholder="Jump to a page, search alerts or hosts..."
+            placeholder="Jump to a page or run an action..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />

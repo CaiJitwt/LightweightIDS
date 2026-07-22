@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Activity,
@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import type { CaptureStatus, FontScale, LlmSettings, ThemePreference } from "./types";
 import brandMascot from "./assets/anime-brand-icon.png";
+import { CommandPalette } from "./components/CommandPalette";
 import { loadPersonalization, savePersonalization, defaultPersonalization } from "./data/personalizationStore";
 import type { PersonalizationState } from "./data/personalizationStore";
 import type { HelpLanguage } from "./pages/HelpPage";
@@ -110,6 +111,8 @@ export default function App() {
   const [alertBadgeRefresh, setAlertBadgeRefresh] = useState(0);
   const [selectedAlertId, setSelectedAlertId] = useState<number | undefined>();
   const [sensorStatus, setSensorStatus] = useState<CaptureStatus | null>(null);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [manualRefreshVersion, setManualRefreshVersion] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -209,6 +212,49 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [autoRefresh, page]);
 
+  useEffect(() => {
+    const openCommandPalette = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandOpen(true);
+      }
+    };
+    window.addEventListener("keydown", openCommandPalette);
+    return () => window.removeEventListener("keydown", openCommandPalette);
+  }, []);
+
+  const refreshCurrentView = useCallback(() => {
+    setManualRefreshVersion((value) => value + 1);
+    setRefreshVersion((value) => value + 1);
+    setAlertBadgeRefresh((value) => value + 1);
+  }, []);
+
+  const commandActions = useMemo(() => [
+    ...navItems.map(({ key, label, icon: Icon }) => ({
+      key: `page:${key}`,
+      label,
+      category: "Navigate",
+      icon: <Icon size={16} />,
+    })),
+    { key: "action:refresh", label: "Refresh current view", category: "Action", icon: <RefreshCw size={16} /> },
+    {
+      key: "action:theme",
+      label: `Use ${theme === "light" ? "dark" : "light"} theme`,
+      category: "Appearance",
+      icon: theme === "light" ? <Moon size={16} /> : <Sun size={16} />,
+    },
+  ], [theme]);
+
+  const runCommand = useCallback((key: string) => {
+    if (key.startsWith("page:")) {
+      const target = key.slice(5) as PageKey;
+      if (target in pageMeta) setPage(target);
+      return;
+    }
+    if (key === "action:refresh") refreshCurrentView();
+    if (key === "action:theme") setThemePreference(theme === "light" ? "dark" : "light");
+  }, [refreshCurrentView, theme]);
+
   const meta = page === "help" && helpLanguage === "zh"
     ? { title: "帮助中心", subtitle: "产品说明、分析工作流和快速页面导航" }
     : pageMeta[page];
@@ -243,15 +289,15 @@ export default function App() {
         <header className="topbar">
           <div className="page-heading"><h1>{meta.title}</h1><p>{meta.subtitle}</p></div>
           <div className="topbar-actions">
-            <button className="global-search" type="button"><Search size={16} /><span>Search</span><kbd>Ctrl K</kbd></button>
+            <button className="global-search" type="button" aria-label="Open command palette" aria-haspopup="dialog" aria-expanded={commandOpen} onClick={() => setCommandOpen(true)}><Search size={16} /><span>Search</span><kbd>Ctrl K</kbd></button>
             {page === "dashboard" && <label className="refresh-toggle"><input type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)} /><span>Auto-refresh</span></label>}
-            <button className="icon-button" type="button" title="Refresh current view" onClick={() => { setRefreshVersion((value) => value + 1); setAlertBadgeRefresh((value) => value + 1); }}><RefreshCw size={17} /></button>
-            <button className="icon-button" type="button" title={themePreference === "system" ? "Following system — click for dark" : themePreference === "dark" ? "Switch to light theme" : "Switch to system theme"} onClick={() => setThemePreference(themePreference === "system" ? "dark" : themePreference === "dark" ? "light" : "system")}>{themePreference === "system" ? <MonitorCog size={17} /> : themePreference === "dark" ? <Moon size={17} /> : <Sun size={17} />}</button>
-            <button className="user-button" type="button" title="Analyst profile"><Laptop size={16} /><span>Analyst</span></button>
+            <button className="icon-button" type="button" title="Refresh current view" onClick={refreshCurrentView}><RefreshCw size={17} /></button>
+            <button className="icon-button" type="button" title={themePreference === "system" ? "Following system - click for dark" : themePreference === "dark" ? "Switch to light theme" : "Switch to system theme"} onClick={() => setThemePreference(themePreference === "system" ? "dark" : themePreference === "dark" ? "light" : "system")}>{themePreference === "system" ? <MonitorCog size={17} /> : themePreference === "dark" ? <Moon size={17} /> : <Sun size={17} />}</button>
+            <button className="user-button" type="button" title="Open analyst settings" onClick={() => setPage("settings")}><Laptop size={16} /><span>Analyst</span></button>
           </div>
         </header>
-        <div className="page-content">
-          <Suspense fallback={<div className="page-loading">Loading view...</div>}>
+        <div className="page-content" data-manual-refresh-version={manualRefreshVersion}>
+          <Suspense key={`${page}:${manualRefreshVersion}`} fallback={<div className="page-loading">Loading view...</div>}>
             {page === "dashboard" && <DashboardPage refreshVersion={refreshVersion} onStatisticsReset={() => { setRefreshVersion((value) => value + 1); setAlertBadgeRefresh((value) => value + 1); }} onOpenAlertCountChange={setOpenAlertCount} onOpenAlerts={() => setPage("alerts")} onOpenHost={(ip) => { setSelectedHostIp(ip); setPage("hosts"); }} />}
             {page === "traffic" && <TrafficPage onDataChanged={() => { setRefreshVersion((value) => value + 1); setAlertBadgeRefresh((value) => value + 1); }} />}
             {page === "hosts" && <HostsPage initialHostIp={selectedHostIp} refreshVersion={refreshVersion} />}
@@ -271,6 +317,7 @@ export default function App() {
           </Suspense>
         </div>
       </main>
+      <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} actions={commandActions} onSelect={runCommand} />
       {personalization.petImage && <img className={`overlay-pet ${personalization.petPosition}`} src={personalization.petImage} alt="" style={{ width: personalization.petSize, opacity: personalization.petOpacity / 100 }} />}
     </div>
   );
