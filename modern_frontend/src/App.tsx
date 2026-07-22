@@ -294,8 +294,13 @@ function useSystemDarkMode(): boolean {
     const mql = window.matchMedia?.("(prefers-color-scheme: dark)");
     if (!mql) return;
     const onChange = (event: MediaQueryListEvent) => setMatches(event.matches);
+    const onFocus = () => setMatches(mql.matches);
     mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      mql.removeEventListener("change", onChange);
+      window.removeEventListener("focus", onFocus);
+    };
   }, []);
   return matches;
 }
