@@ -114,6 +114,10 @@ export default function App() {
   }, [themePreference]);
 
   useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
     localStorage.setItem("ids-prototype-font-scale", fontScale);
   }, [fontScale]);
 
