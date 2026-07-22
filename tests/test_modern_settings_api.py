@@ -3,12 +3,17 @@ from __future__ import annotations
 import base64
 import json
 from threading import Thread
+from time import monotonic, sleep
 from urllib.request import Request, urlopen
 
+import pytest
+
 from detection.engine import DetectionEngine
+from modern_ui.capture_session import default_capture_options
 from modern_ui.local_api import LocalApiServer
+from modern_ui.pcap_import import PcapImportService
 from storage.database import Database
-from storage.repositories import SettingsRepository
+from storage.repositories import AlertRepository, SettingsRepository
 
 
 class _TestSecretStore:
@@ -66,12 +71,34 @@ def test_minimum_alert_severity_is_persisted_and_exposed_by_local_api(tmp_path):
         assert SettingsRepository(database).get("minimum_alert_severity") == "HIGH"
         assert SettingsRepository(database).get("modern_theme_preference") == "dark"
         assert SettingsRepository(database).get("modern_font_scale") == "comfortable"
+        assert default_capture_options(database).minimum_severity == "HIGH"
         engine = DetectionEngine.from_rule_records([], minimum_severity="HIGH")
         assert engine.noise_reducer.minimum_severity == "HIGH"
     finally:
         server.shutdown()
         server.server_close()
         thread.join(timeout=3)
+
+
+def test_pcap_import_applies_persisted_minimum_alert_severity(tmp_path):
+    scapy = pytest.importorskip("scapy.all")
+    database = Database(tmp_path / "ids.db")
+    database.initialize()
+    SettingsRepository(database).set("minimum_alert_severity", "HIGH")
+    pcap_path = tmp_path / "medium-alert.pcap"
+    scapy.wrpcap(
+        str(pcap_path),
+        [scapy.IP(src="192.0.2.10", dst="192.0.2.20") / scapy.TCP(sport=51_000, dport=22, flags="S")],
+    )
+    service = PcapImportService(database)
+
+    service.start(pcap_path)
+    deadline = monotonic() + 5
+    while service.status()["state"] == "importing" and monotonic() < deadline:
+        sleep(0.02)
+
+    assert service.status()["state"] == "completed"
+    assert AlertRepository(database).count() == 0
 
 
 def test_modern_personalization_and_wallpaper_survive_api_restart(tmp_path):

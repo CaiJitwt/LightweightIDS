@@ -27,7 +27,7 @@ def packet_text(packet: PacketRecord) -> str:
         packet.http_path,
     ]
     if has_inspectable_payload(packet):
-        values.insert(0, packet.raw_summary)
+        values = [raw_http_body_text(packet), packet.raw_summary, *values]
     source = " ".join(value for value in values if value)[:MAX_SOURCE_LENGTH]
     return "\n".join(canonical_text_variants(source))
 
@@ -40,6 +40,25 @@ def has_inspectable_payload(packet: PacketRecord) -> bool:
     if protocol in OPAQUE_ENCRYPTED_PROTOCOLS:
         return False
     return bool(packet.raw_summary)
+
+
+def raw_http_body_text(packet: PacketRecord) -> str:
+    """Return a bounded HTTP body decoded from the retained raw packet bytes."""
+    raw_hex = packet.raw_hex or ""
+    if not raw_hex:
+        return ""
+    try:
+        raw_bytes = bytes.fromhex(raw_hex[: MAX_SOURCE_LENGTH * 2])
+    except ValueError:
+        return ""
+
+    markers = (b"GET ", b"POST ", b"PUT ", b"DELETE ", b"HEAD ", b"OPTIONS ", b"PATCH ", b"HTTP/1.")
+    starts = [index for marker in markers if (index := raw_bytes.find(marker)) >= 0]
+    request_bytes = raw_bytes[min(starts) :] if starts else raw_bytes
+    header_end = request_bytes.find(bytes((13, 10, 13, 10)))
+    if header_end >= 0:
+        request_bytes = request_bytes[header_end + 4 :]
+    return request_bytes.decode("utf-8", errors="replace")
 
 
 def canonical_text_variants(source: str) -> list[str]:

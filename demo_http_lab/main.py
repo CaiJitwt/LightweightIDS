@@ -5,17 +5,23 @@ import ipaddress
 import secrets
 import socket
 
+from demo_http_lab.packet_emitter import DefaultInterfacePacketEmitter, PacketEmissionError
 from demo_http_lab.server import DemoHttpServer
 
 
 HTTP_DEMO_PORTS = (8080, 8000, 8888)
+LOOPBACK_HOST = "127.0.0.1"
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Run a private-network HTTP sink for demonstrating Lightweight IDS alerts."
+        description="Run a local HTTP sink for demonstrating Lightweight IDS alerts."
     )
-    parser.add_argument("--host", default="0.0.0.0", help="Bind address (default: all local IPv4 interfaces).")
+    parser.add_argument(
+        "--host",
+        default=LOOPBACK_HOST,
+        help="Bind address (default: 127.0.0.1 loopback only).",
+    )
     parser.add_argument(
         "--port",
         type=int,
@@ -40,22 +46,42 @@ def main(argv: list[str] | None = None) -> int:
         metavar="CIDR",
         help="Restrict clients to an explicit network, for example 192.168.56.0/24. May be repeated.",
     )
-    parser.add_argument("--advertise-host", default="", help="Private host IP printed for VM users.")
+    parser.add_argument("--advertise-host", default="", help="Address printed for advanced LAN demonstrations.")
+    parser.add_argument(
+        "--interface",
+        default="",
+        help="Capture interface used for demo frame injection (default: Scapy's default interface).",
+    )
+    parser.add_argument(
+        "--receiver-only",
+        action="store_true",
+        help="Disable adapter injection and only receive/discard browser requests.",
+    )
     args = parser.parse_args(argv)
 
     token = args.token or (secrets.token_urlsafe(18) if args.require_token else "")
+    emitter = None
+    if not args.receiver_only:
+        try:
+            emitter = DefaultInterfacePacketEmitter(
+                interface=args.interface or None,
+                destination_port=args.port,
+            )
+        except PacketEmissionError as exc:
+            parser.error(str(exc))
     try:
         server = DemoHttpServer(
             (args.host, args.port),
             token=token,
             allowed_networks=args.allow_network,
+            packet_emitter=None if emitter is None else emitter.emit,
         )
     except ValueError as exc:
         parser.error(str(exc))
     except OSError as exc:
         parser.error(f"Could not bind {args.host}:{args.port}: {exc}")
 
-    addresses = [args.advertise_host] if args.advertise_host else private_ipv4_addresses()
+    addresses = advertised_addresses(args.host, args.advertise_host)
     if not addresses:
         addresses = ["<HOST_PRIVATE_IP>"]
 
@@ -63,13 +89,22 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Listening on {args.host}:{args.port}; accepted bodies are discarded and never executed.")
     if token:
         print(f"Protected mode token: {token}")
+    elif args.host == LOOPBACK_HOST:
+        print("Local classroom mode: only this computer can connect; no token is required.")
     else:
         print("Classroom mode: private-network clients can send samples without a token.")
-    print("Open an address on the same private subnet as the VM:")
+    print("Open this address in a browser:")
     for address in addresses:
         suffix = f"#{token}" if token else ""
         print(f"  http://{address}:{args.port}/{suffix}")
-    print("Start live capture on the VM-facing adapter before sending scenarios.")
+    if emitter is not None:
+        print(f"Demo samples will be injected on: {emitter.interface_label}")
+        if args.interface:
+            print("Select this same interface in Traffic Monitor before sending scenarios.")
+        else:
+            print("Leave Default interface selected in Traffic Monitor before sending scenarios.")
+    else:
+        print("Receiver-only mode is active; browser requests will not be injected into a capture adapter.")
     print(f"Recommended capture filter: tcp.dstport == {args.port}")
     print("Press Ctrl+C to stop the demo lab.")
 
@@ -80,6 +115,16 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         server.server_close()
     return 0
+
+
+def advertised_addresses(bind_host: str, override: str = "") -> list[str]:
+    if override:
+        return [override]
+    if bind_host in {LOOPBACK_HOST, "localhost"}:
+        return [LOOPBACK_HOST]
+    if bind_host == "0.0.0.0":
+        return private_ipv4_addresses()
+    return [bind_host]
 
 
 def private_ipv4_addresses() -> list[str]:

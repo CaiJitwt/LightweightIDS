@@ -23,7 +23,7 @@ class TlsMetadata:
 
 
 def extract_tls_metadata(packet: PacketRecord) -> TlsMetadata:
-    text = packet.raw_summary or ""
+    text = _metadata_source_text(packet)
     values = {key.lower(): value.strip() for key, value in _extract_key_values(text).items()}
     sni = values.get("sni", values.get("server_name", values.get("servername", "")))
     missing_sni = _truthy(values.get("missing_sni")) or _truthy(values.get("no_sni"))
@@ -39,6 +39,18 @@ def extract_tls_metadata(packet: PacketRecord) -> TlsMetadata:
         sni=sni,
         missing_sni=missing_sni,
     )
+
+
+def _metadata_source_text(packet: PacketRecord) -> str:
+    values = [packet.raw_summary or ""]
+    if packet.raw_hex:
+        try:
+            raw_bytes = bytes.fromhex(packet.raw_hex[:32_768])
+        except ValueError:
+            raw_bytes = b""
+        if raw_bytes:
+            values.append("".join(chr(byte) if 32 <= byte <= 126 else " " for byte in raw_bytes))
+    return " ".join(values)
 
 
 def tls_metadata_findings(packet: PacketRecord) -> list[str]:

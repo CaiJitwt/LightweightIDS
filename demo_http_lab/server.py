@@ -9,9 +9,10 @@ import json
 from pathlib import Path
 from threading import Lock
 from time import monotonic
-from typing import Iterable
+from typing import Callable, Iterable
 from urllib.parse import urlparse
 
+from demo_http_lab.packet_emitter import PacketEmissionError, PacketEmissionResult
 from demo_http_lab.scenarios import SCENARIO_BY_ID
 
 
@@ -36,12 +37,14 @@ class DemoHttpServer(ThreadingHTTPServer):
         allowed_networks: Iterable[str] = (),
         max_body_bytes: int = 4_096,
         requests_per_minute: int = 30,
+        packet_emitter: Callable[[str, bytes], PacketEmissionResult] | None = None,
     ) -> None:
         super().__init__(address, DemoRequestHandler)
         self.token = token
         self.allowed_networks = tuple(ipaddress.ip_network(item, strict=False) for item in allowed_networks)
         self.max_body_bytes = max(1, max_body_bytes)
         self.requests_per_minute = max(1, requests_per_minute)
+        self.packet_emitter = packet_emitter
         self._request_times: dict[str, deque[float]] = defaultdict(deque)
         self._accepted_requests = 0
         self._lock = Lock()
@@ -111,8 +114,8 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
             )
             return
 
-        # Reading is required to complete HTTP transport. The bytes are deliberately
-        # discarded: no parsing, execution, forwarding, persistence, or reflection.
+        # The body is retained only long enough to encapsulate one inert local demo frame.
+        # It is never executed, persisted, reflected, or forwarded to a remote target.
         body = self.rfile.read(content_length)
         if len(body) != content_length:
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "Incomplete request body."})
@@ -123,17 +126,27 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.TOO_MANY_REQUESTS, {"error": "Demo request rate limit reached."})
             return
 
+        emission: PacketEmissionResult | None = None
+        if self.server.packet_emitter is not None:
+            try:
+                emission = self.server.packet_emitter(scenario_id, body)
+            except PacketEmissionError as exc:
+                self._send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": str(exc)})
+                return
+
         sequence = self.server.record_accepted_request()
-        self._send_json(
-            HTTPStatus.ACCEPTED,
-            {
-                "accepted": True,
-                "sequence": sequence,
-                "scenario": scenario_id,
-                "receivedBytes": content_length,
-                "message": "Payload received and discarded without processing.",
-            },
-        )
+        result: dict[str, object] = {
+            "accepted": True,
+            "sequence": sequence,
+            "scenario": scenario_id,
+            "receivedBytes": content_length,
+            "emitted": False,
+            "message": "Payload received and discarded without processing.",
+        }
+        if emission is not None:
+            result.update(emission.as_payload())
+            result["message"] = "An inert HTTP frame was injected for normal live-capture analysis."
+        self._send_json(HTTPStatus.ACCEPTED, result)
 
     def log_message(self, _format: str, *_args: object) -> None:
         return

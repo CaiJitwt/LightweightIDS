@@ -270,6 +270,7 @@ const translations = {
     "alerts.investigateTitle": "Investigation workflows remain available in the PySide application",
     "alerts.selectAlert": "Select an alert to review its evidence and related packets.",
     "alerts.offlinePreview": "Offline preview",
+    "alerts.localApiUnavailable": "Local API unavailable",
 
     // ── Investigations ──────────────────────────────────────────────────
     "investigations.search": "Search investigations…",
@@ -944,6 +945,7 @@ const translations = {
     "alerts.investigateTitle": "调查工作流可在 PySide 应用中使用",
     "alerts.selectAlert": "选择一条告警以查看其证据和相关数据包。",
     "alerts.offlinePreview": "离线预览",
+    "alerts.localApiUnavailable": "本地 API 不可用",
 
     // ── Investigations ──────────────────────────────────────────────────
     "investigations.search": "搜索调查...",
