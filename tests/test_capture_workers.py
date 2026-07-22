@@ -5,7 +5,8 @@ import pytest
 from scripts.generate_demo_pcap import generate_demo_pcap
 from storage.database import Database
 from storage.repositories import AlertRepository, CustomRuleRepository, PacketRepository, RuleRepository
-from ui.packet_page import PcapImportWorker
+from ui import packet_page
+from ui.packet_page import LiveCaptureWorker, PcapImportWorker
 
 pytest.importorskip("scapy.all")
 
@@ -45,3 +46,46 @@ def test_pcap_worker_can_detect_without_persisting_packet_rows(tmp_path):
     assert finished[0][2] == 0
     assert PacketRepository(database).count() == 0
     assert AlertRepository(database).count() == sum(saved_alerts for _, saved_alerts in batches)
+
+
+def test_live_capture_worker_flushes_pending_alerts_when_capture_stops(tmp_path, monkeypatch):
+    from scapy.all import IP, Raw, TCP
+
+    database = Database(tmp_path / "ids.db")
+    database.initialize()
+    request = (
+        b"POST /login HTTP/1.1\r\nHost: demo.test\r\n\r\n"
+        b"username=admin&password=1%27+UNION+SELECT+password+FROM+users--"
+    )
+    raw_packet = IP(src="192.0.2.10", dst="192.0.2.20") / TCP(
+        sport=51_000,
+        dport=8080,
+        flags="PA",
+    ) / Raw(load=request)
+
+    class OnePacketCapture:
+        def __init__(self, **kwargs):
+            self.packet_callback = kwargs["packet_callback"]
+            self._stop_event = type("StopState", (), {"is_set": lambda self: False})()
+
+        def start(self):
+            self.packet_callback(raw_packet)
+
+        def stop(self):
+            return None
+
+    monkeypatch.setattr(packet_page, "LiveCapture", OnePacketCapture)
+    worker = LiveCaptureWorker(
+        interface=None,
+        rule_records=RuleRepository(database).list_all(),
+        custom_rule_records=CustomRuleRepository(database).list_all(),
+        database=database,
+        batch_size=100,
+        flush_interval_seconds=60,
+        alert_cooldown_seconds=0,
+    )
+
+    worker.run()
+
+    assert PacketRepository(database).count() == 1
+    assert {alert.rule_id for alert in AlertRepository(database).list_all()} >= {"SQL_INJECTION"}
