@@ -71,8 +71,8 @@ export function SecurityEventsPage({ onOpenAlert }: { onOpenAlert: (alertId: num
     { accessorKey: "eventId", header: t("securityEvents.eventIdPlaceholder") },
     { accessorKey: "channel", header: t("securityEvents.channel"), cell: ({ getValue }) => <span className="event-channel" title={String(getValue())}>{shortChannel(String(getValue()))}</span> },
     { accessorKey: "user", header: t("securityEvents.user"), cell: ({ getValue }) => String(getValue() || "-") },
-    { accessorKey: "sourceIp", header: "Source", cell: ({ getValue }) => String(getValue() || t("common.local")) },
-    { accessorKey: "summary", header: "Summary", enableSorting: false },
+    { accessorKey: "sourceIp", header: t("securityEvents.sourceIp"), cell: ({ getValue }) => String(getValue() || t("common.local")) },
+    { accessorKey: "summary", header: t("securityEvents.summary"), enableSorting: false },
   ], [t]);
 
   const runAction = async (action: "start" | "stop" | "refresh") => {
