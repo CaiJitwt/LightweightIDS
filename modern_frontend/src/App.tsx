@@ -9,6 +9,7 @@ import {
   HeartPulse,
   CircleHelp,
   Laptop,
+  MonitorCog,
   Moon,
   Network,
   Package,
@@ -229,7 +230,7 @@ export default function App() {
             <button className="global-search" type="button"><Search size={16} /><span>Search</span><kbd>Ctrl K</kbd></button>
             {page === "dashboard" && <label className="refresh-toggle"><input type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)} /><span>Auto-refresh</span></label>}
             <button className="icon-button" type="button" title="Refresh current view" onClick={() => { setRefreshVersion((value) => value + 1); setAlertBadgeRefresh((value) => value + 1); }}><RefreshCw size={17} /></button>
-            <button className="icon-button" type="button" title={`Use ${theme === "light" ? "dark" : "light"} theme`} onClick={() => setThemePreference(theme === "light" ? "dark" : "light")}>{theme === "light" ? <Moon size={17} /> : <Sun size={17} />}</button>
+            <button className="icon-button" type="button" title={themePreference === "system" ? "Following system — click for dark" : themePreference === "dark" ? "Switch to light theme" : "Switch to system theme"} onClick={() => setThemePreference(themePreference === "system" ? "dark" : themePreference === "dark" ? "light" : "system")}>{themePreference === "system" ? <MonitorCog size={17} /> : themePreference === "dark" ? <Moon size={17} /> : <Sun size={17} />}</button>
             <button className="user-button" type="button" title="Analyst profile"><Laptop size={16} /><span>Analyst</span></button>
           </div>
         </header>
