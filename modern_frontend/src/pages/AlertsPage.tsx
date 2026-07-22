@@ -17,6 +17,7 @@ export function AlertsPage({ llmSettings, refreshVersion, initialAlertId, onAler
   const [relatedPackets, setRelatedPackets] = useState<PacketRecord[]>([]);
   const [selectedPacketId, setSelectedPacketId] = useState<number | null>(null);
   const [linkedSecurityEvent, setLinkedSecurityEvent] = useState<SecurityEventRecord | null>(null);
+  const [relatedFallback, setRelatedFallback] = useState(false);
   const [connected, setConnected] = useState(false);
   const [updating, setUpdating] = useState(false);
 
@@ -47,10 +48,11 @@ export function AlertsPage({ llmSettings, refreshVersion, initialAlertId, onAler
     let active = true;
     setSelectedPacketId(null);
     setLinkedSecurityEvent(null);
+    setRelatedFallback(false);
     idsApi.alertPackets(selected.id)
       .then(({ records: next }) => { if (active) setRelatedPackets(next); })
       .catch(() => {
-        if (active) setRelatedPackets(previewPackets.filter((packet) => selected.packetIds?.includes(packet.id)));
+        if (active) { setRelatedPackets(previewPackets.filter((packet) => selected.packetIds?.includes(packet.id))); setRelatedFallback(true); }
       });
     idsApi.alertSecurityEvent(selected.id)
       .then(({ record }) => { if (active) setLinkedSecurityEvent(record); })
@@ -106,7 +108,7 @@ export function AlertsPage({ llmSettings, refreshVersion, initialAlertId, onAler
             <div className="detail-section"><h3>Analyst summary</h3><p>{selected.description}</p></div>
             <div className="detail-section"><h3>Evidence</h3><code>{selected.evidence}</code></div>
             {linkedSecurityEvent && <div className="detail-section host-event-evidence"><h3>Windows security event</h3><p>Event {linkedSecurityEvent.eventId} / Record {linkedSecurityEvent.recordId}</p><code>{JSON.stringify({ channel: linkedSecurityEvent.channel, computer: linkedSecurityEvent.computer, user: linkedSecurityEvent.user, sourceIp: linkedSecurityEvent.sourceIp, logonType: linkedSecurityEvent.logonType, processName: linkedSecurityEvent.processName, summary: linkedSecurityEvent.summary, details: linkedSecurityEvent.details }, null, 2)}</code></div>}
-            <div className="detail-section"><h3>Related packets <span>{relatedPackets.length}</span></h3><div className="packet-stack">{relatedPackets.map((packet) => <button type="button" className={packet.id === selectedPacketId ? "selected-packet" : ""} key={packet.id} onClick={() => setSelectedPacketId(packet.id)}><strong>#{packet.id} - {packet.timestamp}</strong><span>{packet.source} to {packet.destination}</span><small>{packet.summary}</small></button>)}{!relatedPackets.length && <p className="empty-packets">No persisted packets match this alert window.</p>}</div>{selectedPacket && <div className="packet-metadata"><strong>Packet metadata</strong><code>{JSON.stringify({ id: selectedPacket.id, timestamp: selectedPacket.timestamp, source: selectedPacket.source, destination: selectedPacket.destination, protocol: selectedPacket.protocol, length: selectedPacket.length, flags: selectedPacket.flags, summary: selectedPacket.summary, ...selectedPacket.details }, null, 2)}</code></div>}</div>
+            <div className="detail-section"><h3>Related packets <span>{relatedPackets.length}</span>{relatedFallback && <span className="capture-notice" style={{display: "inline-flex", marginLeft: 8, padding: "2px 6px", fontSize: 11}}>Preview</span>}</h3><div className="packet-stack">{relatedPackets.map((packet) => <button type="button" className={packet.id === selectedPacketId ? "selected-packet" : ""} key={packet.id} onClick={() => setSelectedPacketId(packet.id)}><strong>#{packet.id} - {packet.timestamp}</strong><span>{packet.source} to {packet.destination}</span><small>{packet.summary}</small></button>)}{!relatedPackets.length && <p className="empty-packets">No persisted packets match this alert window.</p>}</div>{selectedPacket && <div className="packet-metadata"><strong>Packet metadata</strong><code>{JSON.stringify({ id: selectedPacket.id, timestamp: selectedPacket.timestamp, source: selectedPacket.source, destination: selectedPacket.destination, protocol: selectedPacket.protocol, length: selectedPacket.length, flags: selectedPacket.flags, summary: selectedPacket.summary, ...selectedPacket.details }, null, 2)}</code></div>}</div>
             <DefenseAdvicePanel alert={selected} settings={llmSettings} />
             <footer className="detail-actions"><button type="button" disabled={updating} onClick={() => updateStatus("confirmed")}><Check size={15} />Confirm</button><button type="button" disabled={updating} onClick={() => updateStatus("ignored")}><Ban size={15} />Ignore</button><button type="button" title="Investigation workflows remain available in the PySide application"><ClipboardList size={15} />Investigate</button></footer>
           </> : <div className="empty-detail">Select an alert to review its evidence and related packets.</div>}

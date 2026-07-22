@@ -19,6 +19,7 @@ export function HostsPage({ initialHostIp, refreshVersion }: HostsPageProps) {
   const [selectedIp, setSelectedIp] = useState("");
   const [profile, setProfile] = useState<HostProfile>(() => previewProfile({ ip: "", name: "", role: "", risk: 0, importance: 0, packets: 0, alerts: 0, lastSeen: "" }));
   const [connected, setConnected] = useState(false);
+  const [profileFallback, setProfileFallback] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -44,9 +45,10 @@ export function HostsPage({ initialHostIp, refreshVersion }: HostsPageProps) {
     const fallback = records.find((host) => host.ip === selectedIp) ?? records[0];
     if (!fallback) return;
     let active = true;
+    setProfileFallback(false);
     idsApi.host(selectedIp)
       .then((next) => { if (active) setProfile(next); })
-      .catch(() => { if (active) setProfile(previewProfile(fallback)); });
+      .catch(() => { if (active) { setProfile(previewProfile(fallback)); setProfileFallback(true); } });
     return () => { active = false; };
   }, [records, selectedIp]);
 
@@ -65,7 +67,7 @@ export function HostsPage({ initialHostIp, refreshVersion }: HostsPageProps) {
           {visible.length ? visible.map((host) => <button type="button" className={host.ip === selected.ip ? "selected-host" : ""} key={host.ip} onClick={() => setSelectedIp(host.ip)}><span className="host-avatar"><Server size={16} /></span><span><strong>{host.name}</strong><small>{host.ip} - {host.role}</small></span><span className={`risk-score risk-${host.risk >= 80 ? "high" : host.risk >= 50 ? "medium" : "low"}`}>{host.risk}</span></button>) : <p className="empty-state">No observed hosts match this search.</p>}
         </section>
         <section className="host-detail" aria-label="Host profile details">
-          <header className="host-detail-header"><div><span className="eyebrow">Host profile</span><h2>{selected.name}</h2><p>{selected.ip} - {selected.role}</p></div><span className={`risk-score large risk-${selected.risk >= 80 ? "high" : selected.risk >= 50 ? "medium" : "low"}`}>{selected.risk}</span></header>
+          <header className="host-detail-header"><div><span className="eyebrow">Host profile{profileFallback && " · preview"}</span><h2>{selected.name}</h2><p>{selected.ip} - {selected.role}</p></div><span className={`risk-score large risk-${selected.risk >= 80 ? "high" : selected.risk >= 50 ? "medium" : "low"}`}>{selected.risk}</span></header>
           <div className="host-metrics"><Metric icon={<Network size={16} />} label="Packets" value={selected.packets.toLocaleString()} /><Metric icon={<ArrowUpRight size={16} />} label="Outbound" value={(selected.outgoingPackets ?? 0).toLocaleString()} /><Metric icon={<ArrowDownLeft size={16} />} label="Inbound" value={(selected.incomingPackets ?? 0).toLocaleString()} /><Metric icon={<ShieldAlert size={16} />} label="Alerts" value={selected.alerts.toString()} /></div>
           <div className="host-analysis">
             <div className="protocol-chart"><h3>Protocol profile</h3>{protocols.length ? <><ResponsiveContainer width="100%" height={190}><PieChart><Pie data={protocols} dataKey="value" nameKey="name" innerRadius={48} outerRadius={72} paddingAngle={2} isAnimationActive={false}>{protocols.map((entry, index) => <Cell key={entry.name} fill={protocolColors[index % protocolColors.length]} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div className="chart-legend">{protocols.map((entry, index) => <span key={entry.name}><i style={{ background: protocolColors[index % protocolColors.length] }} />{entry.name} {entry.value}</span>)}</div></> : <p className="empty-state">No packet profile is available yet.</p>}</div>
