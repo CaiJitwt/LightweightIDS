@@ -17,7 +17,9 @@ const translations = {
     "app.themeLight": "Switch to system theme",
     "app.user": "Analyst",
     "app.sensorOnline": "Sensor online",
-    "app.sensorSummary": "Ethernet 3 - 1.2k pkt/min",
+    "app.sensorIdle": "Sensor idle",
+    "app.captureStopped": "Capture stopped",
+    "app.apiUnavailable": "API unavailable",
     "app.language": "Language",
 
     // ── Navigation ──────────────────────────────────────────────────────
@@ -637,7 +639,9 @@ const translations = {
     "app.themeLight": "切换系统主题",
     "app.user": "分析人员",
     "app.sensorOnline": "传感器在线",
-    "app.sensorSummary": "Ethernet 3 - 1.2k pkt/min",
+    "app.sensorIdle": "传感器空闲",
+    "app.captureStopped": "抓包已停止",
+    "app.apiUnavailable": "API 不可用",
     "app.language": "语言",
 
     // ── Navigation ──────────────────────────────────────────────────────

@@ -288,7 +288,7 @@ function AppShell() {
           })}
         </nav>
         <div className="sidebar-footer">
-          <div className="sensor-summary"><span className={`live-dot${!sensorOnline ? " paused" : ""}`} /><span>{sensorOnline ? <><strong>{t("app.sensorOnline")}</strong><small>{sensorStatus?.interface || ""} &middot; {(sensorStatus?.packetsPerSecond ?? 0) > 1000 ? `${((sensorStatus?.packetsPerSecond ?? 0) / 1000).toFixed(1)}k` : (sensorStatus?.packetsPerSecond ?? 0)} pkt/s</small></> : <><strong>{t("app.sensorOnline")}</strong><small>{sensorStatus ? "Capture stopped" : "API unavailable"}</small></>}</span></div>
+          <div className="sensor-summary"><span className={`live-dot${!sensorOnline ? " paused" : ""}`} /><span>{sensorOnline ? <><strong>{t("app.sensorOnline")}</strong><small>{sensorStatus?.interface || ""} &middot; {(sensorStatus?.packetsPerSecond ?? 0) > 1000 ? `${((sensorStatus?.packetsPerSecond ?? 0) / 1000).toFixed(1)}k` : (sensorStatus?.packetsPerSecond ?? 0)} pkt/s</small></> : <><strong>{t("app.sensorIdle")}</strong><small>{sensorStatus ? t("app.captureStopped") : t("app.apiUnavailable")}</small></>}</span></div>
           <button type="button" className="collapse-button" onClick={() => setCollapsed((value) => !value)} title={collapsed ? t("app.expand") : t("app.collapse")}>{collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}<span>{t("app.collapse")}</span></button>
         </div>
       </aside>
