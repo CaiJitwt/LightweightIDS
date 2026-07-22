@@ -98,7 +98,7 @@ python -m scripts.generate_demo_pcap
 
 然后导入 `sample_data/demo_attack_chain.pcap`。经典 Traffic Monitor 在文件不存在时也可以通过 `Load demo data` 自动生成并导入。详细说明见 [演示指南](docs/demo_guide.md)。
 
-需要从虚拟机进行实时演示时，运行 `python -m demo_http_lab.main` 即可启动 [HTTP 告警演示实验室](demo_http_lab/README.md)。默认课堂模式无需令牌，只接收私网客户端发送的无害明文样本；流量会经过正常实时抓包和 Detection Engine，接收器不会执行或转发内容。
+需要进行本机实时演示时，在 Traffic Monitor 中保留 Default interface，并运行 `python demo_http.py` 启动 [HTTP 告警演示实验室](demo_http_lab/README.md)。控制页面只监听 `127.0.0.1`，提交的无害明文帧会注入终端打印的默认网卡，并经过正常实时抓包和 Detection Engine；内容不会被执行，也不会发送到公网目标。
 
 ## 重置行为
 
