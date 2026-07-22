@@ -8,13 +8,22 @@ import { DefenseAdvicePanel } from "../components/DefenseAdvicePanel";
 import { SeverityBadge } from "../components/SeverityBadge";
 import { alerts as initialAlerts, packets as previewPackets } from "../data/mockData";
 import type { AlertRecord, AlertStatus, LlmSettings, PacketRecord, SecurityEventRecord } from "../types";
-import { useT } from "../i18n/context";
+import { useLocale, useT } from "../i18n/context";
 
 export function AlertsPage({ llmSettings, refreshVersion, initialAlertId, onAlertsChanged }: { llmSettings: LlmSettings; refreshVersion: number; initialAlertId?: number; onAlertsChanged: () => void }) {
   const t = useT();
+  const locale = useLocale();
   const [records, setRecords] = useState<AlertRecord[]>(initialAlerts);
   const [query, setQuery] = useState("");
   const [severity, setSeverity] = useState(t("common.allSeverities"));
+
+  useEffect(() => {
+    setSeverity((prev) => {
+      if (["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"].includes(prev)) return prev;
+      return t("common.allSeverities");
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale]);
   const [selectedId, setSelectedId] = useState<number | null>(initialAlertId ?? initialAlerts[0]?.id ?? null);
   const [relatedPackets, setRelatedPackets] = useState<PacketRecord[]>([]);
   const [selectedPacketId, setSelectedPacketId] = useState<number | null>(null);

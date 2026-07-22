@@ -4,7 +4,7 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import { CirclePause, CirclePlay, Download, FileUp, Filter, Play, RefreshCw, Search, Square, WifiOff, X } from "lucide-react";
 
 import { idsApi } from "../api/idsApi";
-import { useT } from "../i18n/context";
+import { useLocale, useT } from "../i18n/context";
 import type { TranslationKey } from "../i18n/translations";
 import { DataTable } from "../components/DataTable";
 import { packets as demoPackets } from "../data/mockData";
@@ -29,6 +29,7 @@ const filterPresets: Array<{ labelKey: TranslationKey; value: string }> = [
 
 export function TrafficPage({ onDataChanged }: { onDataChanged?: () => void }) {
   const t = useT();
+  const locale = useLocale();
   const [status, setStatus] = useState<CaptureStatus>(emptyStatus);
   const [serviceReady, setServiceReady] = useState(false);
   const [interfaces, setInterfaces] = useState<string[]>([]);
@@ -38,6 +39,14 @@ export function TrafficPage({ onDataChanged }: { onDataChanged?: () => void }) {
   const [actionError, setActionError] = useState("");
   const [query, setQuery] = useState("");
   const [protocol, setProtocol] = useState(t("common.allProtocols"));
+
+  useEffect(() => {
+    setProtocol((prev) => {
+      if (["TLS", "TCP", "DNS", "MDNS"].includes(prev)) return prev;
+      return t("common.allProtocols");
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale]);
   const [livePackets, setLivePackets] = useState<PacketRecord[]>([]);
   const [selectedPacketKey, setSelectedPacketKey] = useState<string | null>(null);
   const [rateHistory, setRateHistory] = useState<{ time: string; rate: number; alerts: number }[]>([]);
