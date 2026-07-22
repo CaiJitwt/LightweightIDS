@@ -301,6 +301,8 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 self._send_json(self.server.file_integrity.status())
             elif parsed.path == "/api/system/health":
                 self._send_json(self._system_health_payload())
+            elif parsed.path == "/api/system/theme":
+                self._send_json({"dark": self._system_is_dark()})
             elif parsed.path == "/api/security/events/status":
                 self._send_json(self.server.security_event_monitor.status())
             elif parsed.path == "/api/security/events":
@@ -805,6 +807,21 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 for rule in rules
             ],
         }
+
+    @staticmethod
+    def _system_is_dark() -> bool:
+        """Read the Windows OS theme preference from the registry."""
+        try:
+            import winreg
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+            )
+            value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+            winreg.CloseKey(key)
+            return value == 0
+        except Exception:
+            return False
 
     def _host_payload(self, host_ip: str) -> dict[str, Any]:
         host = self.server.host_profiles.get_host(host_ip)

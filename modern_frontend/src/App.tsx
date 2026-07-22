@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useSyncExternalStore, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import {
   Activity,
   BellRing,
@@ -112,6 +112,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("ids-prototype-theme", themePreference);
   }, [themePreference]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     localStorage.setItem("ids-prototype-font-scale", fontScale);
@@ -289,16 +293,29 @@ function llmSettingsFromRuntime(settings: Partial<import("./types").RuntimeSetti
 }
 
 function useSystemDarkMode(): boolean {
-  const subscribe = useCallback((notify: () => void) => {
+  const [matches, setMatches] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false);
+  useEffect(() => {
     const mql = window.matchMedia?.("(prefers-color-scheme: dark)");
-    if (!mql) return () => {};
-    mql.addEventListener("change", notify);
-    window.addEventListener("focus", notify);
+    if (!mql) return;
+    const checkBrowser = () => setMatches(mql.matches);
+    checkBrowser();
+    mql.addEventListener("change", checkBrowser);
+    window.addEventListener("focus", checkBrowser);
+
+    const poll = async () => {
+      checkBrowser();
+      try {
+        const { dark } = await idsApi.systemTheme();
+        setMatches(dark);
+      } catch { /* backend unavailable — keep browser value */ }
+    };
+    const interval = window.setInterval(poll, 2000);
+    poll();
     return () => {
-      mql.removeEventListener("change", notify);
-      window.removeEventListener("focus", notify);
+      mql.removeEventListener("change", checkBrowser);
+      window.removeEventListener("focus", checkBrowser);
+      window.clearInterval(interval);
     };
   }, []);
-  const getSnapshot = useCallback(() => window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false, []);
-  return useSyncExternalStore(subscribe, getSnapshot);
+  return matches;
 }

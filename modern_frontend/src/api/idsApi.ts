@@ -73,6 +73,7 @@ async function uploadPersonalizationImage(kind: "background" | "petImage", file:
 
 export const idsApi = {
   health: () => request<{ ok: boolean }>("/api/health"),
+  systemTheme: () => request<{ dark: boolean }>("/api/system/theme"),
   interfaces: () => request<{ interfaces: string[] }>("/api/capture/interfaces"),
   status: () => request<CaptureStatus>("/api/capture/status"),
   pcapStatus: () => request<PcapImportStatus>("/api/pcap/status"),
