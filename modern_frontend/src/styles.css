@@ -54,6 +54,7 @@ button { cursor: pointer; }
   background-repeat: no-repeat;
   z-index: 0;
   pointer-events: none;
+  transform: translateZ(0);
 }
 
 html[data-theme="dark"] .app-shell {
