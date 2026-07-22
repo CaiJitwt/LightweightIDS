@@ -24,7 +24,7 @@ import {
   Timeline,
   Waypoints,
 } from "lucide-react";
-import type { FontScale, LlmSettings, ThemePreference } from "./types";
+import type { CaptureStatus, FontScale, LlmSettings, ThemePreference } from "./types";
 import brandMascot from "./assets/anime-brand-icon.png";
 import { loadPersonalization, savePersonalization, defaultPersonalization } from "./data/personalizationStore";
 import type { PersonalizationState } from "./data/personalizationStore";
@@ -108,6 +108,17 @@ export default function App() {
   const [openAlertCount, setOpenAlertCount] = useState(0);
   const [alertBadgeRefresh, setAlertBadgeRefresh] = useState(0);
   const [selectedAlertId, setSelectedAlertId] = useState<number | undefined>();
+  const [sensorStatus, setSensorStatus] = useState<CaptureStatus | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const poll = () => {
+      idsApi.status().then((status) => { if (active) setSensorStatus(status); }).catch(() => { if (active) setSensorStatus(null); });
+    };
+    poll();
+    const timer = window.setInterval(poll, 5000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("ids-prototype-theme", themePreference);
@@ -222,7 +233,7 @@ export default function App() {
           })}
         </nav>
         <div className="sidebar-footer">
-          <div className="sensor-summary"><span className="live-dot" /><span><strong>Sensor online</strong><small>Ethernet 3 - 1.2k pkt/min</small></span></div>
+          <div className="sensor-summary"><span className={`live-dot${!sensorStatus || sensorStatus.state !== "running" ? " paused" : ""}`} /><span>{sensorStatus?.state === "running" ? <><strong>Sensor online</strong><small>{sensorStatus.interface || "Active interface"} &middot; {sensorStatus.packetsPerSecond > 1000 ? `${(sensorStatus.packetsPerSecond / 1000).toFixed(1)}k` : sensorStatus.packetsPerSecond} pkt/s</small></> : <><strong>Sensor idle</strong><small>{sensorStatus ? "Capture stopped" : "API unavailable"}</small></>}</span></div>
           <button type="button" className="collapse-button" onClick={() => setCollapsed((value) => !value)} title={collapsed ? "Expand sidebar" : "Collapse sidebar"}>{collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}<span>Collapse</span></button>
         </div>
       </aside>
