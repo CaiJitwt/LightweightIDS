@@ -109,6 +109,7 @@ class PcapImportService:
                 alert_cooldown_seconds=max(0, settings.get_int("alert_cooldown_seconds", 10)),
                 asset_importance=AssetRepository(self.database).importance_map(),
                 blocklist_entries=BlocklistEntryRepository(self.database).list_all(enabled_only=True),
+                minimum_severity=settings.get("minimum_alert_severity", "LOW").upper(),
             )
             save_packets = settings.get_bool("auto_save_packets", True)
             repository = TrafficRepository(self.database)

@@ -30,6 +30,7 @@ class CaptureStartOptions:
     save_packets: bool = True
     detection_enabled: bool = True
     alert_cooldown_seconds: int = 10
+    minimum_severity: str = "LOW"
 
 
 class CaptureSessionService:
@@ -80,6 +81,7 @@ class CaptureSessionService:
                 save_packets=options.save_packets,
                 detection_enabled=options.detection_enabled,
                 alert_cooldown_seconds=max(0, options.alert_cooldown_seconds),
+                minimum_severity=options.minimum_severity.upper(),
             )
             self._stop_event.clear()
             self._paused_event.clear()
@@ -237,6 +239,7 @@ class CaptureSessionService:
                 alert_cooldown_seconds=self._options.alert_cooldown_seconds,
                 asset_importance=AssetRepository(self.database).importance_map(),
                 blocklist_entries=BlocklistEntryRepository(self.database).list_all(enabled_only=True),
+                minimum_severity=self._options.minimum_severity,
             )
             traffic_repository = TrafficRepository(self.database)
 
@@ -348,6 +351,7 @@ def default_capture_options(database: Database) -> CaptureStartOptions:
         save_packets=settings.get_bool("auto_save_packets", True),
         detection_enabled=settings.get_bool("enable_realtime_detection", True),
         alert_cooldown_seconds=max(0, settings.get_int("alert_cooldown_seconds", 10)),
+        minimum_severity=settings.get("minimum_alert_severity", "LOW").upper(),
     )
 
 
@@ -361,15 +365,25 @@ def parse_capture_options(payload: dict[str, Any], defaults: CaptureStartOptions
     save_packets = payload.get("savePackets", defaults.save_packets)
     detection_enabled = payload.get("detectionEnabled", defaults.detection_enabled)
     cooldown = payload.get("alertCooldownSeconds", defaults.alert_cooldown_seconds)
+    minimum_severity = payload.get("minimumAlertSeverity", defaults.minimum_severity)
     if not isinstance(save_packets, bool) or not isinstance(detection_enabled, bool):
         raise ValueError("savePackets and detectionEnabled must be booleans")
     if not isinstance(cooldown, int):
         raise ValueError("alertCooldownSeconds must be an integer")
+    if not isinstance(minimum_severity, str) or minimum_severity.upper() not in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
+        raise ValueError("minimumAlertSeverity must be LOW, MEDIUM, HIGH, or CRITICAL")
     try:
         PacketFilter.compile(expression)
     except PacketFilterError as exc:
         raise ValueError(str(exc)) from exc
-    return CaptureStartOptions(interface, expression, save_packets, detection_enabled, max(0, cooldown))
+    return CaptureStartOptions(
+        interface=interface,
+        filter_expression=expression,
+        save_packets=save_packets,
+        detection_enabled=detection_enabled,
+        alert_cooldown_seconds=max(0, cooldown),
+        minimum_severity=minimum_severity.upper(),
+    )
 
 
 def _endpoint(ip: str | None, port: int | None) -> str:
