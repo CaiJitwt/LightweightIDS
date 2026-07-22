@@ -102,12 +102,12 @@ describe("modern IDS frontend", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "中文" }));
     expect(screen.getByRole("heading", { name: "帮助中心", level: 2 })).toBeInTheDocument();
-    expect(localStorage.getItem("ids-help-language")).toBe("zh");
+    expect(localStorage.getItem("ids-prototype-locale")).toBe("zh");
 
     const quickNavigation = screen.getByRole("heading", { name: "快速导航" }).closest("section");
     expect(quickNavigation).not.toBeNull();
     fireEvent.click(within(quickNavigation as HTMLElement).getByRole("button", { name: "仪表盘" }));
-    expect(await screen.findByRole("heading", { name: "Security overview" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "安全概览" })).toBeInTheDocument();
   });
 
   it("renders and clears a persisted workspace wallpaper", async () => {

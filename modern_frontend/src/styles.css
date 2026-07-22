@@ -337,7 +337,7 @@ kbd { padding: 2px 5px; border: 1px solid var(--border); border-radius: 3px; bac
 .topology small { color: var(--muted); }
 .connection-events { border-top: 1px solid var(--border); }
 .connection-events p { margin: 0; padding: 8px 2px; color: var(--muted); border-bottom: 1px solid var(--border); font-size: var(--fs-xs); }
-.connection-events strong { display: inline-block; width: 58px; color: var(--text); }
+.connection-events strong { display: inline-block; width: 58px; margin-right: 6px; color: var(--text); }
 .host-reasons { padding: 13px 17px; border-top: 1px solid var(--border); }
 .host-reasons h3 { margin: 0 0 7px; font-size: var(--fs-sm); }
 .host-reasons p, .host-reasons ul { margin: 0; color: var(--muted); font-size: var(--fs-xs); line-height: 1.5; }

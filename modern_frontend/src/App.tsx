@@ -29,7 +29,7 @@ import type { CaptureStatus, FontScale, LlmSettings, ThemePreference } from "./t
 import brandMascot from "./assets/anime-brand-icon.png";
 import { loadPersonalization, savePersonalization, defaultPersonalization } from "./data/personalizationStore";
 import type { PersonalizationState } from "./data/personalizationStore";
-import type { HelpLanguage } from "./pages/HelpPage";
+
 import { idsApi } from "./api/idsApi";
 import { LocaleContext, resolveLocale, useLocale, useSetLocale, useT } from "./i18n/context";
 import type { Locale } from "./i18n/context";
@@ -110,7 +110,7 @@ function AppShell() {
   const [personalizationLoaded, setPersonalizationLoaded] = useState(false);
   const [persistWarning, setPersistWarning] = useState(false);
   const [storageWarning, setStorageWarning] = useState(false);
-  const [helpLanguage, setHelpLanguage] = useState<HelpLanguage>(readHelpLanguage);
+
   const [openAlertCount, setOpenAlertCount] = useState(0);
   const [alertBadgeRefresh, setAlertBadgeRefresh] = useState(0);
   const [selectedAlertId, setSelectedAlertId] = useState<number | undefined>();
@@ -196,7 +196,6 @@ function AppShell() {
     };
   }, [personalization, personalizationLoaded]);
 
-  useEffect(() => localStorage.setItem("ids-help-language", helpLanguage), [helpLanguage]);
 
   useEffect(() => {
     let active = true;
@@ -276,7 +275,7 @@ function AppShell() {
             {page === "endpoint" && <EndpointSecurityPage refreshVersion={refreshVersion} />}
             {page === "settings" && <SettingsPage themePreference={themePreference} onThemePreferenceChange={setThemePreference} fontScale={fontScale} onFontScaleChange={setFontScale} llmSettings={llmSettings} onLlmSettingsChange={setLlmSettings} />}
             {page === "personalization" && <PersonalizationPage state={personalization} onChange={setPersonalization} storageWarning={storageWarning} persistWarning={persistWarning} />}
-            {page === "help" && <HelpPage onNavigate={setPage} language={helpLanguage} onLanguageChange={setHelpLanguage} />}
+            {page === "help" && <HelpPage onNavigate={setPage} language={locale} onLanguageChange={setLocale} />}
           </Suspense>
         </div>
       </main>
@@ -308,9 +307,7 @@ function readFontScale(): FontScale {
   return value === "compact" || value === "comfortable" ? value : "default";
 }
 
-function readHelpLanguage(): HelpLanguage {
-  return localStorage.getItem("ids-help-language") === "zh" ? "zh" : "en";
-}
+
 
 const defaultLlmSettings: LlmSettings = {
   baseUrl: "https://api.openai.com/v1",
