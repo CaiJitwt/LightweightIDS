@@ -69,12 +69,12 @@ export function AlertsPage({ llmSettings, refreshVersion, initialAlertId, onAler
   const selectedPacket = relatedPackets.find((packet) => packet.id === selectedPacketId) ?? null;
 
   const columns = useMemo<ColumnDef<AlertRecord, unknown>[]>(() => [
-    { accessorKey: "timestamp", header: "Time", size: 155 },
-    { accessorKey: "severity", header: "Severity", size: 90, cell: ({ row }) => <SeverityBadge severity={row.original.severity} /> },
-    { accessorKey: "ruleName", header: "Rule", size: 130 },
+    { accessorKey: "timestamp", header: t("common.time"), size: 155 },
+    { accessorKey: "severity", header: t("common.severity"), size: 90, cell: ({ row }) => <SeverityBadge severity={row.original.severity} /> },
+    { accessorKey: "ruleName", header: t("common.rule"), size: 130 },
     { accessorKey: "source", header: t("alerts.source"), size: 135 },
     { accessorKey: "destination", header: t("alerts.destination"), size: 135 },
-    { accessorKey: "description", header: "Description", size: 200, enableSorting: false },
+    { accessorKey: "description", header: t("common.description"), size: 200, enableSorting: false },
     { accessorKey: "status", header: t("alerts.status"), size: 90, cell: ({ getValue }) => <span className={`status status-${String(getValue())}`}>{String(getValue())}</span> },
   ], [t]);
 

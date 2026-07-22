@@ -37,7 +37,7 @@ export function TrafficPage({ onDataChanged }: { onDataChanged?: () => void }) {
   const [filterNotice, setFilterNotice] = useState("");
   const [actionError, setActionError] = useState("");
   const [query, setQuery] = useState("");
-  const [protocol, setProtocol] = useState("All protocols");
+  const [protocol, setProtocol] = useState(t("common.allProtocols"));
   const [livePackets, setLivePackets] = useState<PacketRecord[]>([]);
   const [selectedPacketKey, setSelectedPacketKey] = useState<string | null>(null);
   const [rateHistory, setRateHistory] = useState<{ time: string; rate: number; alerts: number }[]>([]);
@@ -93,20 +93,20 @@ export function TrafficPage({ onDataChanged }: { onDataChanged?: () => void }) {
 
   const displayedPackets = serviceReady ? livePackets : demoPackets;
   const visiblePackets = useMemo(() => displayedPackets.filter((packet) => {
-    const matchesProtocol = protocol === "All protocols" || packet.protocol === protocol;
+    const matchesProtocol = protocol === t("common.allProtocols") || packet.protocol === protocol;
     const text = `${packet.source} ${packet.destination} ${packet.protocol} ${packet.summary}`.toLowerCase();
     return matchesProtocol && text.includes(query.toLowerCase());
   }), [displayedPackets, protocol, query]);
   const selectedPacket = displayedPackets.find((packet) => packetKey(packet) === selectedPacketKey) ?? null;
 
   const columns = useMemo<ColumnDef<PacketRecord, unknown>[]>(() => [
-    { accessorKey: "id", header: "ID", size: 64 },
-    { accessorKey: "timestamp", header: "Time" },
+    { accessorKey: "id", header: t("common.id"), size: 64 },
+    { accessorKey: "timestamp", header: t("common.time") },
     { accessorKey: "source", header: t("traffic.source") },
     { accessorKey: "destination", header: t("traffic.destination") },
     { accessorKey: "protocol", header: t("alerts.protocol"), cell: ({ getValue }) => <span className={`protocol protocol-${String(getValue()).toLowerCase()}`}>{String(getValue())}</span> },
     { accessorKey: "length", header: t("traffic.bytes") },
-    { accessorKey: "flags", header: "Flags" },
+    { accessorKey: "flags", header: t("common.flags") },
     { accessorKey: "summary", header: t("investigations.summaryLabel"), enableSorting: false },
   ], [t]);
 
@@ -172,7 +172,7 @@ export function TrafficPage({ onDataChanged }: { onDataChanged?: () => void }) {
         <div className="capture-config">
           <label className="capture-field"><span>{t("traffic.interface")}</span><select aria-label={t("traffic.interface")} value={selectedInterface} onChange={(event) => setSelectedInterface(event.target.value)} disabled={isActive || !serviceReady}><option value="">{t("traffic.defaultInterface")}</option>{interfaces.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
           <label className="capture-field grow"><span>{t("traffic.captureFilter")}</span><input value={filterExpression} onChange={(event) => setFilterExpression(event.target.value)} placeholder={t("traffic.filterPlaceholder")} disabled={isActive || !serviceReady} /></label>
-          <select aria-label="Capture filter preset" className="plain-select" value="" onChange={(event) => { if (event.target.value !== "") setFilterExpression(event.target.value); }} disabled={isActive || !serviceReady}><option value="">{t("traffic.filterPresets")}</option>{filterPresets.map((preset) => <option key={preset.labelKey} value={preset.value}>{t(preset.labelKey)}</option>)}</select>
+          <select aria-label={t("traffic.filterPresetAriaLabel")} className="plain-select" value="" onChange={(event) => { if (event.target.value !== "") setFilterExpression(event.target.value); }} disabled={isActive || !serviceReady}><option value="">{t("traffic.filterPresets")}</option>{filterPresets.map((preset) => <option key={preset.labelKey} value={preset.value}>{t(preset.labelKey)}</option>)}</select>
           <button className="icon-button" type="button" title={t("traffic.validateFilter")} onClick={() => void validateFilter()} disabled={isActive || !serviceReady}><Filter size={17} /></button>
         </div>
         <div className="control-actions">
@@ -193,7 +193,7 @@ export function TrafficPage({ onDataChanged }: { onDataChanged?: () => void }) {
 
       <section className="filter-row">
         <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("traffic.filterAddresses")} /></label>
-        <label className="select-box"><Filter size={15} /><select aria-label={t("alerts.protocol")} value={protocol} onChange={(event) => setProtocol(event.target.value)}><option value="All protocols">{t("common.allProtocols")}</option><option value="TLS">TLS</option><option value="TCP">TCP</option><option value="DNS">DNS</option><option value="MDNS">MDNS</option></select></label>
+        <label className="select-box"><Filter size={15} /><select aria-label={t("alerts.protocol")} value={protocol} onChange={(event) => setProtocol(event.target.value)}><option value={t("common.allProtocols")}>{t("common.allProtocols")}</option><option value="TLS">TLS</option><option value="TCP">TCP</option><option value="DNS">DNS</option><option value="MDNS">MDNS</option></select></label>
         <span className="result-count">{serviceReady ? t("traffic.shownLive", { count: visiblePackets.length }) : t("traffic.shownDemo", { count: visiblePackets.length })}</span>
       </section>
       <div className="master-detail traffic-packet-workspace">
@@ -206,7 +206,7 @@ export function TrafficPage({ onDataChanged }: { onDataChanged?: () => void }) {
             onRowClick={(packet) => setSelectedPacketKey(packetKey(packet))}
           />
         </section>
-        <aside className="detail-panel packet-detail-panel" aria-label="Selected packet details">
+        <aside className="detail-panel packet-detail-panel" aria-label={t("traffic.packetDetailAriaLabel")}>
           {selectedPacket ? <>
             <header className="detail-header"><div><span className={`protocol protocol-${selectedPacket.protocol.toLowerCase()}`}>{selectedPacket.protocol}</span><h2>Packet #{selectedPacket.id}</h2><p>{selectedPacket.timestamp}</p></div><button className="icon-button" type="button" title={t("traffic.closeDetails")} onClick={() => setSelectedPacketKey(null)}><X size={17} /></button></header>
             <dl className="detail-grid"><div><dt>{t("traffic.source")}</dt><dd title={selectedPacket.source}>{selectedPacket.source}</dd></div><div><dt>{t("traffic.destination")}</dt><dd title={selectedPacket.destination}>{selectedPacket.destination}</dd></div><div><dt>{t("traffic.length")}</dt><dd>{selectedPacket.length.toLocaleString()} {t("traffic.bytes")}</dd></div><div><dt>{t("traffic.tcpFlags")}</dt><dd>{selectedPacket.flags || "-"}</dd></div></dl>

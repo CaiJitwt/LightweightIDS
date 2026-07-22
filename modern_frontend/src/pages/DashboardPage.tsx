@@ -116,7 +116,7 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
         <span>{resetNotice || t("dashboard.dataActive", { label: dataLabel })}</span>
         <button className="danger-button" type="button" disabled={!connected || resetting} onClick={() => void resetStatistics()} title={connected ? t("dashboard.resetTitle") : t("dashboard.resetDisabled")}><RotateCcw size={15} />{resetting ? t("dashboard.resetting") : t("dashboard.resetStatistics")}</button>
       </section>
-      <section className="metric-strip" aria-label="Current IDS statistics">
+      <section className="metric-strip" aria-label={t("dashboard.statsAriaLabel")}>
         <Metric icon={<Radio size={18} />} label={t("dashboard.captureStatus")} value={captureLive ? t("dashboard.live") : titleCase(snapshot.capture.state)} meta={snapshot.capture.interface || t("dashboard.noActiveInterface")} tone={captureLive ? "green" : "blue"} />
         <Metric icon={<Activity size={18} />} label={t("dashboard.packetsObserved")} value={formatNumber(snapshot.statistics.packetTotal)} meta={t("dashboard.inLatestHour", { count: formatNumber(snapshot.statistics.lastHourPackets) })} tone="blue" />
         <Metric icon={<BellRing size={18} />} label={t("dashboard.openAlerts")} value={formatNumber(snapshot.statistics.openAlerts)} meta={t("dashboard.highPriority", { count: formatNumber(snapshot.statistics.highPriorityAlerts) })} tone="amber" />
@@ -126,7 +126,7 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
       <section className="analysis-grid">
         <div className="section-panel trend-panel">
           <SectionHeading title={t("dashboard.trafficTrend")} meta={t("dashboard.trafficTrendMeta", { label: dataLabel, unit: trendUnit })} />
-          <div className="chart-area" aria-label="Traffic and alert trend chart">
+          <div className="chart-area" aria-label={t("dashboard.trafficChartAriaLabel")}>
             {snapshot.trend.length ? <ResponsiveContainer width="100%" height="100%">
               <LineChart data={snapshot.trend} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
@@ -143,7 +143,7 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
 
         <div className="section-panel severity-panel">
           <SectionHeading title={t("dashboard.severityDistribution")} meta={t("dashboard.persistedAlerts", { count: formatNumber(snapshot.statistics.alertTotal) })} />
-          <div className="chart-area" aria-label="Severity distribution chart">
+          <div className="chart-area" aria-label={t("dashboard.severityChartAriaLabel")}>
             {snapshot.severityDistribution.length ? <ResponsiveContainer width="100%" height="100%">
               <BarChart data={snapshot.severityDistribution} layout="vertical" margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--chart-grid)" />
@@ -161,7 +161,7 @@ export function DashboardPage({ onOpenAlerts, onOpenHost, onOpenAlertCountChange
 
       <section className="section-panel detection-rate-panel">
         <SectionHeading title={t("dashboard.detectionRateTrend")} meta={t("dashboard.detectionRateMeta", { unit: trendUnit })} />
-        <div className="chart-area" aria-label="Detection rate trend chart">
+        <div className="chart-area" aria-label={t("dashboard.detectionChartAriaLabel")}>
           {detectionRateTrend.length ? <ResponsiveContainer width="100%" height="100%">
             <LineChart data={detectionRateTrend} margin={{ top: 10, right: 18, left: -18, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />

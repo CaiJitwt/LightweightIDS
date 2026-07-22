@@ -27,8 +27,8 @@ export function SecurityEventsPage({ onOpenAlert }: { onOpenAlert: (alertId: num
   const [records, setRecords] = useState<SecurityEventRecord[]>([]);
   const [status, setStatus] = useState<SecurityEventStatus>(stoppedStatus);
   const [query, setQuery] = useState("");
-  const [severity, setSeverity] = useState("All severities");
-  const [channel, setChannel] = useState("All channels");
+  const [severity, setSeverity] = useState(t("common.allSeverities"));
+  const [channel, setChannel] = useState(t("common.allChannels"));
   const [eventId, setEventId] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [connected, setConnected] = useState(false);
@@ -66,8 +66,8 @@ export function SecurityEventsPage({ onOpenAlert }: { onOpenAlert: (alertId: num
   const availableChannels = Math.max(0, status.monitoredChannels.length - status.unavailableChannels.length);
 
   const columns = useMemo<ColumnDef<SecurityEventRecord, unknown>[]>(() => [
-    { accessorKey: "timestamp", header: "Time" },
-    { accessorKey: "severity", header: "Severity", cell: ({ row }) => <SeverityBadge severity={row.original.severity} /> },
+    { accessorKey: "timestamp", header: t("common.time") },
+    { accessorKey: "severity", header: t("common.severity"), cell: ({ row }) => <SeverityBadge severity={row.original.severity} /> },
     { accessorKey: "eventId", header: t("securityEvents.eventIdPlaceholder") },
     { accessorKey: "channel", header: t("securityEvents.channel"), cell: ({ getValue }) => <span className="event-channel" title={String(getValue())}>{shortChannel(String(getValue()))}</span> },
     { accessorKey: "user", header: t("securityEvents.user"), cell: ({ getValue }) => String(getValue() || "-") },
@@ -108,9 +108,9 @@ export function SecurityEventsPage({ onOpenAlert }: { onOpenAlert: (alertId: num
 
       <section className="filter-row security-event-filters">
         <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("securityEvents.search")} /></label>
-        <select className="plain-select" aria-label="Security event severity" value={severity} onChange={(event) => setSeverity(event.target.value)}><option>{t("common.allSeverities")}</option><option>CRITICAL</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option></select>
-        <select className="plain-select event-channel-select" aria-label="Security event channel" value={channel} onChange={(event) => setChannel(event.target.value)}><option>{t("common.allChannels")}</option>{channels.map((value) => <option key={value}>{value}</option>)}</select>
-        <input className="table-input event-id-filter" aria-label="Windows Event ID" value={eventId} onChange={(event) => setEventId(event.target.value.replace(/\D/g, ""))} placeholder={t("securityEvents.eventIdPlaceholder")} />
+        <select className="plain-select" aria-label={t("securityEvents.severityAriaLabel")} value={severity} onChange={(event) => setSeverity(event.target.value)}><option>{t("common.allSeverities")}</option><option>CRITICAL</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option></select>
+        <select className="plain-select event-channel-select" aria-label={t("securityEvents.channelAriaLabel")} value={channel} onChange={(event) => setChannel(event.target.value)}><option>{t("common.allChannels")}</option>{channels.map((value) => <option key={value}>{value}</option>)}</select>
+        <input className="table-input event-id-filter" aria-label={t("securityEvents.eventIdAriaLabel")} value={eventId} onChange={(event) => setEventId(event.target.value.replace(/\D/g, ""))} placeholder={t("securityEvents.eventIdPlaceholder")} />
         <span className="result-count">{t("securityEvents.events", { count: records.length })}</span>
       </section>
 
@@ -118,9 +118,9 @@ export function SecurityEventsPage({ onOpenAlert }: { onOpenAlert: (alertId: num
 
       <div className="master-detail security-event-workspace">
         <section className="table-panel security-event-table"><DataTable columns={columns} data={records} getRowId={(row) => String(row.id)} selectedRowId={selected ? String(selected.id) : undefined} onRowClick={(row) => setSelectedId(row.id)} /></section>
-        <aside className="detail-panel security-event-detail" aria-label="Selected Windows security event">
+        <aside className="detail-panel security-event-detail" aria-label={t("securityEvents.detailAriaLabel")}>
           {selected ? <>
-            <header className="detail-header"><div><SeverityBadge severity={selected.severity} /><h2>Windows Event {selected.eventId}</h2><p>Record #{selected.recordId} - {selected.timestamp}</p></div></header>
+            <header className="detail-header"><div><SeverityBadge severity={selected.severity} /><h2>{t("securityEvents.windowsEventHeader")} {selected.eventId}</h2><p>t("securityEvents.recordNumber") + String(selected.recordId) - {selected.timestamp}</p></div></header>
             <dl className="detail-grid"><Detail label={t("securityEvents.channel")} value={selected.channel} /><Detail label={t("securityEvents.computer")} value={selected.computer} /><Detail label={t("securityEvents.user")} value={selected.user || t("common.unknown")} /><Detail label={t("securityEvents.sourceIp")} value={selected.sourceIp || t("securityEvents.localOrUnavailable")} /><Detail label={t("securityEvents.logonType")} value={selected.logonType || "-"} /><Detail label={t("securityEvents.provider")} value={selected.provider} /></dl>
             <div className="detail-section"><h3>{t("securityEvents.eventSummary")}</h3><p>{selected.summary}</p></div>
             {(selected.processName || selected.commandLine) && <div className="detail-section"><h3>{t("securityEvents.executionContext")}</h3>{selected.processName && <p>{selected.processName}</p>}{selected.commandLine && <code>{selected.commandLine}</code>}</div>}

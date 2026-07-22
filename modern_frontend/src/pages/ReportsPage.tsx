@@ -97,7 +97,7 @@ export function ReportsPage({ refreshVersion }: { refreshVersion: number }) {
         {showPreview && (
           <div className="table-scroll">
             <table className="data-table">
-              <thead><tr><th>Time</th><th>{t("rules.columnSeverity")}</th><th>{t("rules.columnRule")}</th><th>{t("alerts.source")}</th><th>{t("alerts.destination")}</th><th>{t("alerts.status")}</th></tr></thead>
+              <thead><tr><th>{t("common.time")}</th><th>{t("rules.columnSeverity")}</th><th>{t("rules.columnRule")}</th><th>{t("alerts.source")}</th><th>{t("alerts.destination")}</th><th>{t("alerts.status")}</th></tr></thead>
               <tbody>
                 {previewAlerts.map((alert) => (
                   <tr key={alert.id}>
@@ -126,7 +126,7 @@ function toCsv(records: AlertRecord[]) {
 
 function toHtml(records: AlertRecord[]) {
   const rows = records.map((r) => `<tr><td>${esc(r.timestamp)}</td><td>${esc(r.severity)}</td><td>${esc(r.ruleName)}</td><td>${esc(r.source)}</td><td>${esc(r.destination)}</td><td>${esc(r.status)}</td></tr>`).join("") || "<tr><td colspan=\"6\">No alerts</td></tr>";
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Lightweight IDS Alert Report</title><style>body{font-family:Inter,Segoe UI,Arial,sans-serif;margin:32px;color:#17212b}table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:10px 12px;border:1px solid #d9e0e7;text-align:left;vertical-align:top}th{background:#f2f5f7;font-weight:700}tr:nth-child(even){background:#fafbfc}</style></head><body><h1>Lightweight IDS Alert Report</h1><p>Exported ${new Date().toLocaleString()}</p><table><thead><tr><th>Time</th><th>Severity</th><th>Rule</th><th>Source</th><th>Destination</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Lightweight IDS Alert Report</title><style>body{font-family:Inter,Segoe UI,Arial,sans-serif;margin:32px;color:#17212b}table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:10px 12px;border:1px solid #d9e0e7;text-align:left;vertical-align:top}th{background:#f2f5f7;font-weight:700}tr:nth-child(even){background:#fafbfc}</style></head><body><h1>Lightweight IDS Alert Report</h1><p>Exported ${new Date().toLocaleString()}</p><table><thead><tr><th>{t("common.time")}</th><th>Severity</th><th>Rule</th><th>Source</th><th>Destination</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
 }
 
 function esc(value: unknown) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;"); }

@@ -79,11 +79,11 @@ export function SettingsPage({ themePreference, onThemePreferenceChange, fontSca
         <header className="section-heading"><div><h2>{t("settings.appearance")}</h2><p>{t("settings.appearanceMeta")}</p></div></header>
         <div className="settings-body">
           <div className="setting-row"><div><strong>{t("settings.themePref")}</strong><small>{t("settings.themePrefMeta")}</small></div><div className="theme-segment" role="group" aria-label={t("settings.themePref")}>
-            <button type="button" className={themePreference === "system" ? "selected" : ""} onClick={() => onThemePreferenceChange("system")}><MonitorCog size={15} />System</button>
-            <button type="button" className={themePreference === "light" ? "selected" : ""} onClick={() => onThemePreferenceChange("light")}><Sun size={15} />Light</button>
-            <button type="button" className={themePreference === "dark" ? "selected" : ""} onClick={() => onThemePreferenceChange("dark")}><Moon size={15} />Dark</button>
+            <button type="button" className={themePreference === "system" ? "selected" : ""} onClick={() => onThemePreferenceChange("system")}><MonitorCog size={15} />{t("settings.themeSystem")}</button>
+            <button type="button" className={themePreference === "light" ? "selected" : ""} onClick={() => onThemePreferenceChange("light")}><Sun size={15} />{t("settings.themeLight")}</button>
+            <button type="button" className={themePreference === "dark" ? "selected" : ""} onClick={() => onThemePreferenceChange("dark")}><Moon size={15} />{t("settings.themeDark")}</button>
           </div></div>
-          <div className="setting-row"><div><strong>{t("settings.fontSize")}</strong><small>{t("settings.fontSizeMeta")}</small></div><div className="theme-segment" role="group" aria-label={t("settings.fontSize")}>{(["compact", "default", "comfortable"] as FontScale[]).map((value) => <button type="button" key={value} className={fontScale === value ? "selected" : ""} onClick={() => onFontScaleChange(value)}>{value[0].toUpperCase() + value.slice(1)}</button>)}</div></div>
+          <div className="setting-row"><div><strong>{t("settings.fontSize")}</strong><small>{t("settings.fontSizeMeta")}</small></div><div className="theme-segment" role="group" aria-label={t("settings.fontSize")}>{(["compact", "default", "comfortable"] as FontScale[]).map((value) => { const labels: Record<string, string> = { compact: t("settings.fontCompact"), default: t("settings.fontDefault"), comfortable: t("settings.fontComfortable") }; return <button type="button" key={value} className={fontScale === value ? "selected" : ""} onClick={() => onFontScaleChange(value)}>{labels[value]}</button>; })}</div></div>
         </div>
       </section>
 

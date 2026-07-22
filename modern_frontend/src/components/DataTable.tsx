@@ -97,7 +97,7 @@ export function DataTable<T>({
                         onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); resizeHandler(e); }}
                         onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); resizeHandler(e); }}
                         className="col-resize-handle"
-                        title="Drag to resize column"
+                        title={t("table.resizeHandleTitle")}
                       >
                         <GripVertical size={12} />
                       </div>

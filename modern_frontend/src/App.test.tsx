@@ -82,7 +82,7 @@ describe("modern IDS frontend", () => {
     const content = document.querySelector(".page-content");
     expect(content).toHaveAttribute("data-manual-refresh-version", "0");
 
-    fireEvent.click(screen.getByRole("button", { name: "Open command palette" }));
+    fireEvent.click(screen.getByRole("button", { name: "Jump to a page, search alerts or hosts..." }));
     const palette = await screen.findByRole("dialog", { name: "Command palette" });
     fireEvent.click(within(palette).getByRole("button", { name: /Network Topology/ }));
     expect(await screen.findByRole("heading", { name: "Network topology" })).toBeInTheDocument();
@@ -95,7 +95,7 @@ describe("modern IDS frontend", () => {
     fireEvent.click(screen.getByTitle("Refresh current view"));
     expect(content).toHaveAttribute("data-manual-refresh-version", "2");
 
-    fireEvent.click(screen.getByTitle("Open analyst settings"));
+    fireEvent.click(screen.getByTitle("Analyst"));
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
   });
 

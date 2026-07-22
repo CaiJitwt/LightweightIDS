@@ -153,7 +153,7 @@ export function InvestigationsPage() {
               {["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((v) => <option key={v}>{v}</option>)}
             </select>
           </div>
-          <select aria-label="Investigation status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as typeof form.status })}>
+          <select aria-label={t("investigations.statusAriaLabel")} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as typeof form.status })}>
             {["Open", "Monitoring", "Closed"].map((value) => <option key={value}>{value}</option>)}
           </select>
           <textarea placeholder={t("investigations.summaryPlaceholder")} value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} />
