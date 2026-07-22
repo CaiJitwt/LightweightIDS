@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from detection.rule_base import RuleBase
-from detection.rules.payload_utils import has_inspectable_payload, packet_text
+from detection.rules.payload_utils import MAX_SOURCE_LENGTH, canonical_text_variants, has_inspectable_payload, packet_text
 from models import AlertRecord, PacketRecord
 
 
@@ -15,6 +15,7 @@ class WebAttackRule(RuleBase):
     threshold = 1
     time_window = 0
     protocols = {"HTTP", "HTTPS"}
+    HTTP_HOST_HEADER = re.compile(r"(?i)(?:^|\s)host\s*:\s*\S+")
 
     REGEX_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         ("path_traversal_dot", re.compile(r"\.\.(?=/|\\)")),
@@ -65,7 +66,12 @@ class WebAttackRule(RuleBase):
         if packet.protocol == "TCP" and not (packet.http_method or packet.http_host or packet.http_path):
             return []
         text = packet_text(packet)
-        matches = [name for name, pattern in self.REGEX_PATTERNS if pattern.search(text)]
+        ssrf_text = self._ssrf_text_without_request_host(packet)
+        matches = [
+            name
+            for name, pattern in self.REGEX_PATTERNS
+            if pattern.search(ssrf_text if name.startswith("ssrf_") else text)
+        ]
         if not matches:
             return []
 
@@ -77,3 +83,12 @@ class WebAttackRule(RuleBase):
                 evidence=f"matched={matches}; host={packet.http_host or ''}; path={packet.http_path or ''}",
             )
         ]
+
+    def _ssrf_text_without_request_host(self, packet: PacketRecord) -> str:
+        raw_summary = packet.raw_summary or ""
+        if "| payload=" in raw_summary:
+            raw_summary = raw_summary.split("| payload=", 1)[1]
+        raw_summary = self.HTTP_HOST_HEADER.sub(" ", raw_summary)
+        values = [raw_summary, packet.dns_query, packet.http_method, packet.http_path]
+        source = " ".join(value for value in values if value)[:MAX_SOURCE_LENGTH]
+        return "\n".join(canonical_text_variants(source))

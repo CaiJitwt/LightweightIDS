@@ -20,6 +20,9 @@ def packet(
     dst_port: int = 443,
     length: int = 400,
     raw_summary: str = "TLS application data",
+    http_method: str = "",
+    http_host: str = "",
+    http_path: str = "",
 ) -> PacketRecord:
     minute, sec = divmod(second, 60)
     return PacketRecord(
@@ -32,6 +35,9 @@ def packet(
         length=length,
         tcp_flags="PA",
         raw_summary=raw_summary,
+        http_method=http_method,
+        http_host=http_host,
+        http_path=http_path,
     )
 
 
@@ -52,6 +58,39 @@ def test_plain_http_content_remains_available_to_web_rules():
     )
 
     assert WebAttackRule().process(plaintext)
+
+
+def test_loopback_host_header_is_not_treated_as_an_ssrf_target():
+    normal = packet(
+        1,
+        protocol="HTTP",
+        dst_port=8080,
+        raw_summary=(
+            "POST /sink/benign HTTP/1.1\r\n"
+            "Host: 127.0.0.1:8080\r\n"
+            "Content-Type: application/x-www-form-urlencoded\r\n\r\n"
+            "message=demo-health-check&status=ok"
+        ),
+        http_method="POST",
+        http_host="127.0.0.1:8080",
+        http_path="/sink/benign",
+    )
+    ssrf = packet(
+        2,
+        protocol="HTTP",
+        dst_port=8080,
+        raw_summary=(
+            "POST /sink/ssrf HTTP/1.1\r\n"
+            "Host: 127.0.0.1:8080\r\n\r\n"
+            "url=http://127.0.0.1/admin"
+        ),
+        http_method="POST",
+        http_host="127.0.0.1:8080",
+        http_path="/sink/ssrf",
+    )
+
+    assert WebAttackRule().process(normal) == []
+    assert WebAttackRule().process(ssrf)
 
 
 def test_one_normal_uncommon_port_connection_is_not_reported_per_packet():

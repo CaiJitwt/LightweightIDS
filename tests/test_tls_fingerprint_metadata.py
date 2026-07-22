@@ -61,3 +61,17 @@ def test_tls_fingerprint_rule_detects_metadata_risks():
     assert "expired_certificate" in alerts[0].evidence
     assert "unusual_alpn=ftp" in alerts[0].evidence
     assert "missing_sni" in alerts[0].evidence
+
+
+def test_tls_metadata_can_read_structured_values_from_raw_hex():
+    packet = tls_packet("TLS packet metadata hidden from display")
+    packet.raw_hex = (
+        b"\x16\x03\x01\x00\x90client hello; version=tlsv1.0; "
+        b"cipher=RC4-MD5; self_signed=true; sni=demo.test"
+    ).hex()
+
+    findings = tls_metadata_findings(packet)
+
+    assert "weak_version=tlsv1.0" in findings
+    assert "weak_cipher=RC4-MD5" in findings
+    assert "self_signed_certificate" in findings
