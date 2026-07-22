@@ -98,6 +98,8 @@ python -m scripts.generate_demo_pcap
 
 Then import `sample_data/demo_attack_chain.pcap`. The classic Traffic Monitor can also generate and load it through `Load demo data` when necessary. See the [Demo Guide](docs/demo_guide.md).
 
+For a live virtual-machine demonstration, start the isolated [HTTP Alert Demo Lab](demo_http_lab/README.md). It accepts inert plaintext samples only from authorized private-network clients and sends them through the normal live-capture and Detection Engine path without executing or forwarding submitted content.
+
 ## Reset Behavior
 
 `Reset statistics` clears runtime packet, alert, baseline, and Windows security-event records and resets their counters. It also clears Reports and Event Timeline runtime data.
@@ -150,6 +152,7 @@ Set `PLAYWRIGHT_BASE_URL` to the frontend address printed by the launcher before
 | `storage/`, `models/` | SQLite migrations, repositories, and shared records |
 | `ui/` | Classic PySide6 application |
 | `modern_frontend/`, `modern_ui/` | React analyst workspace and local Python API |
+| `demo_http_lab/` | Private-network HTTP sink and minimal alert demonstration page |
 | `endpoint_security/`, `protection/` | Host telemetry, security events, integrity checks, and blocklist enforcement |
 | `report/` | Report and investigation export |
 | `scripts/`, `sample_data/` | Deterministic demo generation and sample material |

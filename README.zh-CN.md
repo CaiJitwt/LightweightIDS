@@ -98,6 +98,8 @@ python -m scripts.generate_demo_pcap
 
 然后导入 `sample_data/demo_attack_chain.pcap`。经典 Traffic Monitor 在文件不存在时也可以通过 `Load demo data` 自动生成并导入。详细说明见 [演示指南](docs/demo_guide.md)。
 
+需要从虚拟机进行实时演示时，可以启动隔离的 [HTTP 告警演示实验室](demo_http_lab/README.md)。它只接收授权私网客户端发送的无害明文样本，流量会经过正常实时抓包和 Detection Engine；接收器不会执行或转发提交内容。
+
 ## 重置行为
 
 `Reset statistics` 会清除运行期数据包、告警、行为基线和 Windows 安全事件，并重置相应计数。Reports 和 Event Timeline 中的运行数据也会同时归零。
@@ -150,6 +152,7 @@ npm run test:e2e
 | `storage/`、`models/` | SQLite 迁移、仓储和共享数据记录 |
 | `ui/` | 经典 PySide6 应用 |
 | `modern_frontend/`、`modern_ui/` | React 分析工作台和本地 Python API |
+| `demo_http_lab/` | 私网 HTTP 接收器和最小告警演示页面 |
 | `endpoint_security/`、`protection/` | 主机遥测、安全事件、完整性检查和拦截执行 |
 | `report/` | 报告与调查导出 |
 | `scripts/`、`sample_data/` | 确定性演示数据生成和样例材料 |
