@@ -878,10 +878,14 @@ class LocalApiHandler(BaseHTTPRequestHandler):
         if image_path is None:
             self._send_error(HTTPStatus.NOT_FOUND, "Personalization image not found.")
             return
-        content_types = {".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp"}
+        content_types = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+        media_type = content_types.get(image_path.suffix.lower())
+        if media_type is None:
+            self._send_error(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "Unsupported personalization image format.")
+            return
         self.send_response(HTTPStatus.OK)
         self._send_cors_headers()
-        self.send_header("Content-Type", content_types[image_path.suffix.lower()])
+        self.send_header("Content-Type", media_type)
         self.send_header("Content-Length", str(image_path.stat().st_size))
         self.send_header("Cache-Control", "no-cache")
         self.end_headers()
