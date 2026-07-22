@@ -289,15 +289,13 @@ function llmSettingsFromRuntime(settings: Partial<import("./types").RuntimeSetti
 }
 
 function useSystemDarkMode(): boolean {
-  const getPreference = () => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
-  const [matches, setMatches] = useState(getPreference);
+  const [matches, setMatches] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false);
   useEffect(() => {
-    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
-    if (!media) return undefined;
-    const update = () => setMatches(media.matches);
-    update();
-    media.addEventListener?.("change", update);
-    return () => media.removeEventListener?.("change", update);
+    const mql = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!mql) return;
+    const onChange = (event: MediaQueryListEvent) => setMatches(event.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
   }, []);
   return matches;
 }
