@@ -4,6 +4,7 @@ import argparse
 import ipaddress
 import secrets
 import socket
+import webbrowser
 
 from demo_http_lab.packet_emitter import DefaultInterfacePacketEmitter, PacketEmissionError
 from demo_http_lab.server import DemoHttpServer
@@ -57,6 +58,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Disable adapter injection and only receive/discard browser requests.",
     )
+    parser.add_argument(
+        "--open-browser",
+        action="store_true",
+        help="Open the first advertised demo URL in the default browser after startup.",
+    )
     args = parser.parse_args(argv)
 
     token = args.token or (secrets.token_urlsafe(18) if args.require_token else "")
@@ -94,9 +100,12 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print("Classroom mode: private-network clients can send samples without a token.")
     print("Open this address in a browser:")
+    browser_url = ""
     for address in addresses:
         suffix = f"#{token}" if token else ""
-        print(f"  http://{address}:{args.port}/{suffix}")
+        url = f"http://{address}:{args.port}/{suffix}"
+        browser_url = browser_url or url
+        print(f"  {url}")
     if emitter is not None:
         print(f"Demo samples will be injected on: {emitter.interface_label}")
         if args.interface:
@@ -107,6 +116,15 @@ def main(argv: list[str] | None = None) -> int:
         print("Receiver-only mode is active; browser requests will not be injected into a capture adapter.")
     print(f"Recommended capture filter: tcp.dstport == {args.port}")
     print("Press Ctrl+C to stop the demo lab.")
+
+    if args.open_browser and browser_url:
+        try:
+            opened = webbrowser.open(browser_url, new=2)
+        except webbrowser.Error as exc:
+            print(f"Could not open the browser automatically: {exc}")
+        else:
+            if not opened:
+                print("The browser did not open automatically; use the address printed above.")
 
     try:
         server.serve_forever(poll_interval=0.25)

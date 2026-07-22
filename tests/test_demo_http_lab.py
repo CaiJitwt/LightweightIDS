@@ -7,7 +7,7 @@ from urllib.request import Request, urlopen
 
 import pytest
 
-from demo_http import main as simple_main
+import demo_http
 from demo_http_lab.main import LOOPBACK_HOST, advertised_addresses, main as lab_main
 from demo_http_lab.packet_emitter import PacketEmissionResult, build_custom_demo_packet, build_demo_packet, demo_source_ip
 from demo_http_lab.scenarios import SCENARIOS
@@ -113,8 +113,17 @@ def test_loading_the_demo_page_does_not_trigger_its_attack_scenarios():
         assert not WEB_DEMO_RULE_IDS.intersection(rule_ids), filename
 
 
-def test_simple_entry_defaults_to_ipv4_loopback():
-    assert simple_main is lab_main
+def test_simple_entry_opens_browser_and_defaults_to_ipv4_loopback(monkeypatch):
+    received = []
+
+    def fake_lab_main(arguments):
+        received.append(arguments)
+        return 0
+
+    monkeypatch.setattr(demo_http, "lab_main", fake_lab_main)
+
+    assert demo_http.main(["--receiver-only"]) == 0
+    assert received == [["--open-browser", "--receiver-only"]]
     assert advertised_addresses(LOOPBACK_HOST) == [LOOPBACK_HOST]
     assert advertised_addresses("localhost") == [LOOPBACK_HOST]
     assert advertised_addresses("0.0.0.0", "192.168.56.1") == ["192.168.56.1"]
