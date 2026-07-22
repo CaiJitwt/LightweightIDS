@@ -16,6 +16,7 @@ BASE64_TOKEN = re.compile(r"(?<![A-Za-z0-9+/])([A-Za-z0-9+/]{16,4096}={0,2})(?![
 HEX_ESCAPE_TOKEN = re.compile(r"(?:\\x[0-9a-fA-F]{2}){4,}")
 PERCENT_UNICODE = re.compile(r"%u([0-9a-fA-F]{4})")
 SQL_INLINE_COMMENT = re.compile(r"/\*.{0,512}?\*/", re.DOTALL)
+HTTP_RESPONSE = re.compile(r"(?i)(?:^|\|\s*payload=)\s*HTTP/\d(?:\.\d)?\s+\d{3}\b")
 OPAQUE_ENCRYPTED_PROTOCOLS = {"HTTPS", "TLS", "QUIC"}
 
 
@@ -34,6 +35,8 @@ def packet_text(packet: PacketRecord) -> str:
 
 def has_inspectable_payload(packet: PacketRecord) -> bool:
     """Return whether content signatures may safely inspect the packet text."""
+    if is_http_response(packet):
+        return False
     if packet.http_method or packet.http_host or packet.http_path:
         return True
     protocol = (packet.protocol or "").upper()
@@ -42,14 +45,18 @@ def has_inspectable_payload(packet: PacketRecord) -> bool:
     return bool(packet.raw_summary)
 
 
+def is_http_response(packet: PacketRecord) -> bool:
+    """Return whether the packet carries server response content, not request input."""
+    if HTTP_RESPONSE.search(packet.raw_summary or ""):
+        return True
+    raw_bytes = _raw_packet_bytes(packet)
+    return bool(re.search(rb"HTTP/\d(?:\.\d)?\s+\d{3}\b", raw_bytes, re.IGNORECASE))
+
+
 def raw_http_body_text(packet: PacketRecord) -> str:
     """Return a bounded HTTP body decoded from the retained raw packet bytes."""
-    raw_hex = packet.raw_hex or ""
-    if not raw_hex:
-        return ""
-    try:
-        raw_bytes = bytes.fromhex(raw_hex[: MAX_SOURCE_LENGTH * 2])
-    except ValueError:
+    raw_bytes = _raw_packet_bytes(packet)
+    if not raw_bytes:
         return ""
 
     markers = (b"GET ", b"POST ", b"PUT ", b"DELETE ", b"HEAD ", b"OPTIONS ", b"PATCH ", b"HTTP/1.")
@@ -59,6 +66,16 @@ def raw_http_body_text(packet: PacketRecord) -> str:
     if header_end >= 0:
         request_bytes = request_bytes[header_end + 4 :]
     return request_bytes.decode("utf-8", errors="replace")
+
+
+def _raw_packet_bytes(packet: PacketRecord) -> bytes:
+    raw_hex = packet.raw_hex or ""
+    if not raw_hex:
+        return b""
+    try:
+        return bytes.fromhex(raw_hex[: MAX_SOURCE_LENGTH * 2])
+    except ValueError:
+        return b""
 
 
 def canonical_text_variants(source: str) -> list[str]:
