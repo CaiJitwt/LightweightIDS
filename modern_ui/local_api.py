@@ -817,9 +817,11 @@ class LocalApiHandler(BaseHTTPRequestHandler):
                 winreg.HKEY_CURRENT_USER,
                 r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
             )
-            value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
-            winreg.CloseKey(key)
-            return value == 0
+            try:
+                value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+                return value == 0
+            finally:
+                winreg.CloseKey(key)
         except Exception:
             return False
 
