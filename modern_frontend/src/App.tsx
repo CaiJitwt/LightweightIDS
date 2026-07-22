@@ -297,14 +297,23 @@ function useSystemDarkMode(): boolean {
   useEffect(() => {
     const mql = window.matchMedia?.("(prefers-color-scheme: dark)");
     if (!mql) return;
-    const check = () => setMatches(mql.matches);
-    check();
-    mql.addEventListener("change", check);
-    window.addEventListener("focus", check);
-    const interval = window.setInterval(check, 2000);
+    const checkBrowser = () => setMatches(mql.matches);
+    checkBrowser();
+    mql.addEventListener("change", checkBrowser);
+    window.addEventListener("focus", checkBrowser);
+
+    const poll = async () => {
+      checkBrowser();
+      try {
+        const { dark } = await idsApi.systemTheme();
+        setMatches(dark);
+      } catch { /* backend unavailable — keep browser value */ }
+    };
+    const interval = window.setInterval(poll, 2000);
+    poll();
     return () => {
-      mql.removeEventListener("change", check);
-      window.removeEventListener("focus", check);
+      mql.removeEventListener("change", checkBrowser);
+      window.removeEventListener("focus", checkBrowser);
       window.clearInterval(interval);
     };
   }, []);
