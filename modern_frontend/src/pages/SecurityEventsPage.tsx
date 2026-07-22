@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { BellRing, Database, Play, RefreshCw, Search, ShieldAlert, Square, Waypoints } from "lucide-react";
 
 import { idsApi } from "../api/idsApi";
-import { useT } from "../i18n/context";
+import { useLocale, useT } from "../i18n/context";
 import { DataTable } from "../components/DataTable";
 import { SeverityBadge } from "../components/SeverityBadge";
 import type { SecurityEventRecord, SecurityEventStatus } from "../types";
@@ -24,11 +24,26 @@ const stoppedStatus: SecurityEventStatus = {
 
 export function SecurityEventsPage({ onOpenAlert }: { onOpenAlert: (alertId: number) => void }) {
   const t = useT();
+  const locale = useLocale();
   const [records, setRecords] = useState<SecurityEventRecord[]>([]);
   const [status, setStatus] = useState<SecurityEventStatus>(stoppedStatus);
   const [query, setQuery] = useState("");
   const [severity, setSeverity] = useState(t("common.allSeverities"));
   const [channel, setChannel] = useState(t("common.allChannels"));
+
+  const allChannelsLabel = useRef(t("common.allChannels"));
+  useEffect(() => {
+    setSeverity((prev) => {
+      if (["CRITICAL", "HIGH", "MEDIUM", "LOW"].includes(prev)) return prev;
+      return t("common.allSeverities");
+    });
+    setChannel((prev) => {
+      if (prev === allChannelsLabel.current) return t("common.allChannels");
+      return prev;
+    });
+    allChannelsLabel.current = t("common.allChannels");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale]);
   const [eventId, setEventId] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [connected, setConnected] = useState(false);
