@@ -54,7 +54,6 @@ button { cursor: pointer; }
   background-repeat: no-repeat;
   z-index: 0;
   pointer-events: none;
-  contain: paint style;
 }
 
 html[data-theme="dark"] .app-shell {
