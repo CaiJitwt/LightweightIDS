@@ -673,7 +673,7 @@ const translations = {
     "meta.health": "检查传感器和本地服务就绪状态",
     "meta.endpoint": "只读主机安全态势、进程清单和文件完整性",
     "meta.settings": "外观设置和本地分析集成配置",
-    "meta.personalization": "工作区外观、壁纸和叠加层伙伴",
+    "meta.personalization": "工作区外观、壁纸和宠物",
     "meta.help": "产品指南、分析工作流和快速导航",
 
     // ── Common ──────────────────────────────────────────────────────────
@@ -1171,7 +1171,7 @@ const translations = {
     "personalization.position": "位置",
     "personalization.size": "大小",
     "personalization.opacity": "透明度",
-    "personalization.overlayCompanion": "叠加层伙伴",
+    "personalization.overlayCompanion": "宠物",
     "personalization.overlayMeta": "不会阻挡操作元素的透明 PNG 叠加层",
     "personalization.petImage": "宠物图片",
     "personalization.petImageMeta": "支持透明 PNG 和 WebP 图片。",
