@@ -6,14 +6,13 @@ import { idsApi } from "../api/idsApi";
 import { DataTable } from "../components/DataTable";
 import { DefenseAdvicePanel } from "../components/DefenseAdvicePanel";
 import { SeverityBadge } from "../components/SeverityBadge";
-import { alerts as initialAlerts, packets as previewPackets } from "../data/mockData";
 import type { AlertRecord, AlertStatus, LlmSettings, PacketRecord, SecurityEventRecord } from "../types";
 import { useLocale, useT } from "../i18n/context";
 
 export function AlertsPage({ llmSettings, refreshVersion, initialAlertId, onAlertsChanged }: { llmSettings: LlmSettings; refreshVersion: number; initialAlertId?: number; onAlertsChanged: () => void }) {
   const t = useT();
   const locale = useLocale();
-  const [records, setRecords] = useState<AlertRecord[]>(initialAlerts);
+  const [records, setRecords] = useState<AlertRecord[]>([]);
   const [query, setQuery] = useState("");
   const [severity, setSeverity] = useState(t("common.allSeverities"));
 
@@ -24,11 +23,10 @@ export function AlertsPage({ llmSettings, refreshVersion, initialAlertId, onAler
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locale]);
-  const [selectedId, setSelectedId] = useState<number | null>(initialAlertId ?? initialAlerts[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<number | null>(initialAlertId ?? null);
   const [relatedPackets, setRelatedPackets] = useState<PacketRecord[]>([]);
   const [selectedPacketId, setSelectedPacketId] = useState<number | null>(null);
   const [linkedSecurityEvent, setLinkedSecurityEvent] = useState<SecurityEventRecord | null>(null);
-  const [relatedFallback, setRelatedFallback] = useState(false);
   const [connected, setConnected] = useState(false);
   const [updating, setUpdating] = useState(false);
 
@@ -44,7 +42,12 @@ export function AlertsPage({ llmSettings, refreshVersion, initialAlertId, onAler
           setConnected(true);
           setSelectedId((current) => next.some((alert) => alert.id === current) ? current : next[0]?.id ?? null);
         })
-        .catch(() => { if (active) setConnected(false); });
+        .catch(() => {
+          if (!active) return;
+          setRecords([]);
+          setSelectedId(null);
+          setConnected(false);
+        });
     }, query ? 180 : 0);
     return () => { active = false; window.clearTimeout(timer); };
   }, [query, refreshVersion, severity]);
@@ -59,12 +62,9 @@ export function AlertsPage({ llmSettings, refreshVersion, initialAlertId, onAler
     let active = true;
     setSelectedPacketId(null);
     setLinkedSecurityEvent(null);
-    setRelatedFallback(false);
     idsApi.alertPackets(selected.id)
       .then(({ records: next }) => { if (active) setRelatedPackets(next); })
-      .catch(() => {
-        if (active) { setRelatedPackets(previewPackets.filter((packet) => selected.packetIds?.includes(packet.id))); setRelatedFallback(true); }
-      });
+      .catch(() => { if (active) setRelatedPackets([]); });
     idsApi.alertSecurityEvent(selected.id)
       .then(({ record }) => { if (active) setLinkedSecurityEvent(record); })
       .catch(() => { if (active) setLinkedSecurityEvent(null); });
@@ -106,7 +106,7 @@ export function AlertsPage({ llmSettings, refreshVersion, initialAlertId, onAler
       <section className="filter-row">
         <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("alerts.search")} /></label>
         <select className="plain-select" value={severity} onChange={(event) => setSeverity(event.target.value)}><option>{t("common.allSeverities")}</option><option>CRITICAL</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option><option>INFO</option></select>
-        <span className="result-count">{t("alerts.count", { count: visible.length })} - {connected ? t("dashboard.localData") : t("alerts.offlinePreview")}</span>
+        <span className="result-count">{t("alerts.count", { count: visible.length })} - {connected ? t("dashboard.localData") : t("alerts.localApiUnavailable")}</span>
       </section>
       <div className="master-detail">
         <section className="table-panel alert-master">
@@ -119,7 +119,7 @@ export function AlertsPage({ llmSettings, refreshVersion, initialAlertId, onAler
             <div className="detail-section"><h3>{t("alerts.analystSummary")}</h3><p>{selected.description}</p></div>
             <div className="detail-section"><h3>{t("alerts.evidence")}</h3><code>{selected.evidence}</code></div>
             {linkedSecurityEvent && <div className="detail-section host-event-evidence"><h3>{t("alerts.windowsEvent")}</h3><p>Event {linkedSecurityEvent.eventId} / Record {linkedSecurityEvent.recordId}</p><code>{JSON.stringify({ channel: linkedSecurityEvent.channel, computer: linkedSecurityEvent.computer, user: linkedSecurityEvent.user, sourceIp: linkedSecurityEvent.sourceIp, logonType: linkedSecurityEvent.logonType, processName: linkedSecurityEvent.processName, summary: linkedSecurityEvent.summary, details: linkedSecurityEvent.details }, null, 2)}</code></div>}
-            <div className="detail-section"><h3>{t("alerts.relatedPackets")} <span>{relatedPackets.length}</span>{relatedFallback && <span className="capture-notice" style={{display: "inline-flex", marginLeft: 8, padding: "2px 6px", fontSize: 11}}>{t("alerts.offlinePreview")}</span>}</h3><div className="packet-stack">{relatedPackets.map((packet) => <button type="button" className={packet.id === selectedPacketId ? "selected-packet" : ""} key={packet.id} onClick={() => setSelectedPacketId(packet.id)}><strong>#{packet.id} - {packet.timestamp}</strong><span>{packet.source} to {packet.destination}</span><small>{packet.summary}</small></button>)}{!relatedPackets.length && <p className="empty-packets">{t("alerts.noPackets")}</p>}</div>{selectedPacket && <div className="packet-metadata"><strong>{t("alerts.packetMetadata")}</strong><code>{JSON.stringify({ id: selectedPacket.id, timestamp: selectedPacket.timestamp, source: selectedPacket.source, destination: selectedPacket.destination, protocol: selectedPacket.protocol, length: selectedPacket.length, flags: selectedPacket.flags, summary: selectedPacket.summary, ...selectedPacket.details }, null, 2)}</code></div>}</div>
+            <div className="detail-section"><h3>{t("alerts.relatedPackets")} <span>{relatedPackets.length}</span></h3><div className="packet-stack">{relatedPackets.map((packet) => <button type="button" className={packet.id === selectedPacketId ? "selected-packet" : ""} key={packet.id} onClick={() => setSelectedPacketId(packet.id)}><strong>#{packet.id} - {packet.timestamp}</strong><span>{packet.source} to {packet.destination}</span><small>{packet.summary}</small></button>)}{!relatedPackets.length && <p className="empty-packets">{t("alerts.noPackets")}</p>}</div>{selectedPacket && <div className="packet-metadata"><strong>{t("alerts.packetMetadata")}</strong><code>{JSON.stringify({ id: selectedPacket.id, timestamp: selectedPacket.timestamp, source: selectedPacket.source, destination: selectedPacket.destination, protocol: selectedPacket.protocol, length: selectedPacket.length, flags: selectedPacket.flags, summary: selectedPacket.summary, ...selectedPacket.details }, null, 2)}</code></div>}</div>
             <DefenseAdvicePanel alert={selected} settings={llmSettings} />
             <footer className="detail-actions"><button type="button" disabled={updating} onClick={() => updateStatus("confirmed")}><Check size={15} />{t("alerts.confirm")}</button><button type="button" disabled={updating} onClick={() => updateStatus("ignored")}><Ban size={15} />{t("alerts.ignore")}</button><button type="button" title={t("alerts.investigateTitle")}><ClipboardList size={15} />{t("alerts.investigate")}</button></footer>
           </> : <div className="empty-detail">{t("alerts.selectAlert")}</div>}

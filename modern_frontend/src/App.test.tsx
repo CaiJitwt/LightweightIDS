@@ -40,19 +40,16 @@ describe("modern IDS frontend", () => {
     expect(within(navigation).getByRole("button", { name: /Alert Center/ })).not.toHaveTextContent("9");
   });
 
-  it("navigates from the dashboard to alert evidence", async () => {
+  it("does not show preview alert evidence when the local API is unavailable", async () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Security overview" })).toBeInTheDocument();
     fireEvent.click(within(screen.getByRole("navigation", { name: "Primary navigation" })).getByRole("button", { name: /Alert Center/ }));
 
     expect(await screen.findByRole("heading", { name: "Alert center" })).toBeInTheDocument();
-    expect(await screen.findByRole("complementary", { name: "Selected alert details" })).toHaveTextContent("Related packets");
-    expect(screen.getByText("TLS metadata indicates a weak protocol fingerprint.")).toBeInTheDocument();
-    const language = screen.getByRole("group", { name: "Response" });
-    expect(within(language).getByRole("button", { name: "English" })).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(within(language).getByRole("button", { name: "Chinese" }));
-    expect(within(language).getByRole("button", { name: "Chinese" })).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByText((_, element) => element?.classList.contains("result-count") === true && element.textContent?.includes("Local API unavailable") === true)).toBeInTheDocument();
+    expect(await screen.findByRole("complementary", { name: "Selected alert details" })).toHaveTextContent("Select an alert");
+    expect(screen.queryByText("TLS metadata indicates a weak protocol fingerprint.")).not.toBeInTheDocument();
   });
 
   it("filters the traffic table by protocol", async () => {
