@@ -9,6 +9,7 @@
 * { box-sizing: border-box; }
 html, body, #root { min-width: 320px; min-height: 100%; margin: 0; }
 html { scrollbar-gutter: stable; }
+body { overflow-x: hidden; }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; clip-path: inset(50%); }
