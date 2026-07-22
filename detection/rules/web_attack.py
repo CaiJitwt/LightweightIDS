@@ -3,7 +3,13 @@ from __future__ import annotations
 import re
 
 from detection.rule_base import RuleBase
-from detection.rules.payload_utils import MAX_SOURCE_LENGTH, canonical_text_variants, has_inspectable_payload, packet_text
+from detection.rules.payload_utils import (
+    MAX_SOURCE_LENGTH,
+    canonical_text_variants,
+    has_inspectable_payload,
+    packet_text,
+    raw_http_body_text,
+)
 from models import AlertRecord, PacketRecord
 
 
@@ -89,6 +95,6 @@ class WebAttackRule(RuleBase):
         if "| payload=" in raw_summary:
             raw_summary = raw_summary.split("| payload=", 1)[1]
         raw_summary = self.HTTP_HOST_HEADER.sub(" ", raw_summary)
-        values = [raw_summary, packet.dns_query, packet.http_method, packet.http_path]
+        values = [raw_http_body_text(packet), raw_summary, packet.dns_query, packet.http_method, packet.http_path]
         source = " ".join(value for value in values if value)[:MAX_SOURCE_LENGTH]
         return "\n".join(canonical_text_variants(source))

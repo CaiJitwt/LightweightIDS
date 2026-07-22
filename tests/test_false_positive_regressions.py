@@ -23,6 +23,7 @@ def packet(
     http_method: str = "",
     http_host: str = "",
     http_path: str = "",
+    raw_hex: str = "",
 ) -> PacketRecord:
     minute, sec = divmod(second, 60)
     return PacketRecord(
@@ -38,6 +39,7 @@ def packet(
         http_method=http_method,
         http_host=http_host,
         http_path=http_path,
+        raw_hex=raw_hex,
     )
 
 
@@ -91,6 +93,31 @@ def test_loopback_host_header_is_not_treated_as_an_ssrf_target():
 
     assert WebAttackRule().process(normal) == []
     assert WebAttackRule().process(ssrf)
+
+
+def test_ssrf_after_long_http_prefix_remains_visible_to_advanced_rule():
+    body = b"padding=" + b"a" * 400 + b"&url=http://127.0.0.1/admin"
+    request = (
+        b"POST /sink/custom HTTP/1.1\r\n"
+        b"Host: 127.0.0.1:8080\r\n"
+        + f"Content-Length: {len(body)}\r\n\r\n".encode()
+        + body
+    )
+    suspicious = packet(
+        3,
+        protocol="HTTP",
+        dst_port=8080,
+        raw_summary=request[:240].decode("ascii"),
+        raw_hex=request.hex(),
+        http_method="POST",
+        http_host="127.0.0.1:8080",
+        http_path="/sink/custom",
+    )
+
+    alerts = WebAttackRule().process(suspicious)
+
+    assert alerts
+    assert "ssrf_loopback" in alerts[0].evidence
 
 
 def test_one_normal_uncommon_port_connection_is_not_reported_per_packet():

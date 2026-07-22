@@ -27,7 +27,7 @@ def packet_text(packet: PacketRecord) -> str:
         packet.http_path,
     ]
     if has_inspectable_payload(packet):
-        values = [_raw_http_request_text(packet), packet.raw_summary, *values]
+        values = [raw_http_body_text(packet), packet.raw_summary, *values]
     source = " ".join(value for value in values if value)[:MAX_SOURCE_LENGTH]
     return "\n".join(canonical_text_variants(source))
 
@@ -42,7 +42,8 @@ def has_inspectable_payload(packet: PacketRecord) -> bool:
     return bool(packet.raw_summary)
 
 
-def _raw_http_request_text(packet: PacketRecord) -> str:
+def raw_http_body_text(packet: PacketRecord) -> str:
+    """Return a bounded HTTP body decoded from the retained raw packet bytes."""
     raw_hex = packet.raw_hex or ""
     if not raw_hex:
         return ""
