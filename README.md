@@ -78,7 +78,7 @@ python modern_main.py --api-port 8787 --frontend-port 4173
 
 Press `Ctrl+C` in the launcher terminal to stop services started by that launcher.
 
-Modern Assets and Investigations create, read, edit, and delete records through local API v6 and persist them in SQLite. The classic desktop additionally supports adding/removing alert evidence snapshots and investigation HTML export.
+Modern Assets and Investigations create, read, edit, and delete records through local API v8 and persist them in SQLite. The classic desktop additionally supports adding/removing alert evidence snapshots and investigation HTML export.
 
 ## Run The Classic Desktop
 

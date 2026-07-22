@@ -78,7 +78,7 @@ python modern_main.py --api-port 8787 --frontend-port 4173
 
 在启动器终端按 `Ctrl+C`，可以停止本次启动器创建的服务。
 
-现代 Assets 和 Investigations 页面已经通过本地 API v6 实现新建、读取、编辑和删除，并持久化到 SQLite。经典桌面端还额外支持添加/移除告警证据快照和导出调查 HTML。
+现代 Assets 和 Investigations 页面已经通过本地 API v8 实现新建、读取、编辑和删除，并持久化到 SQLite。经典桌面端还额外支持添加/移除告警证据快照和导出调查 HTML。
 
 ## 启动经典桌面端
 

@@ -11,7 +11,7 @@ Lightweight IDS is a local, user-mode network and endpoint analysis application.
 
 The modern API binds to `127.0.0.1` and is not intended to be exposed as a remote multi-user service.
 
-Local API v6 includes the `analyst-workflow-v1` capability. Assets and investigations use REST-style GET, POST, PUT, and DELETE routes backed by the existing repositories and SQLite tables.
+Local API v8 includes the `analyst-workflow-v1` capability. Assets and investigations use REST-style GET, POST, PUT, and DELETE routes backed by the existing repositories and SQLite tables.
 
 ## 2. Major Layers
 

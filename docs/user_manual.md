@@ -128,7 +128,7 @@ Offline pcap analysis cannot reject historical traffic. See [Protection Workflow
 
 ## 9. Investigations And Reports
 
-Investigations organize a title, host, status, priority, summary, and notes. The modern interface supports persistent create, read, edit, and delete operations through local API v6. Classic investigation evidence is stored as a snapshot, so it remains available after the original alert is deleted or runtime statistics are reset; evidence add/remove and HTML export remain classic-desktop workflows.
+Investigations organize a title, host, status, priority, summary, and notes. The modern interface supports persistent create, read, edit, and delete operations through local API v8. Classic investigation evidence is stored as a snapshot, so it remains available after the original alert is deleted or runtime statistics are reset; evidence add/remove and HTML export remain classic-desktop workflows.
 
 Reports export persisted alert data. The modern Reports page supports HTML, CSV, and JSON output. The classic report workflow also summarizes packet and alert statistics. Empty data after a reset is expected and is not replaced with demo alerts.
 
