@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lightweight IDS HTTP Demo</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">Private-network demonstration</p>
+          <h1>Lightweight IDS HTTP Alert Lab</h1>
+          <p>Send inert HTTP samples to the host while the analyst watches Traffic Monitor and Alert Center.</p>
+        </div>
+        <span id="session-state" class="state">Checking session</span>
+      </header>
+
+      <section class="notice">
+        <strong>Safe sink:</strong> request bodies are discarded. Nothing is executed, stored, forwarded, or sent to another target.
+      </section>
+
+      <section>
+        <div class="section-title">
+          <div><h2>Detection scenarios</h2><p>Start capture on the host before sending a sample.</p></div>
+          <button id="send-sequence" class="primary" type="button">Send full sequence</button>
+        </div>
+        <div id="scenario-list" class="scenario-list"></div>
+      </section>
+
+      <section>
+        <div class="section-title"><div><h2>Custom text sample</h2><p>Sent only to this host, with a 2 KB browser-side limit.</p></div></div>
+        <textarea id="custom-payload" maxlength="2048" placeholder="Enter inert text for a custom signature check"></textarea>
+        <button id="send-custom" type="button">Send custom sample</button>
+      </section>
+
+      <section>
+        <div class="section-title"><div><h2>Activity</h2><p>Delivery acknowledgement only. Detection results remain on the analyst host.</p></div></div>
+        <ol id="activity-log" class="activity-log"><li>No requests sent in this browser session.</li></ol>
+      </section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
