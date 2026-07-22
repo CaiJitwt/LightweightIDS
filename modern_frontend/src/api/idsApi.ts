@@ -23,7 +23,17 @@ import type {
   RuntimeSettings,
   RuntimeSettingsUpdate,
 } from "../types";
+import { translations } from "../i18n/translations";
 import type { PersonalizationState } from "../data/personalizationStore";
+
+// Sentinel "all" values across every locale — used to decide whether to omit
+// filter params from API requests (the backend only accepts concrete values).
+const ALL_SEVERITY_SENTINELS: Set<string> = new Set(
+  Object.values(translations).map((t) => t["common.allSeverities"]),
+);
+const ALL_CHANNEL_SENTINELS: Set<string> = new Set(
+  Object.values(translations).map((t) => t["common.allChannels"]),
+);
 
 const apiBase = import.meta.env.VITE_IDS_API_BASE ?? "";
 
@@ -91,7 +101,7 @@ export const idsApi = {
   alerts: (filters: { query?: string; severity?: string; limit?: number } = {}) => {
     const params = new URLSearchParams();
     if (filters.query) params.set("query", filters.query);
-    if (filters.severity && filters.severity !== "All severities") params.set("severity", filters.severity);
+    if (filters.severity && !ALL_SEVERITY_SENTINELS.has(filters.severity)) params.set("severity", filters.severity);
     params.set("limit", String(filters.limit ?? 500));
     return request<{ records: AlertRecord[] }>(`/api/alerts?${params.toString()}`);
   },
@@ -108,8 +118,8 @@ export const idsApi = {
   securityEvents: (filters: { query?: string; severity?: string; channel?: string; eventId?: string; limit?: number } = {}) => {
     const params = new URLSearchParams();
     if (filters.query) params.set("query", filters.query);
-    if (filters.severity && filters.severity !== "All severities") params.set("severity", filters.severity);
-    if (filters.channel && filters.channel !== "All channels") params.set("channel", filters.channel);
+    if (filters.severity && !ALL_SEVERITY_SENTINELS.has(filters.severity)) params.set("severity", filters.severity);
+    if (filters.channel && !ALL_CHANNEL_SENTINELS.has(filters.channel)) params.set("channel", filters.channel);
     if (filters.eventId) params.set("eventId", filters.eventId);
     params.set("limit", String(filters.limit ?? 500));
     return request<{ records: SecurityEventRecord[]; total: number; status: SecurityEventStatus }>(`/api/security/events?${params.toString()}`);
