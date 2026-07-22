@@ -9,6 +9,7 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ChevronsUpDown, GripVertical } from "lucide-react";
+import { useT } from "../i18n/context";
 
 interface DataTableProps<T> {
   columns: ColumnDef<T, unknown>[];
@@ -29,10 +30,11 @@ export function DataTable<T>({
   getRowId,
   onRowClick,
   selectedRowId,
-  emptyText = "No matching records",
+  emptyText,
   resizableColumns = false,
   minColumnWidth = 48,
 }: DataTableProps<T>) {
+  const t = useT();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const tableRef = useRef<HTMLTableElement>(null);
@@ -62,6 +64,8 @@ export function DataTable<T>({
     getSortedRowModel: getSortedRowModel(),
     getRowId,
   });
+
+  const resolvedEmptyText = emptyText ?? t("common.noRecords");
 
   return (
     <div className="table-scroll">
@@ -118,7 +122,7 @@ export function DataTable<T>({
           ))}
           {table.getRowModel().rows.length === 0 && (
             <tr>
-              <td className="empty-table" colSpan={columns.length}>{emptyText}</td>
+              <td className="empty-table" colSpan={columns.length}>{resolvedEmptyText}</td>
             </tr>
           )}
         </tbody>

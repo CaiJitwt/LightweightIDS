@@ -526,6 +526,11 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             values["modern_font_scale"] = _setting_choice(
                 payload, "fontScale", {"compact", "default", "comfortable"}
             )
+        if "locale" in payload:
+            locale = str(payload["locale"]).strip()
+            if locale not in {"en", "zh"}:
+                raise ValueError("locale must be 'en' or 'zh'")
+            values["app_locale"] = locale
         if "autoSavePackets" in payload:
             values["auto_save_packets"] = _bool_setting(payload, "autoSavePackets")
         if "realtimeDetection" in payload:
@@ -1085,9 +1090,13 @@ def _path_list(value: object) -> list[str]:
 
 
 def _settings_payload(settings: SettingsRepository) -> dict[str, Any]:
+    locale = settings.get("app_locale", "en")
+    if locale not in {"en", "zh"}:
+        locale = "en"
     return {
         "themePreference": settings.get("modern_theme_preference", "system"),
         "fontScale": settings.get("modern_font_scale", "default"),
+        "locale": str(locale),
         "autoSavePackets": settings.get_bool("auto_save_packets", True),
         "realtimeDetection": settings.get_bool("enable_realtime_detection", True),
         "alertCooldownSeconds": settings.get_int("alert_cooldown_seconds", 10),

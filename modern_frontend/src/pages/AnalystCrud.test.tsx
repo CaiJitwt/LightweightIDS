@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
 import { idsApi } from "../api/idsApi";
@@ -26,12 +26,13 @@ it("edits and deletes a persisted asset", async () => {
 
   render(<AssetsPage />);
   await screen.findByText("Database-01");
-  fireEvent.click(screen.getByTitle("Edit 10.0.0.10"));
+  const row = screen.getByText("Database-01").closest("tr")!;
+  fireEvent.click(within(row).getByTitle("Edit"));
   fireEvent.change(screen.getByDisplayValue("Database-01"), { target: { value: "Database-Primary" } });
   fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
   await waitFor(() => expect(update).toHaveBeenCalledWith("10.0.0.10", expect.objectContaining({ displayName: "Database-Primary" })));
-  fireEvent.click(screen.getByTitle("Delete 10.0.0.10"));
+  fireEvent.click(within(row).getByTitle("Delete"));
   await waitFor(() => expect(remove).toHaveBeenCalledWith("10.0.0.10"));
 });
 

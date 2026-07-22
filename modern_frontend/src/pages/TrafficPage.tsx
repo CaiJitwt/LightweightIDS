@@ -4,6 +4,8 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import { CirclePause, CirclePlay, Download, FileUp, Filter, Play, RefreshCw, Search, Square, WifiOff, X } from "lucide-react";
 
 import { idsApi } from "../api/idsApi";
+import { useT } from "../i18n/context";
+import type { TranslationKey } from "../i18n/translations";
 import { DataTable } from "../components/DataTable";
 import { packets as demoPackets } from "../data/mockData";
 import type { CaptureStatus, PacketRecord, PcapImportStatus } from "../types";
@@ -17,15 +19,16 @@ const emptyPcapImport: PcapImportStatus = {
   state: "idle", filename: "", packetTotal: 0, alertTotal: 0, skippedTotal: 0, savedPacketTotal: 0, savedAlertTotal: 0, error: "",
 };
 
-const filterPresets = [
-  { label: "All traffic", value: "" },
-  { label: "TLS metadata", value: "tls" },
-  { label: "DNS", value: "dns" },
-  { label: "Internal TCP", value: "tcp and ip.addr == 10.0.0.0/8" },
-  { label: "Web and DNS", value: "http or https or tls or dns" },
+const filterPresets: Array<{ labelKey: TranslationKey; value: string }> = [
+  { labelKey: "traffic.presetAllTraffic", value: "" },
+  { labelKey: "traffic.presetTls", value: "tls" },
+  { labelKey: "traffic.presetDns", value: "dns" },
+  { labelKey: "traffic.presetInternalTcp", value: "tcp and ip.addr == 10.0.0.0/8" },
+  { labelKey: "traffic.presetWebDns", value: "http or https or tls or dns" },
 ];
 
 export function TrafficPage({ onDataChanged }: { onDataChanged?: () => void }) {
+  const t = useT();
   const [status, setStatus] = useState<CaptureStatus>(emptyStatus);
   const [serviceReady, setServiceReady] = useState(false);
   const [interfaces, setInterfaces] = useState<string[]>([]);
@@ -99,13 +102,13 @@ export function TrafficPage({ onDataChanged }: { onDataChanged?: () => void }) {
   const columns = useMemo<ColumnDef<PacketRecord, unknown>[]>(() => [
     { accessorKey: "id", header: "ID", size: 64 },
     { accessorKey: "timestamp", header: "Time" },
-    { accessorKey: "source", header: "Source" },
-    { accessorKey: "destination", header: "Destination" },
-    { accessorKey: "protocol", header: "Protocol", cell: ({ getValue }) => <span className={`protocol protocol-${String(getValue()).toLowerCase()}`}>{String(getValue())}</span> },
-    { accessorKey: "length", header: "Bytes" },
+    { accessorKey: "source", header: t("traffic.source") },
+    { accessorKey: "destination", header: t("traffic.destination") },
+    { accessorKey: "protocol", header: t("alerts.protocol"), cell: ({ getValue }) => <span className={`protocol protocol-${String(getValue()).toLowerCase()}`}>{String(getValue())}</span> },
+    { accessorKey: "length", header: t("traffic.bytes") },
     { accessorKey: "flags", header: "Flags" },
-    { accessorKey: "summary", header: "Summary", enableSorting: false },
-  ], []);
+    { accessorKey: "summary", header: t("investigations.summaryLabel"), enableSorting: false },
+  ], [t]);
 
   const runAction = async (action: () => Promise<CaptureStatus>) => {
     setActionError("");
@@ -113,7 +116,7 @@ export function TrafficPage({ onDataChanged }: { onDataChanged?: () => void }) {
       setStatus(await action());
       await poll();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "The capture request failed.");
+      setActionError(error instanceof Error ? error.message : t("traffic.requestFailed"));
     }
   };
 
@@ -128,9 +131,9 @@ export function TrafficPage({ onDataChanged }: { onDataChanged?: () => void }) {
     setFilterNotice("");
     try {
       const result = await idsApi.validateFilter(filterExpression);
-      setFilterNotice(result.bpf ? `Validated. Capture BPF: ${result.bpf}` : "Validated. No capture-side filter will be applied.");
+      setFilterNotice(result.bpf ? t("traffic.validated", { bpf: result.bpf }) : t("traffic.validatedNoFilter"));
     } catch (error) {
-      setFilterNotice(error instanceof Error ? error.message : "Filter validation failed.");
+      setFilterNotice(error instanceof Error ? error.message : t("traffic.filterFailed"));
     }
   };
 
@@ -142,7 +145,7 @@ export function TrafficPage({ onDataChanged }: { onDataChanged?: () => void }) {
     try {
       setPcapImport(await idsApi.importPcap(file));
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "The PCAP import request failed.");
+      setActionError(error instanceof Error ? error.message : t("traffic.importFailed"));
     }
   };
 
@@ -157,9 +160,9 @@ export function TrafficPage({ onDataChanged }: { onDataChanged?: () => void }) {
     URL.revokeObjectURL(url);
   };
 
-  const stateLabel = !serviceReady ? "Local capture service unavailable" : status.state === "running" ? `Capturing on ${status.interface}` : status.state === "paused" ? "Capture paused" : status.state === "error" ? "Capture error" : "Capture ready";
+  const stateLabel = !serviceReady ? t("traffic.captureUnavailable") : status.state === "running" ? t("traffic.capturingOn", { interface: status.interface === "Default interface" ? t("traffic.defaultInterface") : status.interface }) : status.state === "paused" ? t("traffic.capturePaused") : status.state === "error" ? t("traffic.captureError") : t("traffic.captureReady");
   const isActive = status.state === "running" || status.state === "paused" || status.state === "stopping";
-  const pcapNotice = pcapImport.state === "importing" ? `Importing ${pcapImport.filename}: ${pcapImport.packetTotal.toLocaleString()} packets processed.` : pcapImport.state === "completed" ? `Imported ${pcapImport.filename}: ${pcapImport.savedPacketTotal.toLocaleString()} packets and ${pcapImport.savedAlertTotal.toLocaleString()} alerts stored.` : pcapImport.error;
+  const pcapNotice = pcapImport.state === "importing" ? t("traffic.importing", { filename: pcapImport.filename, count: pcapImport.packetTotal.toLocaleString() }) : pcapImport.state === "completed" ? t("traffic.imported", { filename: pcapImport.filename, packets: pcapImport.savedPacketTotal.toLocaleString(), alerts: pcapImport.savedAlertTotal.toLocaleString() }) : pcapImport.error;
 
   return (
     <div className="page-stack traffic-workspace">
@@ -167,31 +170,31 @@ export function TrafficPage({ onDataChanged }: { onDataChanged?: () => void }) {
         <input ref={pcapPicker} className="visually-hidden" type="file" accept=".pcap,.pcapng,.cap" onChange={importPcap} />
         <div className="capture-state"><span className={`live-dot ${status.state === "paused" || !serviceReady ? "paused" : ""}`} />{stateLabel}</div>
         <div className="capture-config">
-          <label className="capture-field"><span>Interface</span><select aria-label="Capture interface" value={selectedInterface} onChange={(event) => setSelectedInterface(event.target.value)} disabled={isActive || !serviceReady}><option value="">Default interface</option>{interfaces.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-          <label className="capture-field grow"><span>Capture filter</span><input value={filterExpression} onChange={(event) => setFilterExpression(event.target.value)} placeholder="tcp.port == 443 or dns" disabled={isActive || !serviceReady} /></label>
-          <select aria-label="Capture filter preset" className="plain-select" value="" onChange={(event) => { if (event.target.value !== "") setFilterExpression(event.target.value); }} disabled={isActive || !serviceReady}><option value="">Presets</option>{filterPresets.map((preset) => <option key={preset.label} value={preset.value}>{preset.label}</option>)}</select>
-          <button className="icon-button" type="button" title="Validate capture filter" onClick={() => void validateFilter()} disabled={isActive || !serviceReady}><Filter size={17} /></button>
+          <label className="capture-field"><span>{t("traffic.interface")}</span><select aria-label={t("traffic.interface")} value={selectedInterface} onChange={(event) => setSelectedInterface(event.target.value)} disabled={isActive || !serviceReady}><option value="">{t("traffic.defaultInterface")}</option>{interfaces.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+          <label className="capture-field grow"><span>{t("traffic.captureFilter")}</span><input value={filterExpression} onChange={(event) => setFilterExpression(event.target.value)} placeholder={t("traffic.filterPlaceholder")} disabled={isActive || !serviceReady} /></label>
+          <select aria-label="Capture filter preset" className="plain-select" value="" onChange={(event) => { if (event.target.value !== "") setFilterExpression(event.target.value); }} disabled={isActive || !serviceReady}><option value="">{t("traffic.filterPresets")}</option>{filterPresets.map((preset) => <option key={preset.labelKey} value={preset.value}>{t(preset.labelKey)}</option>)}</select>
+          <button className="icon-button" type="button" title={t("traffic.validateFilter")} onClick={() => void validateFilter()} disabled={isActive || !serviceReady}><Filter size={17} /></button>
         </div>
         <div className="control-actions">
-          {!isActive && <button className="primary-button" type="button" onClick={() => void startCapture()} disabled={!serviceReady}><Play size={16} />Start capture</button>}
-          {status.state === "running" && <button className="icon-text-button" type="button" onClick={() => void runAction(idsApi.pause)}><CirclePause size={16} />Pause</button>}
-          {status.state === "paused" && <button className="icon-text-button" type="button" onClick={() => void runAction(idsApi.resume)}><CirclePlay size={16} />Resume</button>}
-          {isActive && <button className="danger-button" type="button" onClick={() => void runAction(idsApi.stop)}><Square size={15} />Stop</button>}
-          <button className="icon-text-button" type="button" onClick={() => pcapPicker.current?.click()} disabled={!serviceReady || pcapImport.state === "importing"}><FileUp size={16} />Import PCAP</button>
-          <button className="icon-button" type="button" title="Refresh capture status" onClick={() => void poll()}><RefreshCw size={17} /></button>
-          <button className="icon-button" type="button" title="Export visible packets" onClick={exportPackets}><Download size={17} /></button>
+          {!isActive && <button className="primary-button" type="button" onClick={() => void startCapture()} disabled={!serviceReady}><Play size={16} />{t("traffic.startCapture")}</button>}
+          {status.state === "running" && <button className="icon-text-button" type="button" onClick={() => void runAction(idsApi.pause)}><CirclePause size={16} />{t("traffic.pause")}</button>}
+          {status.state === "paused" && <button className="icon-text-button" type="button" onClick={() => void runAction(idsApi.resume)}><CirclePlay size={16} />{t("traffic.resume")}</button>}
+          {isActive && <button className="danger-button" type="button" onClick={() => void runAction(idsApi.stop)}><Square size={15} />{t("traffic.stop")}</button>}
+          <button className="icon-text-button" type="button" onClick={() => pcapPicker.current?.click()} disabled={!serviceReady || pcapImport.state === "importing"}><FileUp size={16} />{t("traffic.importPcap")}</button>
+          <button className="icon-button" type="button" title={t("traffic.refreshStatus")} onClick={() => void poll()}><RefreshCw size={17} /></button>
+          <button className="icon-button" type="button" title={t("traffic.exportPackets")} onClick={exportPackets}><Download size={17} /></button>
         </div>
       </section>
 
-      <section className="capture-metrics" aria-label="Capture metrics"><Metric label="Packets" value={status.packetTotal.toLocaleString()} /><Metric label="Rate" value={`${status.packetsPerSecond.toFixed(1)}/s`} /><Metric label="Alerts" value={status.alertTotal.toLocaleString()} /><Metric label="Skipped" value={status.skippedTotal.toLocaleString()} /></section>
-      {(actionError || filterNotice || pcapNotice || !serviceReady) && <p className={`capture-notice ${actionError || pcapImport.error ? "error" : ""}`}>{!serviceReady && <WifiOff size={15} />}{actionError || pcapNotice || filterNotice || "Start `python modern_main.py` from the project root to use the live capture controls. Demo records remain available offline."}</p>}
+      <section className="capture-metrics" aria-label="Capture metrics"><Metric label={t("traffic.packets")} value={status.packetTotal.toLocaleString()} /><Metric label={t("traffic.rate")} value={`${status.packetsPerSecond.toFixed(1)}/s`} /><Metric label={t("traffic.alerts")} value={status.alertTotal.toLocaleString()} /><Metric label={t("traffic.skipped")} value={status.skippedTotal.toLocaleString()} /></section>
+      {(actionError || filterNotice || pcapNotice || !serviceReady) && <p className={`capture-notice ${actionError || pcapImport.error ? "error" : ""}`}>{!serviceReady && <WifiOff size={15} />}{actionError || pcapNotice || filterNotice || t("traffic.demoNotice")}</p>}
 
-      <section className="traffic-chart-panel section-panel"><header className="section-heading"><div><h2>Capture throughput</h2><p>Rolling telemetry from the local capture service</p></div></header><div className="chart-area"><ResponsiveContainer width="100%" height="100%"><AreaChart data={rateHistory}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" /><XAxis dataKey="time" hide /><YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} /><Tooltip contentStyle={{ borderRadius: 6, borderColor: "var(--border)" }} /><Area type="monotone" dataKey="rate" name="Packets/s" stroke="#2878d0" fill="#dcecff" strokeWidth={2} isAnimationActive={false} /></AreaChart></ResponsiveContainer></div></section>
+      <section className="traffic-chart-panel section-panel"><header className="section-heading"><div><h2>{t("traffic.throughput")}</h2><p>{t("traffic.throughputMeta")}</p></div></header><div className="chart-area"><ResponsiveContainer width="100%" height="100%"><AreaChart data={rateHistory}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" /><XAxis dataKey="time" hide /><YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} /><Tooltip contentStyle={{ borderRadius: 6, borderColor: "var(--border)" }} /><Area type="monotone" dataKey="rate" name="Packets/s" stroke="#2878d0" fill="#dcecff" strokeWidth={2} isAnimationActive={false} /></AreaChart></ResponsiveContainer></div></section>
 
       <section className="filter-row">
-        <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter addresses, protocol or summary" /></label>
-        <label className="select-box"><Filter size={15} /><select aria-label="Protocol" value={protocol} onChange={(event) => setProtocol(event.target.value)}><option>All protocols</option><option>TLS</option><option>TCP</option><option>DNS</option><option>MDNS</option></select></label>
-        <span className="result-count">{visiblePackets.length} packets shown{serviceReady ? " from live and imported activity" : " from demo data"}</span>
+        <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("traffic.filterAddresses")} /></label>
+        <label className="select-box"><Filter size={15} /><select aria-label={t("alerts.protocol")} value={protocol} onChange={(event) => setProtocol(event.target.value)}><option value="All protocols">{t("common.allProtocols")}</option><option value="TLS">TLS</option><option value="TCP">TCP</option><option value="DNS">DNS</option><option value="MDNS">MDNS</option></select></label>
+        <span className="result-count">{serviceReady ? t("traffic.shownLive", { count: visiblePackets.length }) : t("traffic.shownDemo", { count: visiblePackets.length })}</span>
       </section>
       <div className="master-detail traffic-packet-workspace">
         <section className="table-panel traffic-packet-table">
@@ -205,11 +208,11 @@ export function TrafficPage({ onDataChanged }: { onDataChanged?: () => void }) {
         </section>
         <aside className="detail-panel packet-detail-panel" aria-label="Selected packet details">
           {selectedPacket ? <>
-            <header className="detail-header"><div><span className={`protocol protocol-${selectedPacket.protocol.toLowerCase()}`}>{selectedPacket.protocol}</span><h2>Packet #{selectedPacket.id}</h2><p>{selectedPacket.timestamp}</p></div><button className="icon-button" type="button" title="Close packet details" onClick={() => setSelectedPacketKey(null)}><X size={17} /></button></header>
-            <dl className="detail-grid"><div><dt>Source</dt><dd title={selectedPacket.source}>{selectedPacket.source}</dd></div><div><dt>Destination</dt><dd title={selectedPacket.destination}>{selectedPacket.destination}</dd></div><div><dt>Length</dt><dd>{selectedPacket.length.toLocaleString()} bytes</dd></div><div><dt>TCP flags</dt><dd>{selectedPacket.flags || "-"}</dd></div></dl>
-            <div className="detail-section"><h3>Packet summary</h3><p>{selectedPacket.summary || "No summary is available."}</p></div>
-            <div className="detail-section packet-full-metadata"><h3>Complete stored metadata</h3><code>{JSON.stringify({ id: selectedPacket.id, sequence: selectedPacket.sequence, timestamp: selectedPacket.timestamp, source: selectedPacket.source, destination: selectedPacket.destination, protocol: selectedPacket.protocol, length: selectedPacket.length, flags: selectedPacket.flags, ...selectedPacket.details }, null, 2)}</code></div>
-          </> : <div className="empty-detail">Select a packet to inspect its complete stored metadata.</div>}
+            <header className="detail-header"><div><span className={`protocol protocol-${selectedPacket.protocol.toLowerCase()}`}>{selectedPacket.protocol}</span><h2>Packet #{selectedPacket.id}</h2><p>{selectedPacket.timestamp}</p></div><button className="icon-button" type="button" title={t("traffic.closeDetails")} onClick={() => setSelectedPacketKey(null)}><X size={17} /></button></header>
+            <dl className="detail-grid"><div><dt>{t("traffic.source")}</dt><dd title={selectedPacket.source}>{selectedPacket.source}</dd></div><div><dt>{t("traffic.destination")}</dt><dd title={selectedPacket.destination}>{selectedPacket.destination}</dd></div><div><dt>{t("traffic.length")}</dt><dd>{selectedPacket.length.toLocaleString()} {t("traffic.bytes")}</dd></div><div><dt>{t("traffic.tcpFlags")}</dt><dd>{selectedPacket.flags || "-"}</dd></div></dl>
+            <div className="detail-section"><h3>{t("traffic.packetSummary")}</h3><p>{selectedPacket.summary || t("traffic.noSummary")}</p></div>
+            <div className="detail-section packet-full-metadata"><h3>{t("traffic.completeMetadata")}</h3><code>{JSON.stringify({ id: selectedPacket.id, sequence: selectedPacket.sequence, timestamp: selectedPacket.timestamp, source: selectedPacket.source, destination: selectedPacket.destination, protocol: selectedPacket.protocol, length: selectedPacket.length, flags: selectedPacket.flags, ...selectedPacket.details }, null, 2)}</code></div>
+          </> : <div className="empty-detail">{t("traffic.selectPacket")}</div>}
         </aside>
       </div>
     </div>

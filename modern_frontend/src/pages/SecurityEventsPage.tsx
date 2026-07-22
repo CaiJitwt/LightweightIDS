@@ -3,6 +3,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { BellRing, Database, Play, RefreshCw, Search, ShieldAlert, Square, Waypoints } from "lucide-react";
 
 import { idsApi } from "../api/idsApi";
+import { useT } from "../i18n/context";
 import { DataTable } from "../components/DataTable";
 import { SeverityBadge } from "../components/SeverityBadge";
 import type { SecurityEventRecord, SecurityEventStatus } from "../types";
@@ -22,6 +23,7 @@ const stoppedStatus: SecurityEventStatus = {
 };
 
 export function SecurityEventsPage({ onOpenAlert }: { onOpenAlert: (alertId: number) => void }) {
+  const t = useT();
   const [records, setRecords] = useState<SecurityEventRecord[]>([]);
   const [status, setStatus] = useState<SecurityEventStatus>(stoppedStatus);
   const [query, setQuery] = useState("");
@@ -66,12 +68,12 @@ export function SecurityEventsPage({ onOpenAlert }: { onOpenAlert: (alertId: num
   const columns = useMemo<ColumnDef<SecurityEventRecord, unknown>[]>(() => [
     { accessorKey: "timestamp", header: "Time" },
     { accessorKey: "severity", header: "Severity", cell: ({ row }) => <SeverityBadge severity={row.original.severity} /> },
-    { accessorKey: "eventId", header: "Event ID" },
-    { accessorKey: "channel", header: "Channel", cell: ({ getValue }) => <span className="event-channel" title={String(getValue())}>{shortChannel(String(getValue()))}</span> },
-    { accessorKey: "user", header: "User", cell: ({ getValue }) => String(getValue() || "-") },
-    { accessorKey: "sourceIp", header: "Source", cell: ({ getValue }) => String(getValue() || "Local") },
+    { accessorKey: "eventId", header: t("securityEvents.eventIdPlaceholder") },
+    { accessorKey: "channel", header: t("securityEvents.channel"), cell: ({ getValue }) => <span className="event-channel" title={String(getValue())}>{shortChannel(String(getValue()))}</span> },
+    { accessorKey: "user", header: t("securityEvents.user"), cell: ({ getValue }) => String(getValue() || "-") },
+    { accessorKey: "sourceIp", header: "Source", cell: ({ getValue }) => String(getValue() || t("common.local")) },
     { accessorKey: "summary", header: "Summary", enableSorting: false },
-  ], []);
+  ], [t]);
 
   const runAction = async (action: "start" | "stop" | "refresh") => {
     setBusy(true);
@@ -81,7 +83,7 @@ export function SecurityEventsPage({ onOpenAlert }: { onOpenAlert: (alertId: num
       setConnected(true);
       await load();
     } catch (error) {
-      setStatus((current) => ({ ...current, lastError: error instanceof Error ? error.message : "Security event action failed." }));
+      setStatus((current) => ({ ...current, lastError: error instanceof Error ? error.message : t("securityEvents.actionFailed") }));
     } finally {
       setBusy(false);
     }
@@ -90,26 +92,26 @@ export function SecurityEventsPage({ onOpenAlert }: { onOpenAlert: (alertId: num
   return (
     <div className="page-stack security-events-page">
       <section className="security-event-toolbar">
-        <div className="security-event-state"><span className={`live-dot ${status.state === "running" ? "" : "paused"}`} /><div><strong>{status.state === "running" ? "Monitoring Windows events" : "Windows event monitor stopped"}</strong><small>{connected ? `${status.pollSeconds}s polling interval` : "Local API unavailable"}</small></div></div>
+        <div className="security-event-state"><span className={`live-dot ${status.state === "running" ? "" : "paused"}`} /><div><strong>{status.state === "running" ? t("securityEvents.monitoring") : t("securityEvents.stopped")}</strong><small>{connected ? t("securityEvents.pollInterval", { seconds: status.pollSeconds }) : t("securityEvents.unavailable")}</small></div></div>
         <div className="security-event-actions">
-          {status.state === "running" ? <button className="icon-text-button" type="button" disabled={busy} onClick={() => void runAction("stop")}><Square size={14} />Stop</button> : <button className="icon-text-button primary-action" type="button" disabled={busy || !status.platformAvailable} onClick={() => void runAction("start")}><Play size={14} />Start monitoring</button>}
-          <button className="icon-button" type="button" title="Collect security events now" disabled={busy || !status.platformAvailable} onClick={() => void runAction("refresh")}><RefreshCw size={15} /></button>
+          {status.state === "running" ? <button className="icon-text-button" type="button" disabled={busy} onClick={() => void runAction("stop")}><Square size={14} />{t("securityEvents.stop")}</button> : <button className="icon-text-button primary-action" type="button" disabled={busy || !status.platformAvailable} onClick={() => void runAction("start")}><Play size={14} />{t("securityEvents.startMonitoring")}</button>}
+          <button className="icon-button" type="button" title={t("securityEvents.collectNow")} disabled={busy || !status.platformAvailable} onClick={() => void runAction("refresh")}><RefreshCw size={15} /></button>
         </div>
       </section>
 
       <section className="metric-strip">
-        <Metric icon={<Database size={18} />} label="Persisted events" value={status.eventTotal} meta={`${status.sessionEvents} this session`} tone="blue" />
-        <Metric icon={<ShieldAlert size={18} />} label="High-risk events" value={highRisk} meta="Critical and high severity" tone="red" />
-        <Metric icon={<BellRing size={18} />} label="Generated alerts" value={status.sessionAlerts} meta="Current monitor session" tone="amber" />
-        <Metric icon={<Waypoints size={18} />} label="Available channels" value={availableChannels} meta={`${status.unavailableChannels.length} unavailable`} tone="green" />
+        <Metric icon={<Database size={18} />} label={t("securityEvents.persistedEvents")} value={status.eventTotal} meta={t("securityEvents.thisSession", { count: status.sessionEvents })} tone="blue" />
+        <Metric icon={<ShieldAlert size={18} />} label={t("securityEvents.highRiskEvents")} value={highRisk} meta={t("securityEvents.highRiskMeta")} tone="red" />
+        <Metric icon={<BellRing size={18} />} label={t("securityEvents.generatedAlerts")} value={status.sessionAlerts} meta={t("securityEvents.generatedMeta")} tone="amber" />
+        <Metric icon={<Waypoints size={18} />} label={t("securityEvents.availableChannels")} value={availableChannels} meta={t("securityEvents.channelsMeta", { count: status.unavailableChannels.length })} tone="green" />
       </section>
 
       <section className="filter-row security-event-filters">
-        <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search users, hosts, processes or summaries" /></label>
-        <select className="plain-select" aria-label="Security event severity" value={severity} onChange={(event) => setSeverity(event.target.value)}><option>All severities</option><option>CRITICAL</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option></select>
-        <select className="plain-select event-channel-select" aria-label="Security event channel" value={channel} onChange={(event) => setChannel(event.target.value)}><option>All channels</option>{channels.map((value) => <option key={value}>{value}</option>)}</select>
-        <input className="table-input event-id-filter" aria-label="Windows Event ID" value={eventId} onChange={(event) => setEventId(event.target.value.replace(/\D/g, ""))} placeholder="Event ID" />
-        <span className="result-count">{records.length} events</span>
+        <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("securityEvents.search")} /></label>
+        <select className="plain-select" aria-label="Security event severity" value={severity} onChange={(event) => setSeverity(event.target.value)}><option>{t("common.allSeverities")}</option><option>CRITICAL</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option></select>
+        <select className="plain-select event-channel-select" aria-label="Security event channel" value={channel} onChange={(event) => setChannel(event.target.value)}><option>{t("common.allChannels")}</option>{channels.map((value) => <option key={value}>{value}</option>)}</select>
+        <input className="table-input event-id-filter" aria-label="Windows Event ID" value={eventId} onChange={(event) => setEventId(event.target.value.replace(/\D/g, ""))} placeholder={t("securityEvents.eventIdPlaceholder")} />
+        <span className="result-count">{t("securityEvents.events", { count: records.length })}</span>
       </section>
 
       {status.lastError && <p className="capture-notice error">{status.lastError}</p>}
@@ -119,12 +121,12 @@ export function SecurityEventsPage({ onOpenAlert }: { onOpenAlert: (alertId: num
         <aside className="detail-panel security-event-detail" aria-label="Selected Windows security event">
           {selected ? <>
             <header className="detail-header"><div><SeverityBadge severity={selected.severity} /><h2>Windows Event {selected.eventId}</h2><p>Record #{selected.recordId} - {selected.timestamp}</p></div></header>
-            <dl className="detail-grid"><Detail label="Channel" value={selected.channel} /><Detail label="Computer" value={selected.computer} /><Detail label="User" value={selected.user || "Unknown"} /><Detail label="Source IP" value={selected.sourceIp || "Local or unavailable"} /><Detail label="Logon type" value={selected.logonType || "-"} /><Detail label="Provider" value={selected.provider} /></dl>
-            <div className="detail-section"><h3>Event summary</h3><p>{selected.summary}</p></div>
-            {(selected.processName || selected.commandLine) && <div className="detail-section"><h3>Execution context</h3>{selected.processName && <p>{selected.processName}</p>}{selected.commandLine && <code>{selected.commandLine}</code>}</div>}
-            <div className="detail-section"><h3>Structured event data</h3><code>{JSON.stringify(selected.details, null, 2)}</code></div>
-            {selected.alertId && <footer className="detail-actions single-action"><button type="button" onClick={() => onOpenAlert(selected.alertId!)}><BellRing size={15} />Open related alert</button></footer>}
-          </> : <div className="empty-detail">Select a Windows security event to inspect its normalized fields.</div>}
+            <dl className="detail-grid"><Detail label={t("securityEvents.channel")} value={selected.channel} /><Detail label={t("securityEvents.computer")} value={selected.computer} /><Detail label={t("securityEvents.user")} value={selected.user || t("common.unknown")} /><Detail label={t("securityEvents.sourceIp")} value={selected.sourceIp || t("securityEvents.localOrUnavailable")} /><Detail label={t("securityEvents.logonType")} value={selected.logonType || "-"} /><Detail label={t("securityEvents.provider")} value={selected.provider} /></dl>
+            <div className="detail-section"><h3>{t("securityEvents.eventSummary")}</h3><p>{selected.summary}</p></div>
+            {(selected.processName || selected.commandLine) && <div className="detail-section"><h3>{t("securityEvents.executionContext")}</h3>{selected.processName && <p>{selected.processName}</p>}{selected.commandLine && <code>{selected.commandLine}</code>}</div>}
+            <div className="detail-section"><h3>{t("securityEvents.structuredData")}</h3><code>{JSON.stringify(selected.details, null, 2)}</code></div>
+            {selected.alertId && <footer className="detail-actions single-action"><button type="button" onClick={() => onOpenAlert(selected.alertId!)}><BellRing size={15} />{t("securityEvents.openAlert")}</button></footer>}
+          </> : <div className="empty-detail">{t("securityEvents.selectEvent")}</div>}
         </aside>
       </div>
     </div>

@@ -23,14 +23,14 @@ describe("NetworkTopologyPage", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { rerender } = render(<NetworkTopologyPage refreshVersion={0} />);
-    expect(await screen.findByLabelText("Observed network topology")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Observed packet topology")).toBeInTheDocument();
     expect(screen.getByText("Workstation 2")).toBeInTheDocument();
     expect(screen.getAllByText("8.8.8.8")).toHaveLength(2);
 
     rerender(<NetworkTopologyPage refreshVersion={1} />);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(await screen.findByText(/No packet connections are stored yet/)).toBeInTheDocument();
-    expect(screen.queryByLabelText("Observed network topology")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Observed packet topology")).not.toBeInTheDocument();
   });
 });
 

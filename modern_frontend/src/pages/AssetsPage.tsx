@@ -2,11 +2,13 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { BarChart3, Package, Pencil, Plus, RefreshCw, Search, Shield, Trash2, X } from "lucide-react";
 
 import { idsApi } from "../api/idsApi";
+import { useT } from "../i18n/context";
 import type { AssetRecord } from "../types";
 
 const emptyAsset = { ip: "", displayName: "", role: "Workstation", importance: 50, notes: "" };
 
 export function AssetsPage() {
+  const t = useT();
   const [assets, setAssets] = useState<AssetRecord[]>([]);
   const [query, setQuery] = useState("");
   const [form, setForm] = useState(emptyAsset);
@@ -20,7 +22,7 @@ export function AssetsPage() {
       setAssets(records);
       setNotice("");
     } catch {
-      setNotice("Local API unavailable. Assets cannot be saved from this preview.");
+      setNotice(t("assets.unavailable"));
     }
   };
   useEffect(() => { void load(); }, []);
@@ -43,9 +45,9 @@ export function AssetsPage() {
       setForm(emptyAsset);
       setEditingIp(null);
       await load();
-      setNotice(editingIp ? "Asset updated." : "Asset created.");
+      setNotice(editingIp ? t("assets.updated") : t("assets.created"));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Asset could not be saved.");
+      setNotice(error instanceof Error ? error.message : t("assets.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -59,9 +61,9 @@ export function AssetsPage() {
         setForm(emptyAsset);
       }
       await load();
-      setNotice("Asset deleted.");
+      setNotice(t("assets.deleted"));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Asset could not be deleted.");
+      setNotice(error instanceof Error ? error.message : t("assets.deleteFailed"));
     }
   };
 
@@ -87,31 +89,31 @@ export function AssetsPage() {
   return (
     <div className="page-stack asset-workspace">
       <section className="asset-form-panel">
-        <header className="section-heading"><div><h2>{editingIp ? "Edit asset" : "New asset"}</h2><p>High-importance assets raise analyst priority</p></div><Shield size={17} /></header>
+        <header className="section-heading"><div><h2>{editingIp ? t("assets.editAsset") : t("assets.newAsset")}</h2><p>{t("assets.importanceHint")}</p></div><Shield size={17} /></header>
         <form className="asset-form-body" onSubmit={save}>
-          <label><span>IP Address</span><input required readOnly={editingIp !== null} placeholder="e.g. 10.0.0.53" value={form.ip} onChange={(e) => setForm({ ...form, ip: e.target.value })} /></label>
-          <label><span>Display Name</span><input placeholder="Primary Domain Controller" value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label>
-          <label><span>Role</span><select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>{["Workstation", "Server", "Database", "Gateway", "Domain Controller", "Other"].map((r) => <option key={r}>{r}</option>)}</select></label>
+          <label><span>{t("assets.ipLabel")}</span><input required readOnly={editingIp !== null} placeholder={t("assets.ipPlaceholder")} value={form.ip} onChange={(e) => setForm({ ...form, ip: e.target.value })} /></label>
+          <label><span>{t("assets.nameLabel")}</span><input placeholder={t("assets.namePlaceholder")} value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label>
+          <label><span>{t("assets.roleLabel")}</span><select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>{["Workstation", "Server", "Database", "Gateway", "Domain Controller", "Other"].map((r) => <option key={r}>{r}</option>)}</select></label>
           <label>
-            <span>Importance <span className={`importance-val risk-${importanceColor(form.importance)}`}>{form.importance}</span></span>
+            <span>{t("assets.importanceLabel")} <span className={`importance-val risk-${importanceColor(form.importance)}`}>{form.importance}</span></span>
             <div className="importance-bar-wrap">
               <input type="range" min="0" max="100" value={form.importance} onChange={(e) => setForm({ ...form, importance: Number(e.target.value) })} style={{ flex: 1 }} />
             </div>
           </label>
-          <label><span>Notes</span><textarea placeholder="Optional notes…" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
+          <label><span>{t("assets.notesLabel")}</span><textarea placeholder={t("assets.notesPlaceholder")} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
           <div className="inline-actions">
-            <button className="primary-button" type="submit" disabled={saving}>{editingIp ? <Pencil size={15} /> : <Plus size={15} />}{editingIp ? "Save changes" : "Add asset"}</button>
-            {editingIp && <button className="icon-text-button" type="button" onClick={cancelEdit}><X size={15} />Cancel</button>}
+            <button className="primary-button" type="submit" disabled={saving}>{editingIp ? <Pencil size={15} /> : <Plus size={15} />}{editingIp ? t("assets.saveChanges") : t("assets.addAsset")}</button>
+            {editingIp && <button className="icon-text-button" type="button" onClick={cancelEdit}><X size={15} />{t("common.cancel")}</button>}
           </div>
           {notice && <p className="capture-notice" style={{ margin: 0 }}><Package size={14} />{notice}</p>}
         </form>
       </section>
 
       <section className="section-panel" style={{ minWidth: 0, display: "flex", flexDirection: "column" }}>
-        <header className="section-heading"><div><h2>Asset inventory</h2><p>{assets.length} assets · {highCount} high-importance</p></div><button className="icon-button" type="button" title="Refresh" onClick={() => void load()}><RefreshCw size={15} /></button></header>
+        <header className="section-heading"><div><h2>{t("assets.assetInventory")}</h2><p>{t("assets.assetCount", { count: assets.length, high: highCount })}</p></div><button className="icon-button" type="button" title={t("common.refresh")} onClick={() => void load()}><RefreshCw size={15} /></button></header>
 
         <div className="filter-row" style={{ borderRadius: 0, borderLeft: 0, borderRight: 0, borderTop: 0 }}>
-          <label className="search-box"><Search size={16} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by IP, name or role…" /></label>
+          <label className="search-box"><Search size={16} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("assets.search")} /></label>
           <span className="result-count">{visible.length} assets</span>
         </div>
 
@@ -127,7 +129,7 @@ export function AssetsPage() {
 
         <div className="table-scroll" style={{ flex: 1 }}>
           <table className="data-table">
-            <thead><tr><th>IP Address</th><th>Name</th><th>Role</th><th>Importance</th><th>Notes</th><th /></tr></thead>
+            <thead><tr><th>{t("assets.ipLabel")}</th><th>{t("assets.nameLabel")}</th><th>{t("assets.roleLabel")}</th><th>{t("assets.importanceLabel")}</th><th>{t("assets.notesLabel")}</th><th /></tr></thead>
             <tbody>
               {visible.length ? visible.map((asset) => (
                 <tr key={asset.ip}>
@@ -143,9 +145,9 @@ export function AssetsPage() {
                     </span>
                   </td>
                   <td style={{ maxWidth: 160 }}>{asset.notes || "—"}</td>
-                  <td><span className="inline-actions"><button className="icon-button" type="button" title={`Edit ${asset.ip}`} onClick={() => edit(asset)} style={{ width: 28, height: 28 }}><Pencil size={13} /></button><button className="icon-button" type="button" title={`Delete ${asset.ip}`} onClick={() => void remove(asset.ip)} style={{ width: 28, height: 28 }}><Trash2 size={13} /></button></span></td>
+                  <td><span className="inline-actions"><button className="icon-button" type="button" title={t("common.edit")} onClick={() => edit(asset)} style={{ width: 28, height: 28 }}><Pencil size={13} /></button><button className="icon-button" type="button" title={t("common.delete")} onClick={() => void remove(asset.ip)} style={{ width: 28, height: 28 }}><Trash2 size={13} /></button></span></td>
                 </tr>
-              )) : <tr><td colSpan={6} className="empty-table">No assets match the current search.</td></tr>}
+              )) : <tr><td colSpan={6} className="empty-table">{t("assets.noAssets")}</td></tr>}
             </tbody>
           </table>
         </div>

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from "lucide-react";
+import { useT } from "../i18n/context";
 
 type ToastKind = "success" | "error" | "warning" | "info";
 
@@ -30,11 +31,12 @@ const iconMap: Record<ToastKind, typeof CheckCircle2> = {
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const t = useT();
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const timersRef = useRef<Map<number, number>>(new Map());
 
   const dismiss = useCallback((id: number) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+    setToasts((prev) => prev.filter((tItem) => tItem.id !== id));
     const timer = timersRef.current.get(id);
     if (timer) {
       window.clearTimeout(timer);
@@ -54,7 +56,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     return () => {
-      timersRef.current.forEach((t) => window.clearTimeout(t));
+      timersRef.current.forEach((timer) => window.clearTimeout(timer));
     };
   }, []);
 
@@ -62,16 +64,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={{ toast }}>
       {children}
       <div className="toast-region" aria-live="polite">
-        {toasts.map((t) => {
-          const Icon = iconMap[t.kind];
+        {toasts.map((item) => {
+          const Icon = iconMap[item.kind];
           return (
-            <div className={`toast toast-${t.kind}`} key={t.id} role="alert">
+            <div className={`toast toast-${item.kind}`} key={item.id} role="alert">
               <Icon size={17} className="toast-icon" />
               <div className="toast-body">
-                <strong>{t.title}</strong>
-                {t.detail && <small>{t.detail}</small>}
+                <strong>{item.title}</strong>
+                {item.detail && <small>{item.detail}</small>}
               </div>
-              <button className="toast-dismiss" type="button" onClick={() => dismiss(t.id)} aria-label="Dismiss">
+              <button className="toast-dismiss" type="button" onClick={() => dismiss(item.id)} aria-label={t("common.dismiss")}>
                 <X size={14} />
               </button>
             </div>

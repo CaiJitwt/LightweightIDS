@@ -8,11 +8,13 @@ import { DefenseAdvicePanel } from "../components/DefenseAdvicePanel";
 import { SeverityBadge } from "../components/SeverityBadge";
 import { alerts as initialAlerts, packets as previewPackets } from "../data/mockData";
 import type { AlertRecord, AlertStatus, LlmSettings, PacketRecord, SecurityEventRecord } from "../types";
+import { useT } from "../i18n/context";
 
 export function AlertsPage({ llmSettings, refreshVersion, initialAlertId, onAlertsChanged }: { llmSettings: LlmSettings; refreshVersion: number; initialAlertId?: number; onAlertsChanged: () => void }) {
+  const t = useT();
   const [records, setRecords] = useState<AlertRecord[]>(initialAlerts);
   const [query, setQuery] = useState("");
-  const [severity, setSeverity] = useState("All severities");
+  const [severity, setSeverity] = useState(t("common.allSeverities"));
   const [selectedId, setSelectedId] = useState<number | null>(initialAlertId ?? initialAlerts[0]?.id ?? null);
   const [relatedPackets, setRelatedPackets] = useState<PacketRecord[]>([]);
   const [selectedPacketId, setSelectedPacketId] = useState<number | null>(null);
@@ -60,19 +62,19 @@ export function AlertsPage({ llmSettings, refreshVersion, initialAlertId, onAler
 
   const visible = useMemo(() => records.filter((alert) => {
     const text = `${alert.ruleName} ${alert.source} ${alert.destination} ${alert.description}`.toLowerCase();
-    return (severity === "All severities" || alert.severity === severity) && text.includes(query.toLowerCase());
-  }), [query, records, severity]);
+    return (severity === t("common.allSeverities") || alert.severity === severity) && text.includes(query.toLowerCase());
+  }), [query, records, severity, t]);
   const selectedPacket = relatedPackets.find((packet) => packet.id === selectedPacketId) ?? null;
 
   const columns = useMemo<ColumnDef<AlertRecord, unknown>[]>(() => [
     { accessorKey: "timestamp", header: "Time", size: 155 },
     { accessorKey: "severity", header: "Severity", size: 90, cell: ({ row }) => <SeverityBadge severity={row.original.severity} /> },
     { accessorKey: "ruleName", header: "Rule", size: 130 },
-    { accessorKey: "source", header: "Source", size: 135 },
-    { accessorKey: "destination", header: "Destination", size: 135 },
+    { accessorKey: "source", header: t("alerts.source"), size: 135 },
+    { accessorKey: "destination", header: t("alerts.destination"), size: 135 },
     { accessorKey: "description", header: "Description", size: 200, enableSorting: false },
-    { accessorKey: "status", header: "Status", size: 90, cell: ({ getValue }) => <span className={`status status-${String(getValue())}`}>{String(getValue())}</span> },
-  ], []);
+    { accessorKey: "status", header: t("alerts.status"), size: 90, cell: ({ getValue }) => <span className={`status status-${String(getValue())}`}>{String(getValue())}</span> },
+  ], [t]);
 
   const updateStatus = async (status: AlertStatus) => {
     if (!selected || updating) return;
@@ -91,9 +93,9 @@ export function AlertsPage({ llmSettings, refreshVersion, initialAlertId, onAler
   return (
     <div className="page-stack alert-workspace">
       <section className="filter-row">
-        <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search alerts, hosts or descriptions" /></label>
-        <select className="plain-select" value={severity} onChange={(event) => setSeverity(event.target.value)}><option>All severities</option><option>CRITICAL</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option><option>INFO</option></select>
-        <span className="result-count">{visible.length} alerts - {connected ? "Local SQLite data" : "Offline preview"}</span>
+        <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("alerts.search")} /></label>
+        <select className="plain-select" value={severity} onChange={(event) => setSeverity(event.target.value)}><option>{t("common.allSeverities")}</option><option>CRITICAL</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option><option>INFO</option></select>
+        <span className="result-count">{t("alerts.count", { count: visible.length })} - {connected ? t("dashboard.localData") : t("alerts.offlinePreview")}</span>
       </section>
       <div className="master-detail">
         <section className="table-panel alert-master">
@@ -101,15 +103,15 @@ export function AlertsPage({ llmSettings, refreshVersion, initialAlertId, onAler
         </section>
         <aside className="detail-panel" aria-label="Selected alert details">
           {selected ? <>
-            <header className="detail-header"><div><SeverityBadge severity={selected.severity} /><h2>{selected.ruleName}</h2><p>Alert #{selected.id} - {selected.timestamp}</p></div><button className="icon-button" type="button" title="Close details" onClick={() => setSelectedId(null)}><X size={17} /></button></header>
-            <dl className="detail-grid"><div><dt>Source</dt><dd>{selected.source}</dd></div><div><dt>Destination</dt><dd>{selected.destination}</dd></div><div><dt>Protocol</dt><dd>{selected.protocol}</dd></div><div><dt>Status</dt><dd className={`status status-${selected.status}`}>{selected.status}</dd></div></dl>
-            <div className="detail-section"><h3>Analyst summary</h3><p>{selected.description}</p></div>
-            <div className="detail-section"><h3>Evidence</h3><code>{selected.evidence}</code></div>
-            {linkedSecurityEvent && <div className="detail-section host-event-evidence"><h3>Windows security event</h3><p>Event {linkedSecurityEvent.eventId} / Record {linkedSecurityEvent.recordId}</p><code>{JSON.stringify({ channel: linkedSecurityEvent.channel, computer: linkedSecurityEvent.computer, user: linkedSecurityEvent.user, sourceIp: linkedSecurityEvent.sourceIp, logonType: linkedSecurityEvent.logonType, processName: linkedSecurityEvent.processName, summary: linkedSecurityEvent.summary, details: linkedSecurityEvent.details }, null, 2)}</code></div>}
-            <div className="detail-section"><h3>Related packets <span>{relatedPackets.length}</span></h3><div className="packet-stack">{relatedPackets.map((packet) => <button type="button" className={packet.id === selectedPacketId ? "selected-packet" : ""} key={packet.id} onClick={() => setSelectedPacketId(packet.id)}><strong>#{packet.id} - {packet.timestamp}</strong><span>{packet.source} to {packet.destination}</span><small>{packet.summary}</small></button>)}{!relatedPackets.length && <p className="empty-packets">No persisted packets match this alert window.</p>}</div>{selectedPacket && <div className="packet-metadata"><strong>Packet metadata</strong><code>{JSON.stringify({ id: selectedPacket.id, timestamp: selectedPacket.timestamp, source: selectedPacket.source, destination: selectedPacket.destination, protocol: selectedPacket.protocol, length: selectedPacket.length, flags: selectedPacket.flags, summary: selectedPacket.summary, ...selectedPacket.details }, null, 2)}</code></div>}</div>
+            <header className="detail-header"><div><SeverityBadge severity={selected.severity} /><h2>{selected.ruleName}</h2><p>Alert #{selected.id} - {selected.timestamp}</p></div><button className="icon-button" type="button" title={t("alerts.closeDetails")} onClick={() => setSelectedId(null)}><X size={17} /></button></header>
+            <dl className="detail-grid"><div><dt>{t("alerts.source")}</dt><dd>{selected.source}</dd></div><div><dt>{t("alerts.destination")}</dt><dd>{selected.destination}</dd></div><div><dt>{t("alerts.protocol")}</dt><dd>{selected.protocol}</dd></div><div><dt>{t("alerts.status")}</dt><dd className={`status status-${selected.status}`}>{selected.status}</dd></div></dl>
+            <div className="detail-section"><h3>{t("alerts.analystSummary")}</h3><p>{selected.description}</p></div>
+            <div className="detail-section"><h3>{t("alerts.evidence")}</h3><code>{selected.evidence}</code></div>
+            {linkedSecurityEvent && <div className="detail-section host-event-evidence"><h3>{t("alerts.windowsEvent")}</h3><p>Event {linkedSecurityEvent.eventId} / Record {linkedSecurityEvent.recordId}</p><code>{JSON.stringify({ channel: linkedSecurityEvent.channel, computer: linkedSecurityEvent.computer, user: linkedSecurityEvent.user, sourceIp: linkedSecurityEvent.sourceIp, logonType: linkedSecurityEvent.logonType, processName: linkedSecurityEvent.processName, summary: linkedSecurityEvent.summary, details: linkedSecurityEvent.details }, null, 2)}</code></div>}
+            <div className="detail-section"><h3>{t("alerts.relatedPackets")} <span>{relatedPackets.length}</span></h3><div className="packet-stack">{relatedPackets.map((packet) => <button type="button" className={packet.id === selectedPacketId ? "selected-packet" : ""} key={packet.id} onClick={() => setSelectedPacketId(packet.id)}><strong>#{packet.id} - {packet.timestamp}</strong><span>{packet.source} to {packet.destination}</span><small>{packet.summary}</small></button>)}{!relatedPackets.length && <p className="empty-packets">{t("alerts.noPackets")}</p>}</div>{selectedPacket && <div className="packet-metadata"><strong>{t("alerts.packetMetadata")}</strong><code>{JSON.stringify({ id: selectedPacket.id, timestamp: selectedPacket.timestamp, source: selectedPacket.source, destination: selectedPacket.destination, protocol: selectedPacket.protocol, length: selectedPacket.length, flags: selectedPacket.flags, summary: selectedPacket.summary, ...selectedPacket.details }, null, 2)}</code></div>}</div>
             <DefenseAdvicePanel alert={selected} settings={llmSettings} />
-            <footer className="detail-actions"><button type="button" disabled={updating} onClick={() => updateStatus("confirmed")}><Check size={15} />Confirm</button><button type="button" disabled={updating} onClick={() => updateStatus("ignored")}><Ban size={15} />Ignore</button><button type="button" title="Investigation workflows remain available in the PySide application"><ClipboardList size={15} />Investigate</button></footer>
-          </> : <div className="empty-detail">Select an alert to review its evidence and related packets.</div>}
+            <footer className="detail-actions"><button type="button" disabled={updating} onClick={() => updateStatus("confirmed")}><Check size={15} />{t("alerts.confirm")}</button><button type="button" disabled={updating} onClick={() => updateStatus("ignored")}><Ban size={15} />{t("alerts.ignore")}</button><button type="button" title={t("alerts.investigateTitle")}><ClipboardList size={15} />{t("alerts.investigate")}</button></footer>
+          </> : <div className="empty-detail">{t("alerts.selectAlert")}</div>}
         </aside>
       </div>
     </div>

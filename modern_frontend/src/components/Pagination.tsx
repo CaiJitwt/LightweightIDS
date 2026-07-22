@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { useT } from "../i18n/context";
 
 interface PaginationProps {
   page: number;
@@ -9,6 +10,7 @@ interface PaginationProps {
 }
 
 export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChange }: PaginationProps) {
+  const t = useT();
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, total);
@@ -21,10 +23,10 @@ export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChan
         {start}&ndash;{end} of {total}
       </span>
       <div className="pagination-controls">
-        <button type="button" disabled={page <= 1} onClick={() => onPageChange(1)} title="First page">
+        <button type="button" disabled={page <= 1} onClick={() => onPageChange(1)} title={t("common.firstPage")}>
           <ChevronsLeft size={15} />
         </button>
-        <button type="button" disabled={page <= 1} onClick={() => onPageChange(page - 1)} title="Previous page">
+        <button type="button" disabled={page <= 1} onClick={() => onPageChange(page - 1)} title={t("common.previousPage")}>
           <ChevronLeft size={15} />
         </button>
         {pages.map((p, i) =>
@@ -41,10 +43,10 @@ export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChan
             </button>
           ),
         )}
-        <button type="button" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)} title="Next page">
+        <button type="button" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)} title={t("common.nextPage")}>
           <ChevronRight size={15} />
         </button>
-        <button type="button" disabled={page >= totalPages} onClick={() => onPageChange(totalPages)} title="Last page">
+        <button type="button" disabled={page >= totalPages} onClick={() => onPageChange(totalPages)} title={t("common.lastPage")}>
           <ChevronsRight size={15} />
         </button>
       </div>

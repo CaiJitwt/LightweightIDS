@@ -299,6 +299,7 @@ export type FontScale = "compact" | "default" | "comfortable";
 export interface RuntimeSettings {
   themePreference: ThemePreference;
   fontScale: FontScale;
+  locale?: "en" | "zh";
   autoSavePackets: boolean;
   realtimeDetection: boolean;
   alertCooldownSeconds: number;

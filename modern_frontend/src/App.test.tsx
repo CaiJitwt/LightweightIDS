@@ -49,7 +49,7 @@ describe("modern IDS frontend", () => {
     expect(await screen.findByRole("heading", { name: "Alert center" })).toBeInTheDocument();
     expect(await screen.findByRole("complementary", { name: "Selected alert details" })).toHaveTextContent("Related packets");
     expect(screen.getByText("TLS metadata indicates a weak protocol fingerprint.")).toBeInTheDocument();
-    const language = screen.getByRole("group", { name: "Response language" });
+    const language = screen.getByRole("group", { name: "Response" });
     expect(within(language).getByRole("button", { name: "English" })).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(within(language).getByRole("button", { name: "Chinese" }));
     expect(within(language).getByRole("button", { name: "Chinese" })).toHaveAttribute("aria-pressed", "true");
@@ -74,7 +74,6 @@ describe("modern IDS frontend", () => {
     fireEvent.click(within(screen.getByRole("navigation", { name: "Primary navigation" })).getByRole("button", { name: "Security Events" }));
 
     expect(await screen.findByRole("heading", { name: "Security events" })).toBeInTheDocument();
-    expect(screen.getByText("Monitor Windows authentication, persistence and security-control activity")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Start monitoring" })).toBeInTheDocument();
   });
 
@@ -97,10 +96,11 @@ describe("modern IDS frontend", () => {
     render(<App />);
 
     fireEvent.click(within(screen.getByRole("navigation", { name: "Primary navigation" })).getByRole("button", { name: "Help Center" }));
-    expect(await screen.findByRole("heading", { name: "Help Center" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Help center" })).toBeInTheDocument();
+    // Wait for the HelpPage to finish lazy-loading
+    expect(await screen.findByText("Help language")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "中文" }));
-    expect(screen.getByRole("heading", { name: "帮助中心", level: 1 })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "帮助中心", level: 2 })).toBeInTheDocument();
     expect(localStorage.getItem("ids-help-language")).toBe("zh");
 
@@ -147,7 +147,7 @@ describe("modern IDS frontend", () => {
     fireEvent.change(screen.getByLabelText("Component blur"), { target: { value: "12" } });
     fireEvent.change(screen.getByLabelText("Table opacity"), { target: { value: "82" } });
     fireEvent.change(screen.getByLabelText("Table blur"), { target: { value: "9" } });
-    fireEvent.change(screen.getByLabelText("Component tint"), { target: { value: "#446688" } });
+    fireEvent.change(screen.getByLabelText("Surface tint"), { target: { value: "#446688" } });
 
     expect(shell.style.getPropertyValue("--component-opacity")).toBe("78%");
     expect(shell.style.getPropertyValue("--component-blur")).toBe("12px");

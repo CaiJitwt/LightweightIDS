@@ -25,7 +25,7 @@ it("shows an empty Event Timeline after reset", async () => {
   render(<EventTimelinePage refreshVersion={1} />);
 
   expect(await screen.findByText("No persisted timeline events match the current filters.")).toBeInTheDocument();
-  const alertMetric = screen.getByText("Alerts").closest("div");
+  const alertMetric = screen.getAllByText("Alerts")[0].closest("div");
   expect(alertMetric).not.toBeNull();
   expect(within(alertMetric as HTMLElement).getByText("0")).toBeInTheDocument();
 });
